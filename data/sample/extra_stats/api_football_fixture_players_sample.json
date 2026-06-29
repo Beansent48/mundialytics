@@ -1,0 +1,13 @@
+{
+  "fixture": {"id": 1001, "date": "2024-02-12T20:00:00+00:00"},
+  "league": {"name": "Sample Cup", "season": 2024},
+  "teams": {"home": {"name": "Alpha FC"}, "away": {"name": "Beta United"}},
+  "response": [
+    {"team": {"name": "Alpha FC"}, "players": [
+      {"player": {"id": 10, "name": "Alpha Keeper"}, "statistics": [{"games": {"position": "G"}, "goals": {"saves": 3}}]}
+    ]},
+    {"team": {"name": "Beta United"}, "players": [
+      {"player": {"id": 20, "name": "Beta Keeper"}, "statistics": [{"games": {"position": "G"}, "goals": {"saves": 1}}]}
+    ]}
+  ]
+}

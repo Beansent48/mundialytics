@@ -1,0 +1,3 @@
+match_id,date,competition,home_team,away_team,home_goals,away_goals,status,source
+ESP_KSA_2026,2026-06-21,FIFA World Cup,spain,saudi arabia,2,0,finished,sample_smoke_not_real
+URU_ESP_2026,2026-06-26,FIFA World Cup,uruguay,spain,1,1,finished,sample_smoke_not_real

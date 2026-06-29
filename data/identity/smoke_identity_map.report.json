@@ -1,0 +1,14 @@
+{
+  "status": "PROVIDER_IDENTITY_MAP_BUILT",
+  "provider_rows": 3,
+  "identity_rows": 3,
+  "historical_players": 8,
+  "match_status_counts": {
+    "matched": 3
+  },
+  "match_method_counts": {
+    "exact_normalized_name": 3
+  },
+  "unmatched_players": [],
+  "out": "/mnt/data/work_provider/mundialytics_betting_engine/data/identity/smoke_identity_map.csv"
+}

@@ -1,0 +1,7 @@
+[
+  {"id":"sxi1","type":{"name":"Starting XI"},"team":{"name":"Alpha FC"},"tactics":{"lineup":[{"player":{"id":10,"name":"Alpha Keeper"},"position":{"name":"Goalkeeper"}}]}},
+  {"id":"sxi2","type":{"name":"Starting XI"},"team":{"name":"Beta United"},"tactics":{"lineup":[{"player":{"id":20,"name":"Beta Keeper"},"position":{"name":"Goalkeeper"}}]}},
+  {"id":"1","type":{"name":"Shot"},"team":{"name":"Beta United"},"shot":{"outcome":{"name":"Saved"}}},
+  {"id":"2","type":{"name":"Goal Keeper"},"team":{"name":"Alpha FC"},"player":{"id":10,"name":"Alpha Keeper"},"goalkeeper":{"type":{"name":"Shot Saved"},"outcome":{"name":"Success"}}},
+  {"id":"3","type":{"name":"Shot"},"team":{"name":"Alpha FC"},"shot":{"outcome":{"name":"Goal"}}}
+]

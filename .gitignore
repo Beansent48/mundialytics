@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+.env
+.env.*
+.ipynb_checkpoints/
+*.pkl
+*.zip
+outputs/
+downloaded_files/
+
+# Large data directories
+data/raw/
+data/external/
+data/processed/
+data/cache/
+
+# Keep data schema/config files
+!data/processed/entities/
+!data/processed/entities/**
+
+# Soccerdata cache (lives in user home, not repo)
+soccerdata_cache/
+
+.DS_Store
+Thumbs.db
+*.log

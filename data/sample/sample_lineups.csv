@@ -1,0 +1,13 @@
+match_id,team,player,position,started,minutes,replaced_by,replacement_minute
+16,Spain,Alvaro Morata,ST,1,70,Mikel Oyarzabal,70
+16,Spain,Lamine Yamal,RW,1,78,Ferran Torres,78
+16,Spain,Nico Williams,LW,1,72,Dani Olmo,72
+16,Spain,Pedri,CM,1,80,Fermin Lopez,80
+16,Spain,Rodri,DM,1,90,,
+16,Cape Verde,Ryan Mendes,LW,1,82,Garry Rodrigues,82
+17,Spain,Alvaro Morata,ST,1,68,Mikel Oyarzabal,68
+17,Spain,Lamine Yamal,RW,1,75,Ferran Torres,75
+17,Spain,Nico Williams,LW,1,70,Dani Olmo,70
+17,Uruguay,Darwin Nunez,ST,1,84,Federico Vinas,84
+17,Uruguay,Federico Valverde,CM,1,90,,
+17,Uruguay,Manuel Ugarte,DM,1,87,Rodrigo Bentancur,87

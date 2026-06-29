@@ -1,0 +1,4 @@
+match_id,date,competition,team,opponent,player,position,expected_minutes,started
+ESP_URU_2026,2026-06-26,FIFA World Cup,Spain,Uruguay,Lamine Yamal,RW,85,1
+ESP_URU_2026,2026-06-26,FIFA World Cup,Spain,Uruguay,Alvaro Morata,ST,75,1
+ESP_URU_2026,2026-06-26,FIFA World Cup,Uruguay,Spain,Federico Valverde,CM,90,1

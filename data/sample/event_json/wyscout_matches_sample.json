@@ -1,0 +1,3 @@
+[
+  {"wyId":100,"dateutc":"2025-05-01 20:00:00","label":"Barcelona - Real Madrid","teamsData":{"1":{"side":"home","formation":{"lineup":[{"playerId":10,"position":"RW"}],"substitutions":[{"playerOut":10,"playerIn":11,"minute":65}]}},"2":{"side":"away","formation":{"lineup":[{"playerId":20,"position":"CM"}],"substitutions":[]}}}}
+]

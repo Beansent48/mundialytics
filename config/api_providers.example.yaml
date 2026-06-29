@@ -1,0 +1,103 @@
+# Mundialytics API provider config example.
+# Copy this file OUTSIDE updates as: config/mundialytics_api_config.local.yaml
+# Do not commit or share real API keys.
+
+runtime:
+  timezone: Europe/Madrid
+  default_cache_policy: cache_first
+
+providers:
+  oddspapi:
+    enabled: true
+    role: odds_provider
+    mode: rapidapi
+    rapidapi:
+      # RapidAPI listing: https://rapidapi.com/odds-papi-odds-papi-default/api/odds-api1
+      key_env: RAPIDAPI_KEY
+      host: odds-api1.p.rapidapi.com
+      base_url: https://odds-api1.p.rapidapi.com/en
+    direct:
+      # Direct OddsPapi mode if you ever use oddspapi.io directly.
+      key_env: ODDSPAPI_API_KEY
+      base_url: https://v5.oddspapi.io/en
+    limits:
+      # RapidAPI Basic currently shows 250 requests/month for odds-api1.
+      monthly_budget: 250
+      max_calls_per_run: 25
+      min_interval_sec: 0.35
+    storage:
+      cache_dir: data/raw/oddspapi/cache
+      ledger_path: data/raw/oddspapi/request_ledger.jsonl
+    defaults:
+      sport_id: 10
+      bookmaker: pinnacle
+      snapshot_policy: pre_kickoff
+      pre_kickoff_seconds: 3600
+    endpoints:
+      sports: /sports
+      bookmakers: /bookmakers
+      markets: /markets
+      fixtures: /fixtures
+      fixture_odds: /fixtures/odds
+      fixture_main_odds: /fixtures/odds/main
+      fixture_historical_odds: /fixtures/odds/historical
+      fixture_clv: /fixtures/odds/clv
+
+  creativesdev_live_football:
+    enabled: true
+    role: football_data_provider
+    mode: rapidapi
+    rapidapi:
+      # User-selected RapidAPI listing:
+      # https://rapidapi.com/Creativesdev/api/free-api-live-football-data
+      # Copy host/base_url exactly from the RapidAPI code snippet if RapidAPI shows a different value.
+      key_env: RAPIDAPI_KEY
+      host: free-api-live-football-data.p.rapidapi.com
+      base_url: https://free-api-live-football-data.p.rapidapi.com
+    limits:
+      # The linked free-api-live-football-data pricing currently shows Basic = 100 requests/month.
+      # Creativesdev also has a different API named free-football-api-data that shows 500,000/month.
+      # Keep this conservative until the chosen subscription is confirmed in RapidAPI.
+      monthly_budget: 100
+      max_calls_per_run: 10
+      min_interval_sec: 0.35
+    storage:
+      cache_dir: data/raw/creativesdev/cache
+      ledger_path: data/raw/creativesdev/request_ledger.jsonl
+    defaults:
+      timezone: Europe/Madrid
+      football_scope: soccer
+    endpoints:
+      # IMPORTANT:
+      # RapidAPI endpoint paths are provider-controlled. Before real calls, open the RapidAPI Playground,
+      # choose an endpoint, and copy the path + query params into the keys below.
+      # The adapter is already integrated; these paths are intentionally external so updates never overwrite them.
+      fixtures_by_date:
+        path: ""
+        params:
+          date: "{date}"
+      fixture_by_id:
+        path: ""
+        params:
+          fixture_id: "{fixture_id}"
+      fixture_lineups:
+        path: ""
+        params:
+          fixture_id: "{fixture_id}"
+      fixture_statistics:
+        path: ""
+        params:
+          fixture_id: "{fixture_id}"
+      fixture_events:
+        path: ""
+        params:
+          fixture_id: "{fixture_id}"
+      standings:
+        path: ""
+        params:
+          league_id: "{league_id}"
+          season: "{season}"
+      odds_if_available:
+        path: ""
+        params:
+          fixture_id: "{fixture_id}"

@@ -1,0 +1,3 @@
+match_id,date,home_team,away_team,neutral,competition,season,stage,group,team_scope,team_type,competition_context,gender
+ESP_KSA_2026,2026-06-21,Spain,Saudi Arabia,1,FIFA World Cup,2026,Group,A,national,national_team,international_national_tournament,men
+URU_ESP_2026,2026-06-26,Uruguay,Spain,1,FIFA World Cup,2026,Group,A,national,national_team,international_national_tournament,men

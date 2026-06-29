@@ -1,0 +1,42 @@
+{
+  "goals": {
+    "avg_home_mae": 0.9885570498910256,
+    "avg_away_mae": 0.8780719590168143,
+    "avg_home_rmse": 1.6385029212139979,
+    "avg_away_rmse": 1.221287836493805,
+    "baseline_home_mae": 1.0541558207591997,
+    "baseline_away_mae": 0.9177216513507525
+  },
+  "corners": {
+    "avg_home_mae": 2.288310158563645,
+    "avg_away_mae": 1.9488465464755795,
+    "avg_home_rmse": 2.8743828715957314,
+    "avg_away_rmse": 2.495993321008007,
+    "baseline_home_mae": 2.364320073622789,
+    "baseline_away_mae": 2.0499444761189882
+  },
+  "fouls": {
+    "avg_home_mae": 2.813759866414531,
+    "avg_away_mae": 2.9829534663610326,
+    "avg_home_rmse": 3.53495976502463,
+    "avg_away_rmse": 3.764763805952808,
+    "baseline_home_mae": 3.0108297069659975,
+    "baseline_away_mae": 3.1399609160056183
+  },
+  "yellow_cards": {
+    "avg_home_mae": 1.0762870255430568,
+    "avg_away_mae": 1.1281907396659303,
+    "avg_home_rmse": 1.3498631511482908,
+    "avg_away_rmse": 1.4264950762676174,
+    "baseline_home_mae": 1.0624694348807684,
+    "baseline_away_mae": 1.1429349790881342
+  },
+  "red_cards": {
+    "avg_home_mae": 0.1737441562912882,
+    "avg_away_mae": 0.18619274912696293,
+    "avg_home_rmse": 0.32062623399584195,
+    "avg_away_rmse": 0.38637926817331925,
+    "baseline_home_mae": 0.17481473008437554,
+    "baseline_away_mae": 0.18268973325429858
+  }
+}

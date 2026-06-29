@@ -1,0 +1,6 @@
+[
+  {"matchId":100,"teamId":1,"playerId":10,"eventName":"Shot","subEventName":"Shot","tags":[{"id":1801}]},
+  {"matchId":100,"teamId":1,"playerId":10,"eventName":"Pass","subEventName":"Simple pass","tags":[{"id":1801},{"id":302}]},
+  {"matchId":100,"teamId":2,"playerId":20,"eventName":"Foul","subEventName":"Foul","tags":[{"id":1702}]},
+  {"matchId":100,"teamId":2,"playerId":20,"eventName":"Duel","subEventName":"Defensive duel","tags":[]}
+]

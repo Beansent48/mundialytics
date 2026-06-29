@@ -1,0 +1,157 @@
+team,player,position,started,expected_minutes,status,source,provider,provider_match_id,match_id,opponent,provider_player_id,provider_player_name
+germany,manuel neuer,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,84774,Manuel Neuer
+germany,oliver baumann,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,138213,Oliver Baumann
+germany,alexander nubel,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,205750,Alexander Nübel
+germany,nathaniel brown,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,120829,Nathaniel Brown
+germany,antonio rudiger,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,169438,Antonio Rüdiger
+germany,jonathan tah,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,188052,Jonathan Tah
+germany,waldemar anton,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,220714,Waldemar Anton
+germany,david raum,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,249548,David Raum
+germany,nico schlotterbeck,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,286828,Nico Schlotterbeck
+germany,malick thiaw,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,303444,Malick Thiaw
+germany,pascal gross,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,132659,Pascal Gross
+germany,leon goretzka,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,174550,Leon Goretzka
+germany,joshua kimmich,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,190161,Joshua Kimmich
+germany,nadiem amiri,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,210818,Nadiem Amiri
+germany,felix nmecha,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,281122,Felix Nmecha
+germany,angelo stiller,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,290232,Angelo Stiller
+germany,florian wirtz,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,303748,Florian Wirtz
+germany,jamal musiala,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,303821,Jamal Musiala
+germany,aleksandar pavlovic,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,359370,Aleksandar Pavlovic
+germany,assan ouedraogo,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,364897,Assan Ouédraogo
+germany,leroy sane,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,202641,Leroy Sané
+germany,kai havertz,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,231182,Kai Havertz
+germany,deniz undav,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,273300,Deniz Undav
+germany,maximilian beier,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,290639,Maximilian Beier
+germany,jamie leweling,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,290811,Jamie Leweling
+germany,nick woltemade,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,cote d ivoire,298349,Nick Woltemade
+cote d ivoire,alban lafont,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,231282,Alban Lafont
+cote d ivoire,yahia fofana,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,261595,Yahia Fofana
+cote d ivoire,mohamed kone,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,323997,Mohamed Koné
+cote d ivoire,evan ndicka,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,242593,Evan Ndicka
+cote d ivoire,christopher operi,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,249072,Christopher Operi
+cote d ivoire,ghislain konan,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,250888,Ghislain Konan
+cote d ivoire,odilon kossounou,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,284822,Odilon Kossounou
+cote d ivoire,wilfried singo,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,286569,Wilfried Singo
+cote d ivoire,emmanuel agbadou,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,308449,Emmanuel Agbadou
+cote d ivoire,ousmane diomande,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,343964,Ousmane Diomande
+cote d ivoire,guela doue,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,346636,Guela Doué
+cote d ivoire,seko fofana,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,184118,Seko Fofana
+cote d ivoire,jean michael seri,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,193539,Jean Michaël Seri
+cote d ivoire,franck kessie,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,194711,Franck Kessié
+cote d ivoire,ibrahim sangare,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,213718,Ibrahim Sangaré
+cote d ivoire,parfait guiagon,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,257055,Parfait Guiagon
+cote d ivoire,christ inao oulai,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,386989,Christ Inao Oulaï
+cote d ivoire,nicolas pepe,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,210397,Nicolas Pépé
+cote d ivoire,evann guessand,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,288924,Evann Guessand
+cote d ivoire,amad diallo,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,291630,Amad Diallo
+cote d ivoire,ange yoan bonny,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,309185,Ange-Yoan Bonny
+cote d ivoire,elye wahi,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,311118,Elye Wahi
+cote d ivoire,simon adingra,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,317404,Simon Adingra
+cote d ivoire,oumar diakite,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,329483,Oumar Diakité
+cote d ivoire,bazoumana toure,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,359108,Bazoumana Touré
+cote d ivoire,yan diomande,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760448,espn:760448,germany,402479,Yan Diomande
+ecuador,gonzalo valle,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,131726,Gonzalo Valle
+ecuador,hernan galindez,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,207921,Hernán Galíndez
+ecuador,moises ramirez,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,269881,Moisés Ramírez
+ecuador,pervis estupinan,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,214689,Pervis Estupiñán
+ecuador,felix torres,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,251963,Félix Torres
+ecuador,angelo preciado,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,256560,Ángelo Preciado
+ecuador,jackson porozo,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,286665,Jackson Porozo
+ecuador,willian pacho,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,287005,Willian Pacho
+ecuador,piero hincapie,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,292062,Piero Hincapié
+ecuador,yaimar medina,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,315600,Yaimar Medina
+ecuador,joel ordonez,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,336589,Joel Ordóñez
+ecuador,alan franco,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,262111,Alan Franco
+ecuador,jordy alcivar,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,270829,Jordy Alcívar
+ecuador,moises caicedo,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,289877,Moisés Caicedo
+ecuador,pedro vite,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,297150,Pedro Vite
+ecuador,denil castillo,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,328742,Denil Castillo
+ecuador,kendry paez,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,358746,Kendry Páez
+ecuador,enner valencia,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,171771,Enner Valencia
+ecuador,jordy caicedo,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,217079,Jordy Caicedo
+ecuador,john yeboah,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,265926,John Yeboah
+ecuador,gonzalo plata,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,277352,Gonzalo Plata
+ecuador,kevin rodriguez,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,281316,Kevin Rodríguez
+ecuador,anthony valencia,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,303328,Anthony Valencia
+ecuador,nilson angulo,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,318090,Nilson Angulo
+ecuador,alan minda,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,319422,Alan Minda
+ecuador,jeremy arevalo,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,curacao,367725,Jeremy Arévalo
+curacao,eloy room,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,127444,Eloy Room
+curacao,trevor doornbusch,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,262109,Trevor Doornbusch
+curacao,tyrick bodak,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,297542,Tyrick Bodak
+curacao,joshua brenet,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,178433,Joshua Brenet
+curacao,riechedly bazoer,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,188411,Riechedly Bazoer
+curacao,sherel floranus,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,224786,Sherel Floranus
+curacao,armando obispo,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,245918,Armando Obispo
+curacao,jurien gaari,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,246281,Juriën Gaari
+curacao,roshon van eijma,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,270807,Roshon van Eijma
+curacao,shurandy sambo,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,301456,Shurandy Sambo
+curacao,livano comenencia,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,317285,Livano Comenencia
+curacao,deveron fonville,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,335203,Deveron Fonville
+curacao,leandro bacuna,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,138664,Leandro Bacuna
+curacao,juninho bacuna,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,216287,Juninho Bacuna
+curacao,kevin felida,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,262738,Kevin Felida
+curacao,godfried roemeratoe,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,273295,Godfried Roemeratoe
+curacao,tahith chong,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,276218,Tahith Chong
+curacao,ar jany martha,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,306553,Ar'jany Martha
+curacao,tyrese noslin,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,359132,Tyrese Noslin
+curacao,jurgen locadia,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,167213,Jürgen Locadia
+curacao,brandley kuwas,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,177058,Brandley Kuwas
+curacao,gervane kastaneer,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,178273,Gervane Kastaneer
+curacao,kenji gorre,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,188452,Kenji Gorré
+curacao,sontje hansen,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,297299,Sontje Hansen
+curacao,jearl margaritha,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,301441,Jearl Margaritha
+curacao,jeremy antonisse,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760446,espn:760446,ecuador,310925,Jeremy Antonisse
+tunisia,sabri ben hessen,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,195253,Sabri Ben Hessen
+tunisia,aymen dahmen,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,265272,Aymen Dahmen
+tunisia,mouhib chamakh,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,420888,Mouhib Chamakh
+tunisia,dylan bronn,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,240371,Dylan Bronn
+tunisia,yan valery,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,240588,Yan Valery
+tunisia,montassar talbi,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,265099,Montassar Talbi
+tunisia,ali abdi,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,265234,Ali Abdi
+tunisia,mohamed amine ben hamida,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,296982,Mohamed Amine Ben Hamida
+tunisia,omar rekik,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,303848,Omar Rekik
+tunisia,moutaz neffati,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,345975,Moutaz Neffati
+tunisia,adem arous,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,410358,Adem Arous
+tunisia,raed chikhaoui,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,420890,Raed Chikhaoui
+tunisia,rani khedira,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,159152,Rani Khedira
+tunisia,ellyes skhiri,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,209595,Ellyes Skhiri
+tunisia,mortadha ben ouanes,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,273170,Mortadha Ben Ouanes
+tunisia,mohamed hadj mahmoud,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,299861,Mohamed Hadj Mahmoud
+tunisia,hannibal mejbri,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,300007,Hannibal Mejbri
+tunisia,anis slimane,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,302944,Anis Slimane
+tunisia,elias achouri,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,324510,Elias Achouri
+tunisia,firas chaouat,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,265207,Firas Chaouat
+tunisia,sebastian tounekti,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,303702,Sebastian Tounekti
+tunisia,ismael gharbi,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,317473,Ismaël Gharbi
+tunisia,elias saad,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,323950,Elias Saad
+tunisia,hazem mastouri,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,396085,Hazem Mastouri
+tunisia,khalil ayari,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,404769,Khalil Ayari
+tunisia,rayan elloumi,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,japan,405591,Rayan Elloumi
+japan,keisuke osako,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,255723,Keisuke Osako
+japan,zion suzuki,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,265958,Zion Suzuki
+japan,tomoki hayakawa,G,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,312924,Tomoki Hayakawa
+japan,hiroki ito,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,97111,Hiroki Ito
+japan,yuto nagatomo,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,119082,Yuto Nagatomo
+japan,shogo taniguchi,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,202728,Shogo Taniguchi
+japan,takehiro tomiyasu,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,238004,Takehiro Tomiyasu
+japan,kou itakura,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,238033,Kou Itakura
+japan,ayumu seko,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,258270,Ayumu Seko
+japan,yukinari sugawara,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,265965,Yukinari Sugawara
+japan,tsuyoshi watanabe,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,276279,Tsuyoshi Watanabe
+japan,junnosuke suzuki,D,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,333663,Junnosuke Suzuki
+japan,wataru endo,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,152479,Wataru Endo
+japan,daichi kamada,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,219362,Daichi Kamada
+japan,ritsu doan,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,219627,Ritsu Doan
+japan,ao tanaka,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,253173,Ao Tanaka
+japan,yuito suzuki,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,303031,Yuito Suzuki
+japan,kaishu sano,M,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,357030,Kaishu Sano
+japan,junya ito,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,219350,Junya Ito
+japan,koki ogawa,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,238016,Koki Ogawa
+japan,takefusa kubo,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,256587,Takefusa Kubo
+japan,keito nakamura,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,265953,Keito Nakamura
+japan,ayase ueda,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,274277,Ayase Ueda
+japan,daizen maeda,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,286347,Daizen Maeda
+japan,keisuke goto,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,346208,Keisuke Goto
+japan,kento shiogai,F,0,35,current_squad_unconfirmed,espn_team_roster,espn,760449,espn:760449,tunisia,362959,Kento Shiogai

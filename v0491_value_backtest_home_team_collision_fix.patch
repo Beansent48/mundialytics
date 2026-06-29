@@ -1,0 +1,60 @@
+--- a/src/mundialytics/reports/match_value.py
++++ b/src/mundialytics/reports/match_value.py
+@@ -78,6 +78,27 @@
+     odd = odd[odd["market_type"].astype(str).str.lower().isin(["match_winner", "1x2", "result"])].copy()
+     if odd.empty:
+         return pd.DataFrame()
++
++    # Football-Data-style odds extracts may carry descriptive columns such as
++    # home_team/away_team/date/competition. The prediction dataframe is the
++    # source of truth for those fields during value evaluation; keeping the odds
++    # copies would make pandas suffix them during merge and remove the expected
++    # canonical names (home_team, away_team).
++    prediction_side_cols = {
++        "date",
++        "competition",
++        "home_team",
++        "away_team",
++        "team_scope",
++        "p_home_win",
++        "p_draw",
++        "p_away_win",
++        "lambda_home",
++        "lambda_away",
++        "most_likely_score",
++    }
++    odd = odd.drop(columns=[c for c in prediction_side_cols if c in odd.columns], errors="ignore")
++
+     for col, default in {
+         "date": None,
+         "competition": "unknown",
+--- a/tests/test_match_value.py
++++ b/tests/test_match_value.py
+@@ -35,6 +35,27 @@
+     home = picks[picks["selection_type"] == "home"].iloc[0]
+     assert home["model_probability"] == 0.55
+     assert home["value_flag"] is True or bool(home["value_flag"]) is True
++
++
++def test_build_match_value_picks_handles_odds_with_prediction_side_columns():
++    odds = pd.DataFrame({
++        "fixture_id": ["fx1", "fx1", "fx1"],
++        "date": ["2026-06-01", "2026-06-01", "2026-06-01"],
++        "competition": ["World Cup", "World Cup", "World Cup"],
++        "team_scope": ["national", "national", "national"],
++        "home_team": ["Spain", "Spain", "Spain"],
++        "away_team": ["Uruguay", "Uruguay", "Uruguay"],
++        "bookmaker": ["demo", "demo", "demo"],
++        "market_type": ["match_winner", "match_winner", "match_winner"],
++        "selection": ["home", "draw", "away"],
++        "odds": [2.10, 3.50, 4.50],
++    })
++    picks = build_match_value_picks(_predictions(), odds, min_edge=0.0, min_ev=0.0)
++    assert len(picks) == 3
++    assert "home_team" in picks.columns
++    assert "home_team_x" not in picks.columns
++    assert "home_team_y" not in picks.columns
++    assert picks["home_team"].eq("spain").all()
+ 
+ 
+ def test_build_match_value_picks_maps_team_names():

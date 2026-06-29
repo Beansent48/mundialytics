@@ -1,0 +1,48 @@
+project:
+  name: Mundialytics Betting Engine
+  mode: paper
+  random_seed: 42
+
+data:
+  sample_matches_path: data/sample/sample_matches.csv
+  sample_player_events_path: data/sample/sample_player_events.csv
+  sample_odds_path: data/sample/sample_odds.csv
+  sample_lineups_path: data/sample/sample_lineups.csv
+  cache_dir: data/cache
+
+elo:
+  initial_rating: 1500.0
+  k_base: 32.0
+  home_advantage: 55.0
+  goal_diff_multiplier: true
+  tournament_weights:
+    friendly: 0.70
+    qualifier: 1.00
+    continental: 1.15
+    world_cup: 1.25
+
+models:
+  max_goals_matrix: 8
+  lambda_floor: 0.05
+  lambda_cap: 6.0
+  poisson_alpha: 0.1
+  rf_n_estimators: 500
+  rf_min_samples_leaf: 6
+  min_minutes_for_player_rate: 180
+
+betting:
+  min_edge: 0.03
+  min_expected_return: 0.03
+  default_stake: 1.0
+  kelly_fraction: 0.10
+  exchange_commission: 0.02
+  apply_overround_normalization: true
+
+substitute_plus:
+  enabled: true
+  assume_or_logic_for_threshold_markets: true
+  min_replacement_probability: 0.10
+
+reports:
+  output_dir: outputs
+  top_n_picks: 20

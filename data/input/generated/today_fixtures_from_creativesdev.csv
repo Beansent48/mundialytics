@@ -1,0 +1,12 @@
+match_id,date,home_team,away_team,neutral,competition,season,stage,group,team_scope,team_type,competition_context,gender,provider,provider_fixture_id,kickoff_utc,status
+5165333,2026-06-23,Iberia 1999,FC Meshakhte Tkibuli,0,439.0,2026,19,,club,club,unknown,men,creativesdev_live_football,5165333,2026-06-23T15:00:00Z,
+5165334,2026-06-23,Dinamo Tbilisi,Dinamo Batumi,0,439.0,2026,19,,club,club,unknown,men,creativesdev_live_football,5165334,2026-06-23T17:00:00Z,
+4667822,2026-06-23,Portugal,Uzbekistan,0,894800.0,2026,2,,club,club,unknown,men,creativesdev_live_football,4667822,2026-06-23T17:00:00Z,
+5629974,2026-06-23,BK Astrio,Ängelholms FF,0,931430.0,2026,1,,club,club,unknown,men,creativesdev_live_football,5629974,2026-06-23T17:00:00Z,
+5629957,2026-06-23,FC Järfälla,FC Arlanda,0,931430.0,2026,1,,club,club,unknown,men,creativesdev_live_football,5629957,2026-06-23T17:30:00Z,
+5147577,2026-06-23,FC Lahti,TPS,0,919925.0,2026,12,,club,club,unknown,men,creativesdev_live_football,5147577,2026-06-23T15:00:00Z,
+5147578,2026-06-23,KuPS,Ilves,0,919925.0,2026,12,,club,club,unknown,men,creativesdev_live_football,5147578,2026-06-23T15:00:00Z,
+5147579,2026-06-23,VPS,AC Oulu,0,919925.0,2026,12,,club,club,unknown,men,creativesdev_live_football,5147579,2026-06-23T15:00:00Z,
+5147580,2026-06-23,FC Inter Turku,SJK,0,919925.0,2026,12,,club,club,unknown,men,creativesdev_live_football,5147580,2026-06-23T16:00:00Z,
+5147581,2026-06-23,FF Jaro,IF Gnistan,0,919925.0,2026,12,,club,club,unknown,men,creativesdev_live_football,5147581,2026-06-23T16:00:00Z,
+5147582,2026-06-23,IFK Mariehamn,HJK,0,919925.0,2026,12,,club,club,unknown,men,creativesdev_live_football,5147582,2026-06-23T17:00:00Z,
