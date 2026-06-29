@@ -49,10 +49,15 @@ def load_clubs_data(path: str | Path | None = None) -> pd.DataFrame:
 
 def load_international_data(
     path: str | Path | None = None,
-    min_year: int = 2010,
+    min_year: int = 2006,
     competitions: Sequence[str] | None = None,
 ) -> pd.DataFrame:
-    """Load and filter international match results."""
+    """Load and filter international match results.
+
+    Uses 2006+ by default so the dataset covers multiple World Cup cycles and
+    avoids over-indexing on any single dominant team. Friendlies are excluded
+    (too noisy); only competitive matches from ELITE_COMPS are kept.
+    """
     p = Path(path) if path else ROOT / "data/processed/national_matches.csv"
     df = pd.read_csv(p)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -60,12 +65,7 @@ def load_international_data(
     df = df[df["date"].dt.year >= min_year].copy()
 
     comps = set(competitions) if competitions else ELITE_COMPS
-    # Allow friendlies after 2022 as signal for latest strength
-    major = df[df["competition"].isin(comps)].copy()
-    recent_friendly = df[
-        (df["competition"] == "Friendly") & (df["date"].dt.year >= 2022)
-    ].copy()
-    combined = pd.concat([major, recent_friendly], ignore_index=True)
+    combined = df[df["competition"].isin(comps)].copy()
     combined["team_scope"] = "national"
     return combined.drop_duplicates(subset=["home_team", "away_team", "date"]).reset_index(drop=True)
 
