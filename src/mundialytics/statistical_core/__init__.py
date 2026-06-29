@@ -15,7 +15,6 @@ from mundialytics.statistical_core.rolling_validation import RollingMatchConfig,
 from mundialytics.statistical_core.dynamic_lines import DynamicLineConfig, build_dynamic_market_lines
 from mundialytics.statistical_core.matchday_summary import MATCHDAY_SUMMARY_VERSION, build_matchday_summary
 from mundialytics.statistical_core.tournament_report import TOURNAMENT_REPORT_VERSION, build_tournament_report
-from mundialytics.statistical_core.player_event_model import PlayerEventModel
 from mundialytics.statistical_core.team_stats_model import TeamStatsModel
 from mundialytics.statistical_core.tournament_simulator import TournamentSimulationConfig, TournamentSimulator
 from mundialytics.statistical_core.simulation_evaluation import SIMULATION_EVALUATION_VERSION, evaluate_simulation_predictions
@@ -48,7 +47,6 @@ __all__ = [
     "RollingMatchConfig",
     "rolling_match_backtest",
     "run_rolling_model_lab",
-    "PlayerEventModel",
     "ScorerForecastConfig",
     "TeamStatsModel",
     "TournamentSimulationConfig",
