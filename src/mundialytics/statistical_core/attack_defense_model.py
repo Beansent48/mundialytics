@@ -140,15 +140,29 @@ class AttackDefenseModel:
 
         ll = np.sum(w * (hg * np.log(lh) - lh + ag * np.log(la) - la))
 
-        # Dixon-Coles correction
+        # Dixon-Coles correction — vectorised over low-score cells only
         rho = self.dixon_coles_rho
         if abs(rho) > 1e-12:
-            for k in range(len(hg)):
-                h, a = int(hg[k]), int(ag[k])
-                if h <= 1 and a <= 1:
-                    tau = _dc_tau(h, a, lh[k], la[k], rho)
-                    tau = max(tau, 1e-10)
-                    ll += w[k] * math.log(tau)
+            low = (hg <= 1) & (ag <= 1)
+            if low.any():
+                h_low = hg[low].astype(int)
+                a_low = ag[low].astype(int)
+                lh_low, la_low = lh[low], la[low]
+                tau = np.ones(int(low.sum()))
+                # (0,0): 1 - rho*lh*la
+                m00 = (h_low == 0) & (a_low == 0)
+                tau[m00] = 1.0 - rho * lh_low[m00] * la_low[m00]
+                # (0,1): 1 + rho*lh
+                m01 = (h_low == 0) & (a_low == 1)
+                tau[m01] = 1.0 + rho * lh_low[m01]
+                # (1,0): 1 + rho*la
+                m10 = (h_low == 1) & (a_low == 0)
+                tau[m10] = 1.0 + rho * la_low[m10]
+                # (1,1): 1 - rho
+                m11 = (h_low == 1) & (a_low == 1)
+                tau[m11] = 1.0 - rho
+                tau = np.clip(tau, 1e-10, None)
+                ll += np.sum(w[low] * np.log(tau))
 
         # L2 regularization — shrinks attack, defense, league effects toward zero
         if self.l2_reg > 0:
