@@ -142,6 +142,8 @@ class PredictionEngine:
         self.ad_model_: AttackDefenseModel | None = None
         self.event_models_: dict[str, EventLambdaModel] = {}
         self._train_frame: pd.DataFrame | None = None
+        # Cache: (team, is_home) → last training row — built once at fit time
+        self._team_row_cache: dict[tuple[str, int], pd.DataFrame] = {}
 
     # ── Fit ───────────────────────────────────────────────────────────────────
 
@@ -184,6 +186,14 @@ class PredictionEngine:
                 em.fit(frame)
                 self.event_models_[market] = em
 
+        # Build O(1) lookup cache: (team, is_home) → last training row
+        # Avoids scanning all 10k rows on every predict_match call
+        self._team_row_cache = {}
+        if "team" in frame.columns and "is_home" in frame.columns:
+            sorted_frame = frame.sort_values("date") if "date" in frame.columns else frame
+            for (team, is_home), grp in sorted_frame.groupby(["team", "is_home"]):
+                self._team_row_cache[(str(team), int(is_home))] = grp.iloc[[-1]].copy()
+
         return self
 
     def _build_team_rows(
@@ -222,28 +232,26 @@ class PredictionEngine:
         lh, la, _ = self.ad_model_.expected_goals(home, away, neutral=int(neutral), competition=competition)
         return lh, la
 
+    def _get_team_row(self, team: str, is_home: int, competition: str) -> pd.DataFrame:
+        """O(1) lookup of last training row for a team via the fit-time cache."""
+        row = self._team_row_cache.get((team, is_home))
+        if row is None:
+            # Fallback: try opposite side (home/away agnostic)
+            row = self._team_row_cache.get((team, 1 - is_home))
+        if row is None:
+            return pd.DataFrame()
+        r = row.copy()
+        r["competition"] = competition
+        r["is_home"] = is_home
+        return r
+
     def _lambdas_gl(self, home: str, away: str, competition: str) -> tuple[float, float]:
-        """Predict via GoalLambdaModel using last training features of each team."""
-        if self.goal_model_ is None or self._train_frame is None:
+        """Predict via GoalLambdaModel using cached last training row per team."""
+        if self.goal_model_ is None:
             return 1.5, 1.2
-        frame = self._train_frame
         h, a = canonical_name(home), canonical_name(away)
-
-        def last_row(team: str, opp: str, is_home: int) -> pd.DataFrame:
-            mask = (frame["team"] == team) & (frame["is_home"] == is_home)
-            hist = frame[mask].sort_values("date") if "date" in frame.columns else frame[mask]
-            if hist.empty:
-                mask2 = frame["team"] == team
-                hist = frame[mask2].sort_values("date") if "date" in frame.columns else frame[mask2]
-            if hist.empty:
-                return pd.DataFrame()
-            row = hist.iloc[[-1]].copy()
-            row["competition"] = competition
-            row["is_home"] = is_home
-            return row
-
-        home_row = last_row(h, a, 1)
-        away_row = last_row(a, h, 0)
+        home_row = self._get_team_row(h, 1, competition)
+        away_row = self._get_team_row(a, 0, competition)
         if home_row.empty or away_row.empty:
             return 1.5, 1.2
         lh = float(self.goal_model_.predict_lambda(home_row)[0])
@@ -252,24 +260,13 @@ class PredictionEngine:
 
     def _event_lambda(self, market: str, home: str, away: str, competition: str) -> tuple[float, float]:
         em = self.event_models_.get(market)
-        if em is None or self._train_frame is None:
-            return em.mean_ if em else 0.0, em.mean_ if em else 0.0
-        frame = self._train_frame
+        if em is None:
+            return 0.0, 0.0
         h, a = canonical_name(home), canonical_name(away)
-
-        def get_row(team: str, is_home: int) -> pd.DataFrame:
-            mask = (frame["team"] == team) & (frame["is_home"] == is_home)
-            hist = frame[mask].sort_values("date") if "date" in frame.columns else frame[mask]
-            if hist.empty:
-                hist = frame[frame["team"] == team]
-            return hist.iloc[[-1]].copy() if not hist.empty else pd.DataFrame()
-
-        home_row = get_row(h, 1)
-        away_row = get_row(a, 0)
+        home_row = self._get_team_row(h, 1, competition)
+        away_row = self._get_team_row(a, 0, competition)
         if home_row.empty or away_row.empty:
             return em.mean_, em.mean_
-        home_row["competition"] = competition
-        away_row["competition"] = competition
         lh = float(em.predict_lambda(home_row)[0])
         la = float(em.predict_lambda(away_row)[0])
         return lh, la
