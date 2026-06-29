@@ -158,6 +158,37 @@ class MatchOutcomeModel:
         self.audit = {"match_model_fit": "historical_event_team_goals", "teams": len(profiles), "global_goal_mean": self.global_goal_mean, "model_config": self.model_config}
         return self
 
+    def inject_external_ratings(self, elo_ratings: dict[str, float]) -> "MatchOutcomeModel":
+        """Override internal goal-diff ratings with externally computed ELO.
+
+        Call after fit(). The ELO values replace the heuristic
+        ``1500 + 85 * goal_diff_signal`` rating in each TeamStrengthProfile.
+        Teams not present in elo_ratings keep their internal rating.
+
+        Parameters
+        ----------
+        elo_ratings : dict mapping canonical team name -> ELO float
+        """
+        for team, profile in self.profiles.items():
+            ext = elo_ratings.get(team) or elo_ratings.get(canonical_name(team))
+            if ext is not None:
+                self.profiles[team] = TeamStrengthProfile(
+                    team=profile.team,
+                    matches=profile.matches,
+                    goals_for=profile.goals_for,
+                    goals_against=profile.goals_against,
+                    recent_goals_for=profile.recent_goals_for,
+                    recent_goals_against=profile.recent_goals_against,
+                    rating=float(ext),
+                    attack_strength=profile.attack_strength,
+                    defense_weakness=profile.defense_weakness,
+                    warnings=profile.warnings,
+                )
+        self.audit["external_elo_teams_injected"] = sum(
+            1 for t in self.profiles if (elo_ratings.get(t) or elo_ratings.get(canonical_name(t))) is not None
+        )
+        return self
+
     def profile_for(self, team: str) -> TeamStrengthProfile:
         key = canonical_name(team)
         if key in self.profiles:

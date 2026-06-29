@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from math import log
 from typing import Dict
 
+import numpy as np
 import pandas as pd
 
 from mundialytics.identity.normalization import canonical_team_name
@@ -15,28 +16,54 @@ class EloConfig:
     k_base: float = 32.0
     home_advantage: float = 55.0
     goal_diff_multiplier: bool = True
+    # Fraction of the gap to the mean that gets closed at the start of each season.
+    # 0.0 = no reset, 0.30 = FiveThirtyEight-style partial regression.
+    season_reset_fraction: float = 0.30
     tournament_weights: dict[str, float] = field(default_factory=lambda: {
         "friendly": 0.70,
         "qualifier": 1.00,
-        "continental": 1.15,
+        "continental_club": 1.10,   # CL / EL — cross-league calibrator
+        "continental": 1.15,        # national-team continental tournament
         "world_cup": 1.25,
     })
 
 
 class EloRater:
-    """Simple, reproducible football ELO rater.
+    """Reproducible football ELO rater with season reset and European calibration.
 
-    It can be used for national teams or clubs. For national-tournament neutral
-    games set neutral=1, which removes home advantage.
+    Design decisions:
+    - Season reset: at the boundary of each season, ratings regress toward the
+      global mean by ``season_reset_fraction``.  This prevents compounding
+      errors and better represents squad turnover between seasons.
+    - European competition weights: CL/EL matches act as cross-league
+      calibrators (K × 1.10), so the relative level of EPL vs LaLiga is
+      implicitly encoded rather than assumed equal.
+    - Goal-diff multiplier: log-scaled so a 4-0 is more informative than 1-0
+      but a 7-0 is not 7× more informative than a 1-0.
     """
 
     def __init__(self, config: EloConfig | None = None):
         self.config = config or EloConfig()
         self.ratings: Dict[str, float] = {}
         self.history: list[dict] = []
+        self._current_season: str | None = None
 
     def get(self, team: str) -> float:
         return self.ratings.get(canonical_team_name(team), self.config.initial_rating)
+
+    def mean_rating(self) -> float:
+        if not self.ratings:
+            return self.config.initial_rating
+        return float(np.mean(list(self.ratings.values())))
+
+    def season_reset(self) -> None:
+        """Regress all ratings toward the global mean at a season boundary."""
+        if self.config.season_reset_fraction <= 0 or not self.ratings:
+            return
+        f = float(self.config.season_reset_fraction)
+        mean = self.mean_rating()
+        for team in self.ratings:
+            self.ratings[team] = self.ratings[team] + f * (mean - self.ratings[team])
 
     def expected_score(self, ra: float, rb: float) -> float:
         return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
@@ -57,11 +84,15 @@ class EloRater:
         return log(gd + 1.0) * 1.10
 
     def competition_weight(self, competition: str | None) -> float:
-        comp = (competition or "").lower().replace(" ", "_")
+        comp = (competition or "").lower()
         if "friendly" in comp:
-            return self.config.tournament_weights.get("friendly", 0.7)
+            return self.config.tournament_weights.get("friendly", 0.70)
+        if "champions" in comp or "ucl" in comp:
+            return self.config.tournament_weights.get("continental_club", 1.10)
+        if "europa" in comp or "conference" in comp or "uel" in comp:
+            return self.config.tournament_weights.get("continental_club", 1.10) * 0.95
         if "qual" in comp:
-            return self.config.tournament_weights.get("qualifier", 1.0)
+            return self.config.tournament_weights.get("qualifier", 1.00)
         if "world" in comp:
             return self.config.tournament_weights.get("world_cup", 1.25)
         if "euro" in comp or "copa" in comp or "afcon" in comp:
@@ -104,16 +135,33 @@ class EloRater:
             "elo_diff_pre": ra - rb,
             "expected_home": expected_home,
             "delta_home": delta,
+            "competition": competition,
+            "k_effective": k,
         }
         self.history.append(record)
         return record
 
     def fit(self, matches: pd.DataFrame) -> pd.DataFrame:
+        """Fit ELO on sorted matches, applying season resets at season boundaries."""
         completed = matches.dropna(subset=["home_goals", "away_goals"]).copy()
         completed = completed.sort_values(["date", "match_id"])
+        self._current_season = None
         for _, row in completed.iterrows():
+            season = str(row.get("season", "") or "")
+            if season and season != self._current_season:
+                if self._current_season is not None:
+                    self.season_reset()
+                self._current_season = season
             self.update_match(row)
         return pd.DataFrame(self.history)
+
+    def ratings_frame(self) -> pd.DataFrame:
+        """Return current ratings as a sorted DataFrame."""
+        return (
+            pd.DataFrame({"team": list(self.ratings.keys()), "elo": list(self.ratings.values())})
+            .sort_values("elo", ascending=False)
+            .reset_index(drop=True)
+        )
 
     def transform_fixture(self, home_team: str, away_team: str, neutral: int = 1) -> dict:
         home_team = canonical_team_name(home_team)
