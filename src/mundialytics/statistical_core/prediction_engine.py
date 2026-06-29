@@ -321,6 +321,53 @@ class PredictionEngine:
             model_source=f"blend_gl{w:.0%}_ad{1-w:.0%}",
         )
 
+    # ── Tournament helpers ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _ko_bracket(
+        group_results: list[tuple[str, str]],  # [(winner, runner_up), ...]
+        format: str = "auto",
+    ) -> list[tuple[str, str]]:
+        """Return R1 knockout bracket as (home, away) pairs.
+
+        Formats:
+        - 'wc' / 'worldcup'  : World Cup pairing (A1-B2, B1-A2, C1-D2, ...)
+        - 'euro'             : UEFA Euro pairing (complex 3rd-place slots, approximated)
+        - 'sequential'       : simple sequential (1st[0]-2nd[1], 1st[1]-2nd[0], ...)
+        - 'auto'             : wc if ≥6 groups, sequential otherwise
+        """
+        n = len(group_results)
+        winners   = [r[0] for r in group_results]
+        runners   = [r[1] for r in group_results]
+
+        fmt = format.lower()
+        if fmt == "auto":
+            fmt = "wc" if n >= 6 else "sequential"
+
+        if fmt in ("wc", "worldcup"):
+            # World Cup bracket: pair groups in order, alternating home/away
+            # A1-B2, B1-A2, C1-D2, D1-C2, E1-F2, F1-E2, G1-H2, H1-G2 ...
+            pairs = []
+            for i in range(0, n - 1, 2):
+                pairs.append((winners[i],   runners[i + 1]))
+                pairs.append((winners[i + 1], runners[i]))
+            if n % 2:  # odd group count — last winner gets a bye (vs runner-up of same group)
+                pairs.append((winners[-1], runners[-1]))
+            return pairs
+
+        if fmt == "euro":
+            # UEFA Euro (6 groups → 16 in R16 using best 3rd-place teams)
+            # Approximate: treat top-2 per group as standard bracket
+            # Actual UEFA pairing depends on which groups produce the 3rd-place teams — we simplify
+            return PredictionEngine._ko_bracket(group_results, "sequential")
+
+        # sequential
+        pairs = []
+        for i in range(0, n - 1, 2):
+            pairs.append((winners[i], runners[i + 1]))
+            pairs.append((winners[i + 1], runners[i]))
+        return pairs
+
     # ── Full tournament simulation ────────────────────────────────────────────
 
     def simulate_tournament(
@@ -332,6 +379,7 @@ class PredictionEngine:
         neutral: bool = True,
         player_goals: dict[str, dict[str, float]] | None = None,
         random_seed: int = 42,
+        bracket_format: str = "auto",
     ) -> TournamentResult:
         """Monte Carlo tournament simulation with group stage + knockout + Golden Boot.
 
@@ -344,168 +392,158 @@ class PredictionEngine:
         neutral : treat all matches as neutral venue
         player_goals : {player: {team: goals_per_match_rate}} for Golden Boot tracking
         random_seed : for reproducibility
+        bracket_format : "auto" | "wc" | "euro" | "sequential"
         """
         rng = np.random.default_rng(random_seed)
         all_teams = [t for teams in groups.values() for t in teams]
 
-        # Pre-compute match lambdas once
+        # Pre-compute all possible match lambdas
         match_cache: dict[tuple[str, str], tuple[float, float]] = {}
+        for h in all_teams:
+            for a in all_teams:
+                if h != a:
+                    pred = self.predict_match(h, a, competition=competition, neutral=neutral)
+                    match_cache[(h, a)] = (pred.lambda_home, pred.lambda_away)
 
-        def get_lam(h: str, a: str) -> tuple[float, float]:
-            key = (h, a)
-            if key not in match_cache:
-                pred = self.predict_match(h, a, competition=competition, neutral=neutral)
-                match_cache[key] = (pred.lambda_home, pred.lambda_away)
-            return match_cache[key]
+        team_counts: dict[str, dict[str, float]] = {
+            t: {"win": 0, "final": 0, "semis": 0, "quarters": 0, "r16": 0,
+                "advance": 0, "goals": 0.0}
+            for t in all_teams
+        }
+        player_goal_counts: dict[str, list[int]] = defaultdict(list)
 
-        # Accumulators
-        team_counts = defaultdict(lambda: {"win": 0, "final": 0, "semis": 0,
-                                            "quarters": 0, "advance": 0, "goals": 0.0})
-        player_goal_counts: dict[str, float] = defaultdict(float)
+        def sim_group(teams: list[str]) -> list[str]:
+            """Return teams sorted by final group table position."""
+            table: dict[str, dict[str, int]] = {t: {"pts":0,"gf":0,"ga":0} for t in teams}
+            for ht, at in itertools.combinations(teams, 2):
+                lh, la = match_cache[(ht, at)]
+                hg = int(rng.poisson(lh)); ag = int(rng.poisson(la))
+                table[ht]["gf"] += hg; table[ht]["ga"] += ag
+                table[at]["gf"] += ag; table[at]["ga"] += hg
+                if hg > ag:   table[ht]["pts"] += 3
+                elif ag > hg: table[at]["pts"] += 3
+                else:         table[ht]["pts"] += 1; table[at]["pts"] += 1
+            return sorted(
+                teams,
+                key=lambda t: (table[t]["pts"], table[t]["gf"]-table[t]["ga"],
+                               table[t]["gf"], rng.uniform()),
+                reverse=True,
+            )
+
+        def sim_ko(h: str, a: str) -> tuple[str, int, int]:
+            """Returns (winner, hg, ag) with penalties on draw."""
+            lh, la = match_cache[(h, a)]
+            hg = int(rng.poisson(lh)); ag = int(rng.poisson(la))
+            if hg > ag: return h, hg, ag
+            if ag > hg: return a, hg, ag
+            p_hp = lh / max(lh + la, 1e-6)
+            return (h if rng.random() < p_hp else a), hg, ag
+
+        def run_ko_round(bracket: list[tuple[str, str]], stage_key: str) -> list[str]:
+            winners = []
+            for h, a in bracket:
+                w, hg, ag = sim_ko(h, a)
+                team_counts[w][stage_key] += 1
+                winners.append(w)
+                # goals tracked
+                sim_goals[h] += hg; sim_goals[a] += ag
+            return winners
 
         for _ in range(n_sims):
-            sim_goals: dict[str, int] = defaultdict(int)   # team goals in this sim (for GD/GF)
+            sim_goals: dict[str, int] = defaultdict(int)
 
-            # ── Group stage ──────────────────────────────────────────────────
-            group_winners: list[str] = []  # 1st in each group
-            group_runnersup: list[str] = []  # 2nd in each group
-
-            for group_name, teams in groups.items():
-                table = defaultdict(lambda: {"pts": 0, "gf": 0, "ga": 0})
-                fixtures = list(itertools.combinations(teams, 2))
-                for ht, at in fixtures:
-                    lh, la = get_lam(ht, at)
-                    hg = int(rng.poisson(lh))
-                    ag = int(rng.poisson(la))
-                    sim_goals[ht] += hg
-                    sim_goals[at] += ag
-                    table[ht]["gf"] += hg; table[ht]["ga"] += ag
-                    table[at]["gf"] += ag; table[at]["ga"] += hg
-                    if hg > ag:
-                        table[ht]["pts"] += 3
-                    elif ag > hg:
-                        table[at]["pts"] += 3
-                    else:
-                        table[ht]["pts"] += 1; table[at]["pts"] += 1
-
-                ranked = sorted(
-                    teams,
-                    key=lambda t: (table[t]["pts"], table[t]["gf"] - table[t]["ga"], table[t]["gf"],
-                                   rng.uniform()),  # tiebreak with RNG
-                    reverse=True,
-                )
+            # Group stage
+            group_ranked: list[list[str]] = []
+            for group_teams in groups.values():
+                ranked = sim_group(list(group_teams))
+                group_ranked.append(ranked)
                 for rank, t in enumerate(ranked):
                     if rank < knockout_slots:
                         team_counts[t]["advance"] += 1
-                group_winners.append(ranked[0])
-                if len(ranked) > 1:
-                    group_runnersup.append(ranked[1])
 
-            # ── Knockout stage ───────────────────────────────────────────────
-            def sim_ko(h: str, a: str) -> str:
-                lh, la = get_lam(h, a)
-                hg = int(rng.poisson(lh))
-                ag = int(rng.poisson(la))
-                sim_goals[h] += hg; sim_goals[a] += ag
-                if hg > ag:
-                    return h
-                if ag > hg:
-                    return a
-                # Penalties (toss weighted by pre-match strength)
-                lh_tot, la_tot = lh, la
-                p_hp = lh_tot / max(lh_tot + la_tot, 1e-6)
-                return h if rng.random() < p_hp else a
+            # Build bracket
+            group_results = [(r[0], r[1]) for r in group_ranked if len(r) >= 2]
+            ko_pairs = self._ko_bracket(group_results, bracket_format)
 
-            # Build knockout bracket: winners face runners-up from paired groups
-            n_groups = len(groups)
-            ko_round = []
-            group_list = list(groups.keys())
-            # Pair groups: A vs B, C vs D, etc.
-            for i in range(0, n_groups - 1, 2):
-                if i < len(group_winners) and i < len(group_runnersup):
-                    ko_round.append((group_winners[i], group_runnersup[i + 1] if i + 1 < len(group_runnersup) else group_winners[i + 1]))
-                    ko_round.append((group_winners[i + 1] if i + 1 < len(group_winners) else group_runnersup[i], group_runnersup[i]))
+            # Determine rounds based on number of pairs
+            n_ko = len(ko_pairs)
+            current_round = ko_pairs
 
-            # If odd number of groups, add extra
-            if n_groups % 2 != 0 and n_groups > 0:
-                ko_round.append((group_winners[-1], group_runnersup[-1] if group_runnersup else group_winners[-1]))
+            if n_ko >= 8:     # R16
+                r16_w = run_ko_round(current_round, "r16")
+                current_round = [(r16_w[i], r16_w[i+1]) for i in range(0, len(r16_w)-1, 2)]
+            if len(current_round) >= 4:   # QF
+                qf_w = run_ko_round(current_round, "quarters")
+                current_round = [(qf_w[i], qf_w[i+1]) for i in range(0, len(qf_w)-1, 2)]
+            if len(current_round) >= 2:   # SF
+                sf_w = run_ko_round(current_round, "semis")
+                if len(sf_w) >= 2:
+                    final_pair = [(sf_w[0], sf_w[1])]
+                    champions = run_ko_round(final_pair, "final")
+                    if champions:
+                        team_counts[champions[0]]["win"] += 1
 
-            survivors = [sim_ko(h, a) for h, a in ko_round if h != a]
-            # Add any unpaired teams
-            for i in range(len(ko_round) * 2, len(group_winners) + len(group_runnersup)):
-                pass
-
-            for t in survivors:
-                team_counts[t]["quarters"] += 1
-
-            # Semis
-            semi_winners = []
-            for i in range(0, len(survivors) - 1, 2):
-                w = sim_ko(survivors[i], survivors[i + 1])
-                semi_winners.append(w)
-                team_counts[w]["semis"] += 1
-
-            # Final
-            if len(semi_winners) >= 2:
-                champion = sim_ko(semi_winners[0], semi_winners[1])
-                team_counts[champion]["final"] += 1
-                team_counts[champion]["win"] += 1
-            elif len(semi_winners) == 1:
-                team_counts[semi_winners[0]]["win"] += 1
-
-            # Goals accumulation for Golden Boot
+            # Team goals
             for t, g in sim_goals.items():
-                team_counts[t]["goals"] += g
+                if t in team_counts:
+                    team_counts[t]["goals"] += g
 
-            # Player Golden Boot (optional)
+            # Player Golden Boot
             if player_goals:
                 for player, teams_map in player_goals.items():
+                    p_goals = 0
                     for team, rate in teams_map.items():
-                        # Only for teams that advanced
-                        if team in sim_goals and sim_goals[team] > 0:
-                            # Approximate: player scores rate * (team_goals / expected_team_goals)
-                            exp_tg = 2 * len(groups.get(list(groups.keys())[0], [4 * 3])) / 2
-                            actual_ratio = sim_goals[team] / max(exp_tg, 0.1)
-                            player_goals_sim = rng.poisson(rate * actual_ratio)
-                            player_goal_counts[player] += player_goals_sim
+                        if team in sim_goals:
+                            p_goals += int(rng.poisson(rate))
+                    player_goal_counts[player].append(p_goals)
 
-        # ── Aggregate results ─────────────────────────────────────────────────
+        # Aggregate
         rows = []
         for team in all_teams:
             c = team_counts[team]
             rows.append({
                 "team": team,
-                "p_win": c["win"] / n_sims,
-                "p_final": c["final"] / n_sims,
-                "p_semis": c["semis"] / n_sims,
-                "p_quarters": c["quarters"] / n_sims,
+                "p_win":            c["win"]     / n_sims,
+                "p_final":          c["final"]   / n_sims,
+                "p_semis":          c["semis"]   / n_sims,
+                "p_quarters":       c["quarters"]/ n_sims,
+                "p_r16":            c["r16"]     / n_sims,
                 "p_advance_groups": c["advance"] / n_sims,
-                "avg_goals_per_sim": c["goals"] / n_sims,
+                "avg_goals":        round(c["goals"] / n_sims, 2),
             })
         team_df = pd.DataFrame(rows).sort_values("p_win", ascending=False).reset_index(drop=True)
 
         # Golden Boot
         if player_goal_counts:
-            pb_rows = [{"player": p, "avg_goals": v / n_sims} for p, v in player_goal_counts.items()]
-            golden_boot = pd.DataFrame(pb_rows).sort_values("avg_goals", ascending=False).reset_index(drop=True)
-            total = golden_boot["avg_goals"].sum()
-            golden_boot["p_golden_boot"] = golden_boot["avg_goals"] / max(total, 1e-6)
-        else:
-            # Estimate from team goal rates
+            max_goals_by_sim = []
+            for sim_i in range(n_sims):
+                top = max((player_goal_counts[p][sim_i] if sim_i < len(player_goal_counts[p]) else 0
+                           for p in player_goal_counts), default=0)
+                max_goals_by_sim.append(top)
             gb_rows = []
-            for team in all_teams:
-                avg_goals = team_counts[team]["goals"] / n_sims
-                gb_rows.append({"player": f"{team} top scorer", "team": team,
-                                  "avg_goals": avg_goals, "p_golden_boot": 0.0})
-            golden_boot = pd.DataFrame(gb_rows).sort_values("avg_goals", ascending=False).reset_index(drop=True)
+            for p, goals_list in player_goal_counts.items():
+                avg = sum(goals_list) / len(goals_list) if goals_list else 0
+                p_gb = sum(1 for i, g in enumerate(goals_list)
+                           if i < len(max_goals_by_sim) and g >= max_goals_by_sim[i]) / n_sims
+                gb_rows.append({"player": p, "avg_goals_tournament": round(avg, 2), "p_golden_boot": round(p_gb, 4)})
+            golden_boot = pd.DataFrame(gb_rows).sort_values("avg_goals_tournament", ascending=False)
+        else:
+            golden_boot = pd.DataFrame()
 
+        n_groups = len(groups)
+        teams_per_group = len(next(iter(groups.values()))) if groups else 0
         return TournamentResult(
             n_sims=n_sims,
             team_stats=team_df,
             golden_boot=golden_boot,
-            metadata={"competition": competition, "n_groups": len(groups),
-                      "teams_per_group": len(next(iter(groups.values()))) if groups else 0,
-                      "knockout_slots": knockout_slots},
+            metadata={
+                "competition": competition,
+                "n_groups": n_groups,
+                "teams_per_group": teams_per_group,
+                "total_teams": n_groups * teams_per_group,
+                "knockout_slots": knockout_slots,
+                "bracket_format": bracket_format,
+            },
         )
 
     def simulate_league(
