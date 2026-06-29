@@ -297,13 +297,35 @@ class PlayerProfileModel:
         w = self.prior_weight
         return (raw_rate * n + prior * w) / (n + w)
 
-    def fit(self, player_df: pd.DataFrame) -> "PlayerProfileModel":
+    def fit(
+        self,
+        player_df: pd.DataFrame,
+        positions_df: pd.DataFrame | None = None,
+    ) -> "PlayerProfileModel":
+        """Fit player profiles.
+
+        Parameters
+        ----------
+        player_df : StatsBomb player match stats DataFrame.
+        positions_df : Optional DataFrame with columns [player, position_group]
+            pre-fetched from StatsBomb lineups.  When supplied, player
+            positions override the raw ``position`` column (which is often
+            all-NaN in the pre-aggregated CSV).
+        """
         df = player_df.copy()
         for c in EVENTS:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
 
-        df["position_group"] = df.get("position", pd.Series(dtype=str)).apply(self._resolve_position)
+        # Merge pre-fetched positions (StatsBomb lineups → GitHub)
+        if positions_df is not None and not positions_df.empty:
+            pos_map = positions_df.set_index("player")["position_group"].to_dict()
+            df["position_group"] = df["player"].map(pos_map).fillna(
+                df.get("position", pd.Series(dtype=str)).apply(self._resolve_position)
+            )
+        else:
+            df["position_group"] = df.get("position", pd.Series(dtype=str)).apply(self._resolve_position)
+
         df["competition_c"] = df.get("competition", pd.Series(dtype=str)).fillna("unknown")
 
         # Compute position medians (for prior)
