@@ -1,0 +1,62 @@
+# Reproducible data-source plan. No source is mandatory: each adapter should
+# write into the same canonical CSV schemas documented in docs/REPRODUCIBLE_SCOPE.md
+# and docs/EVENT_DATA_PIPELINE.md.
+
+national_teams:
+  historical_results:
+    primary: martj42_international_results
+    use_for: [elo, poisson_goals, tournament_backtesting]
+    notes: "Full international results are ideal for national-team ELO and match-level models."
+  event_data:
+    primary: statsbomb_open_data
+    secondary: wyscout_public_dataset_for_world_cup_2018_and_euro_2016
+    use_for: [shots, fouls, lineups, player_props_prototypes, substitution_context]
+    notes: "StatsBomb is higher quality; Wyscout is broader for some historical competitions. Both are historical/open, not full current coverage."
+  fixtures:
+    primary: openfootball_worldcup_json_or_manual_csv
+    backup: official_competition_site_manual_csv
+    use_for: [future_slate, tournament_simulation]
+
+clubs:
+  historical_results_odds:
+    primary: football_data_uk
+    use_for: [club_match_models, odds_backtesting, 1x2_totals_handicap]
+    notes: "Excellent for European club historical results/odds, less useful for player props."
+  ratings:
+    primary: clubelo
+    python_helper: soccerdata.ClubElo
+    use_for: [club_power_ratings, elo_features]
+  fixtures:
+    primary: openfootball_json_or_football_data_uk_fixtures
+    backup: manual_csv_export
+    use_for: [future_slate]
+  event_player_data:
+    primary: statsbomb_open_data
+    secondary: wyscout_public_dataset
+    python_helpers: [soccerdata_fbref_understat_when_terms_allow]
+    use_for: [shots, shots_on_target, fouls, cards, passes, duels, player_rates, minutes_from_lineups, substitutions, tactical_shifts]
+  tactical_tracking_samples:
+    primary: skillcorner_open_data
+    secondary: metrica_sports_sample_data
+    use_for: [tracking_experiments, physical_metrics, spacing, formation_prototypes]
+    notes: "Too small for production betting, useful for tactical feature engineering prototypes."
+
+odds:
+  historical_match_odds:
+    primary: football_data_uk
+  current_markets:
+    primary: betfair_api_or_manual_export
+    notes: "Keep paper mode first; player props coverage and rules vary by market."
+
+operational_provider:
+  free_mvp:
+    primary: sofascore_public_scheduled_events_for_current_fixtures
+    secondary_for_ids_lineups_if_plan_allows: api_football
+    provider_label: sofascore_for_fixtures_api_football_for_ids
+    env_var: none_for_sofascore_fixtures__API_FOOTBALL_KEY_if_using_api_football_lineups
+    use_for: [current_fixtures, current_lineups, provider_player_ids, provider_team_ids, basic_match_statistics]
+    notes: "SofaScore public scheduled-events is the free MVP source for current fixtures because API-Football free plans may not expose the current World Cup season. API-Football remains optional for IDs/lineups when the plan allows it. StatsBomb Open Data remains historical training data; odds remain separate."
+  identity_map:
+    output: data/identity/player_identity_map.csv
+    canonical_player_id_format: "<provider>:<provider_player_id>"
+    historical_bridge: "historical_player_id_global from StatsBomb-derived player-events model"

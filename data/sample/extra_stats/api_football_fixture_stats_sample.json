@@ -1,0 +1,23 @@
+{
+  "fixture": {"id": 1001, "date": "2024-02-12T20:00:00+00:00"},
+  "league": {"name": "Sample Cup"},
+  "teams": {"home": {"name": "Alpha FC"}, "away": {"name": "Beta United"}},
+  "response": [
+    {"team": {"name": "Alpha FC"}, "statistics": [
+      {"type": "Total Shots", "value": 13},
+      {"type": "Shots on Goal", "value": 6},
+      {"type": "Corner Kicks", "value": 8},
+      {"type": "Goalkeeper Saves", "value": 2},
+      {"type": "Yellow Cards", "value": 2},
+      {"type": "Fouls", "value": 10}
+    ]},
+    {"team": {"name": "Beta United"}, "statistics": [
+      {"type": "Total Shots", "value": 9},
+      {"type": "Shots on Goal", "value": 4},
+      {"type": "Corner Kicks", "value": 3},
+      {"type": "Goalkeeper Saves", "value": 5},
+      {"type": "Yellow Cards", "value": 3},
+      {"type": "Fouls", "value": 14}
+    ]}
+  ]
+}

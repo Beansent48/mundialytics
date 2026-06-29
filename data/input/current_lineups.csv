@@ -1,0 +1,7 @@
+match_id,team,player,position,started,expected_minutes
+ESP_KSA_2026,Spain,Lamine Yamal,RW,1,85
+ESP_KSA_2026,Spain,Alvaro Morata,ST,1,75
+ESP_KSA_2026,Saudi Arabia,Salem Al-Dawsari,LW,1,85
+URU_ESP_2026,Uruguay,Federico Valverde,CM,1,90
+URU_ESP_2026,Spain,Lamine Yamal,RW,1,85
+URU_ESP_2026,Spain,Alvaro Morata,ST,1,75

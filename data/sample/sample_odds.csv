@@ -1,0 +1,13 @@
+match_id,bookmaker,market_type,team,player,line,odds,substitute_plus
+16,Betfair,match_winner,Spain,,win,1.18,0
+16,Betfair,match_winner,Draw,,draw,7.00,0
+16,Betfair,match_winner,Cape Verde,,win,15.00,0
+17,Betfair,match_winner,Uruguay,,win,3.40,0
+17,Betfair,match_winner,Draw,,draw,3.20,0
+17,Betfair,match_winner,Spain,,win,2.20,0
+17,Betfair,player_fouls_committed,Uruguay,Federico Valverde,1+,1.62,1
+17,Betfair,player_fouls_committed,Uruguay,Federico Valverde,2+,2.80,1
+17,Betfair,player_shots_on_target,Spain,Lamine Yamal,1+,1.95,1
+17,Betfair,player_shots,Spain,Nico Williams,1+,1.35,1
+17,Betfair,player_fouls_drawn,Spain,Nico Williams,2+,1.90,1
+17,Betfair,player_shots,Uruguay,Darwin Nunez,2+,1.55,1

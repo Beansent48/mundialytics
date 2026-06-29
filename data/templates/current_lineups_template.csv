@@ -1,0 +1,4 @@
+match_id,date,competition,team,opponent,player,provider,provider_player_id,canonical_player_id,position,expected_minutes,started
+ESP_URU_2026,2026-06-26,FIFA World Cup,Spain,Uruguay,Lamine Yamal,api_football,1001,api_football:1001,RW,85,1
+ESP_URU_2026,2026-06-26,FIFA World Cup,Spain,Uruguay,Alvaro Morata,api_football,1003,api_football:1003,ST,75,1
+ESP_URU_2026,2026-06-26,FIFA World Cup,Uruguay,Spain,Federico Valverde,api_football,1002,api_football:1002,CM,90,1

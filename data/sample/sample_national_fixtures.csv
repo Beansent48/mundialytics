@@ -1,0 +1,3 @@
+fixture_id,date,home_team,away_team,neutral,competition,season,stage,team_scope,source
+fx_nat_001,2026-06-21,Spain,Saudi Arabia,1,World Cup,2026,Group,national,sample
+fx_nat_002,2026-06-26,Uruguay,Spain,1,World Cup,2026,Group,national,sample

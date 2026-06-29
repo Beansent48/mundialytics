@@ -1,0 +1,10 @@
+[
+  {"id":"1","type":{"name":"Starting XI"},"team":{"name":"Spain"},"minute":0,"second":0,"tactics":{"formation":433,"lineup":[{"player":{"name":"Lamine Yamal"},"position":{"name":"Right Wing"}},{"player":{"name":"Alvaro Morata"},"position":{"name":"Center Forward"}}]}},
+  {"id":"2","type":{"name":"Starting XI"},"team":{"name":"Uruguay"},"minute":0,"second":0,"tactics":{"formation":442,"lineup":[{"player":{"name":"Federico Valverde"},"position":{"name":"Center Midfield"}}]}},
+  {"id":"3","type":{"name":"Shot"},"team":{"name":"Spain"},"player":{"name":"Lamine Yamal"},"position":{"name":"Right Wing"},"minute":12,"shot":{"outcome":{"name":"Saved"}}},
+  {"id":"4","type":{"name":"Pass"},"team":{"name":"Spain"},"player":{"name":"Lamine Yamal"},"minute":20,"pass":{"outcome":null,"shot_assist":true}},
+  {"id":"5","type":{"name":"Foul Committed"},"team":{"name":"Uruguay"},"player":{"name":"Federico Valverde"},"minute":24,"foul_committed":{"card":{"name":"Yellow Card"}}},
+  {"id":"6","type":{"name":"Foul Won"},"team":{"name":"Spain"},"player":{"name":"Lamine Yamal"},"minute":24},
+  {"id":"7","type":{"name":"Substitution"},"team":{"name":"Spain"},"player":{"name":"Lamine Yamal"},"minute":70,"substitution":{"replacement":{"name":"Ferran Torres"}}},
+  {"id":"8","type":{"name":"Tactical Shift"},"team":{"name":"Spain"},"minute":71,"second":0,"tactics":{"formation":4231,"lineup":[{"player":{"name":"Ferran Torres"},"position":{"name":"Right Wing"}}]}}
+]

@@ -1,0 +1,15 @@
+alias,canonical,scope,notes
+Ivory Coast,cote d ivoire,national,Provider English name -> StatsBomb-style canonical key
+Côte d'Ivoire,cote d ivoire,national,Accent/apostrophe variant
+Cote d'Ivoire,cote d ivoire,national,ASCII apostrophe variant
+CIV,cote d ivoire,national,FIFA code
+DR Congo,dr congo,national,Common provider name
+Democratic Republic of Congo,dr congo,national,Long English name
+Czech Republic,czechia,national,Older provider name
+Czechia,czechia,national,Canonical modern name
+USA,united states,national,Common abbreviation
+United States of America,united states,national,Long name
+Türkiye,turkey,national,Provider display variant
+Turkiye,turkey,national,ASCII variant
+Cabo Verde,cape verde,national,Portuguese provider name
+Cape Verde Islands,cape verde,national,Older provider name

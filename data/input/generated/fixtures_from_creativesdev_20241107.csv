@@ -1,0 +1,87 @@
+match_id,date,home_team,away_team,neutral,competition,season,stage,group,team_scope,team_type,competition_context,gender,provider,provider_fixture_id,kickoff_utc,status
+4621624,2024-11-06,Feyenoord,Salzburg,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621624,2024-11-06T20:00:00Z,Full-Time
+4621539,2024-11-06,Red Star Belgrade,Barcelona,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621539,2024-11-06T20:00:00Z,Full-Time
+4621502,2024-11-06,Inter,Arsenal,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621502,2024-11-06T20:00:00Z,Full-Time
+4621568,2024-11-06,PSG,Atletico Madrid,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621568,2024-11-06T20:00:00Z,Full-Time
+4621656,2024-11-06,Sparta Prague,Brest,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621656,2024-11-06T20:00:00Z,Full-Time
+4621588,2024-11-06,VfB Stuttgart,Atalanta,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621588,2024-11-06T20:00:00Z,Full-Time
+4621510,2024-11-06,Bayern München,Benfica,0,894202.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4621510,2024-11-06T20:15:00Z,Full-Time
+4622118,2024-11-07,Bodø/Glimt,Qarabag FK,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622118,2024-11-07T17:45:00Z,Full-Time
+4622022,2024-11-07,Frankfurt,Slavia Prague,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622022,2024-11-07T17:45:00Z,Full-Time
+4622138,2024-11-07,Elfsborg,Braga,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622138,2024-11-07T17:45:00Z,Full-Time
+4622152,2024-11-07,FCSB,FC Midtjylland,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622152,2024-11-07T17:45:00Z,Full-Time
+4622100,2024-11-07,Galatasaray,Tottenham,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622100,2024-11-07T17:45:00Z,Full-Time
+4622095,2024-11-07,Ludogorets Razgrad,Athletic Club,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622095,2024-11-07T17:45:00Z,Full-Time
+4622157,2024-11-07,Nice,FC Twente,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622157,2024-11-07T17:45:00Z,Full-Time
+4622076,2024-11-07,Olympiacos,Rangers,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622076,2024-11-07T17:45:00Z,Full-Time
+4622088,2024-11-07,Union St.Gilloise,Roma,0,894204.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4622088,2024-11-07T17:45:00Z,Full-Time
+4622291,2024-11-07,Vikingur Reykjavik,Borac Banja Luka,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622291,2024-11-07T14:30:00Z,Full-Time
+4622272,2024-11-07,CS Petrocub,Rapid Wien,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622272,2024-11-07T17:45:00Z,Full-Time
+4622182,2024-11-07,Gent,Omonia Nicosia,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622182,2024-11-07T17:45:00Z,Full-Time
+4622221,2024-11-07,HJK,Olimpija Ljubljana,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622221,2024-11-07T17:45:00Z,Full-Time
+4622209,2024-11-07,Legia Warszawa,Dinamo Minsk,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622209,2024-11-07T17:45:00Z,Full-Time
+4622278,2024-11-07,Pafos FC,FC Astana,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622278,2024-11-07T17:45:00Z,Full-Time
+4622245,2024-11-07,Shamrock Rovers,TNS,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622245,2024-11-07T17:45:00Z,Full-Time
+4622266,2024-11-07,TSC Backa Topola,Lugano,0,894205.0,2024,3,,club,club,unknown,men,creativesdev_live_football,4622266,2024-11-07T17:45:00Z,Full-Time
+4610900,2024-11-07,Sydney FC,Sanfrecce,0,893930.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4610900,2024-11-07T08:00:00Z,Full-Time
+4610955,2024-11-07,Eastern Sports Club,Kaya FC,0,893930.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4610955,2024-11-07T12:00:00Z,Full-Time
+4610987,2024-11-07,Cebu FC,Muang Thong United,0,893933.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4610987,2024-11-07T10:00:00Z,Full-Time
+4610961,2024-11-07,Jeonbuk Hyundai Motors FC,Selangor,0,893933.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4610961,2024-11-07T10:00:00Z,Full-Time
+4610944,2024-11-07,Lion City Sailors FC,Persib Bandung,0,893931.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4610944,2024-11-07T12:00:00Z,Full-Time
+4610954,2024-11-07,Zhejiang Professional,Port FC,0,893931.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4610954,2024-11-07T12:00:00Z,Full-Time
+4519639,2024-11-06,Blackburn,Stoke,0,893033.0,2024,14,,club,club,unknown,men,creativesdev_live_football,4519639,2024-11-06T19:45:00Z,Full-Time
+4519638,2024-11-06,Coventry,Derby,0,893033.0,2024,14,,club,club,unknown,men,creativesdev_live_football,4519638,2024-11-06T19:45:00Z,Full-Time
+4519645,2024-11-06,Millwall,Leeds,0,893033.0,2024,14,,club,club,unknown,men,creativesdev_live_football,4519645,2024-11-06T19:45:00Z,Full-Time
+4519725,2024-11-06,Luton,Cardiff,0,893033.0,2024,14,,club,club,unknown,men,creativesdev_live_football,4519725,2024-11-06T20:00:00Z,Full-Time
+4519637,2024-11-06,Preston,Sunderland,0,893033.0,2024,14,,club,club,unknown,men,creativesdev_live_football,4519637,2024-11-06T20:00:00Z,Full-Time
+4661113,2024-11-07,Fundacion Albacete (W),Granada (W),0,895030.0,2024,1/16,,club,club,unknown,men,creativesdev_live_football,4661113,2024-11-07T18:00:00Z,Full-Time
+4647580,2024-11-07,Skive,AGF,0,242.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4647580,2024-11-07T17:30:00Z,After extra time
+4526007,2024-11-06,Blackpool,Liverpool Academy,0,893063.0,2024,2,,club,club,unknown,men,creativesdev_live_football,4526007,2024-11-06T19:00:00Z,After penalties
+4502720,2024-11-07,CSKA 1948,CSKA-Sofia,0,892891.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4502720,2024-11-07T15:30:00Z,Full-Time
+4502359,2024-11-07,Ruch Chorzow,Chrobry Głogów,0,197.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4502359,2024-11-07T18:00:00Z,Full-Time
+4617872,2024-11-07,Kerala Blasters FC,Hyderabad FC,0,894232.0,2024,8,,club,club,unknown,men,creativesdev_live_football,4617872,2024-11-07T14:00:00Z,Full-Time
+4672186,2024-11-07,Venados,Celaya,0,895783.0,2024,1/4,,club,club,unknown,men,creativesdev_live_football,4672186,2024-11-07T01:00:00Z,Full-Time
+4672192,2024-11-07,Mineros,UDG,0,895783.0,2024,1/4,,club,club,unknown,men,creativesdev_live_football,4672192,2024-11-07T03:05:00Z,Full-Time
+4572785,2024-11-07,Comunal Selimbar,CSM Resita,0,893404.0,2024,13,,club,club,unknown,men,creativesdev_live_football,4572785,2024-11-07T12:00:00Z,Full-Time
+4500039,2024-11-07,América,Pachuca,0,892858.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4500039,2024-11-07T01:00:00Z,Full-Time
+4500038,2024-11-07,Necaxa,San Luis,0,892858.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4500038,2024-11-07T01:00:00Z,Full-Time
+4500037,2024-11-07,Tigres,Toluca,0,892858.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4500037,2024-11-07T01:00:00Z,Full-Time
+4500031,2024-11-07,Atlas,Cruz Azul,0,892858.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4500031,2024-11-07T03:05:00Z,Full-Time
+4500040,2024-11-07,Juárez,Tijuana,0,892858.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4500040,2024-11-07T03:06:00Z,Full-Time
+4592126,2024-11-06,CD Marathon,FC Motagua,0,893358.0,2024,15,,club,club,unknown,men,creativesdev_live_football,4592126,2024-11-06T21:00:00Z,Full-Time
+4592128,2024-11-06,Juticalpa,Lobos UPNFM,0,893358.0,2024,15,,club,club,unknown,men,creativesdev_live_football,4592128,2024-11-06T23:15:00Z,Full-Time
+4592125,2024-11-07,CD Olimpia,Real Espana,0,893358.0,2024,15,,club,club,unknown,men,creativesdev_live_football,4592125,2024-11-07T01:30:00Z,Full-Time
+4487181,2024-11-07,Deportivo Malacateco,Comunicaciones FC,0,892517.0,2024,10,,club,club,unknown,men,creativesdev_live_football,4487181,2024-11-07T01:00:00Z,Full-Time
+4487178,2024-11-07,Antigua Guatemala,Deportivo Mixco,0,892517.0,2024,9,,club,club,unknown,men,creativesdev_live_football,4487178,2024-11-07T02:00:00Z,Full-Time
+4393427,2024-11-06,Barracas Central,Racing Club,0,890035.0,2024,21,,club,club,unknown,men,creativesdev_live_football,4393427,2024-11-06T19:00:00Z,Full-Time
+4393425,2024-11-06,Banfield,Belgrano,0,890035.0,2024,21,,club,club,unknown,men,creativesdev_live_football,4393425,2024-11-06T20:00:00Z,Full-Time
+4393464,2024-11-06,Boca Juniors,Godoy Cruz,0,890035.0,2024,21,,club,club,unknown,men,creativesdev_live_football,4393464,2024-11-06T22:30:00Z,Full-Time
+4393426,2024-11-07,Instituto,River Plate,0,890035.0,2024,21,,club,club,unknown,men,creativesdev_live_football,4393426,2024-11-07T00:30:00Z,Full-Time
+4631000,2024-11-07,MC Oran,ES Setif,0,516.0,2024,8,,club,club,unknown,men,creativesdev_live_football,4631000,2024-11-07T18:30:00Z,Full-Time
+4649229,2024-11-06,Oldham,Wolverhampton Wanderers Academy,0,894714.0,2024,2,,club,club,unknown,men,creativesdev_live_football,4649229,2024-11-06T19:00:00Z,After penalties
+4649261,2024-11-06,Gateshead FC,Leeds United Academy,0,894715.0,2024,2,,club,club,unknown,men,creativesdev_live_football,4649261,2024-11-06T19:30:00Z,Full-Time
+4547689,2024-11-06,Curzon,Kidderminster Harriers,0,893302.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4547689,2024-11-06T19:45:00Z,Full-Time
+4547176,2024-11-06,Boreham Wood,Farnborough,0,893303.0,2024,16,,club,club,unknown,men,creativesdev_live_football,4547176,2024-11-06T19:45:00Z,Full-Time
+4662724,2024-11-07,Al Ittihad Alexandria,Haras El Hodoud,0,519.0,2024,2,,club,club,unknown,men,creativesdev_live_football,4662724,2024-11-07T15:00:00Z,Full-Time
+4662706,2024-11-07,Ghazl Al Mahalla,Tala'ea El Gaish,0,519.0,2024,2,,club,club,unknown,men,creativesdev_live_football,4662706,2024-11-07T15:00:00Z,Full-Time
+4662705,2024-11-07,ZED FC,Al Ahly SC,0,519.0,2024,2,,club,club,unknown,men,creativesdev_live_football,4662705,2024-11-07T18:00:00Z,Full-Time
+4558193,2024-11-07,Gandzasar,Pyunik,0,118.0,2024,4,,club,club,unknown,men,creativesdev_live_football,4558193,2024-11-07T11:00:00Z,Full-Time
+4602974,2024-11-07,Young Africans,Tabora United,0,9066.0,2024,9,,club,club,unknown,men,creativesdev_live_football,4602974,2024-11-07T15:00:00Z,Full-Time
+4548377,2024-11-06,Chico FC,Bucaramanga,0,893305.0,2024,17,,club,club,unknown,men,creativesdev_live_football,4548377,2024-11-06T19:30:00Z,Full-Time
+4548371,2024-11-06,Alianza FC,Aguilas Doradas,0,893305.0,2024,17,,club,club,unknown,men,creativesdev_live_football,4548371,2024-11-06T21:30:00Z,Full-Time
+4548368,2024-11-06,Tolima,Envigado,0,893305.0,2024,17,,club,club,unknown,men,creativesdev_live_football,4548368,2024-11-06T23:30:00Z,Full-Time
+4548359,2024-11-07,Deportivo Cali,CD Jaguares,0,893305.0,2024,17,,club,club,unknown,men,creativesdev_live_football,4548359,2024-11-07T01:30:00Z,Full-Time
+4548375,2024-11-07,Independiente Medellin,Patriotas,0,893305.0,2024,17,,club,club,unknown,men,creativesdev_live_football,4548375,2024-11-07T01:30:00Z,Full-Time
+4511597,2024-11-07,Deportiva San Carlos,Club Sport Herediano,0,892962.0,2024,19,,club,club,unknown,men,creativesdev_live_football,4511597,2024-11-07T01:00:00Z,Full-Time
+4511571,2024-11-07,LD Alajuelense,Sporting FC,0,892962.0,2024,19,,club,club,unknown,men,creativesdev_live_football,4511571,2024-11-07T02:00:00Z,Full-Time
+4563985,2024-11-07,Al Qadasiya,Al-Fayha,0,536.0,2024,10,,club,club,unknown,men,creativesdev_live_football,4563985,2024-11-07T14:30:00Z,Full-Time
+4563992,2024-11-07,Al Kholood,Al Shabab,0,536.0,2024,10,,club,club,unknown,men,creativesdev_live_football,4563992,2024-11-07T15:00:00Z,Full-Time
+4563995,2024-11-07,Al-Orobah FC,Al Ittihad,0,536.0,2024,10,,club,club,unknown,men,creativesdev_live_football,4563995,2024-11-07T17:00:00Z,Full-Time
+4436485,2024-11-07,Atletico GO,Atletico MG,0,268.0,2024,32,,club,club,unknown,men,creativesdev_live_football,4436485,2024-11-07T00:00:00Z,Full-Time
+4436491,2024-11-07,Cruzeiro,Flamengo,0,268.0,2024,32,,club,club,unknown,men,creativesdev_live_football,4436491,2024-11-07T00:00:00Z,Full-Time
+4667671,2024-11-07,Diyala,Al Minaa,0,894596.0,2024,7,,club,club,unknown,men,creativesdev_live_football,4667671,2024-11-07T11:30:00Z,Full-Time
+4667669,2024-11-07,Al Hedood,Al Najaf,0,894596.0,2024,7,,club,club,unknown,men,creativesdev_live_football,4667669,2024-11-07T11:45:00Z,Full-Time
+4667670,2024-11-07,Naft Al-Basra,Al Kahrabaa,0,894596.0,2024,7,,club,club,unknown,men,creativesdev_live_football,4667670,2024-11-07T14:15:00Z,Full-Time
+4667672,2024-11-07,Zakho,Erbil,0,894596.0,2024,7,,club,club,unknown,men,creativesdev_live_football,4667672,2024-11-07T16:45:00Z,Full-Time
+4650909,2024-11-06,Man United U19,Zalgiris Vilnius U19,0,894380.0,2024,1/2,,club,club,unknown,men,creativesdev_live_football,4650909,2024-11-06T19:00:00Z,Full-Time
+4651587,2024-11-06,UC Dublin FC U19,KF 2 Korriku U19,0,894380.0,2024,1/2,,club,club,unknown,men,creativesdev_live_football,4651587,2024-11-06T19:00:00Z,Full-Time

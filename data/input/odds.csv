@@ -1,0 +1,10 @@
+match_id,market,selection,line,odds_decimal,bookmaker
+ESP_KSA_2026,1x2,home,,1.55,demo_book
+ESP_KSA_2026,1x2,draw,,4.20,demo_book
+ESP_KSA_2026,1x2,away,,6.50,demo_book
+ESP_KSA_2026,total_goals,over,2.5,1.88,demo_book
+ESP_KSA_2026,total_goals,under,2.5,1.98,demo_book
+ESP_KSA_2026,btts,yes,,2.05,demo_book
+ESP_KSA_2026,player_shots,lamine yamal,1+,1.75,demo_book
+URU_ESP_2026,1x2,away,,2.10,demo_book
+URU_ESP_2026,player_shots,federico valverde,1+,1.90,demo_book

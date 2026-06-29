@@ -1,0 +1,161 @@
+{
+  "version": "v0.33_team_identity_event_timezone_player_confidence",
+  "status": "matchday_fixtures_ready",
+  "fixtures_csv": "C:\\Users\\Vicente\\Desktop\\BetBot\\mundialytics_betting_engine\\data\\input\\generated\\today_fixtures.csv",
+  "provider_fixtures_csv": "C:\\Users\\Vicente\\Desktop\\BetBot\\mundialytics_betting_engine\\data\\input\\generated\\today_provider_fixtures.csv",
+  "fixtures_rows": 3,
+  "builder_report": {
+    "status": "matchday_fixtures_ready",
+    "rows_raw": 7,
+    "rows_after_date_filter": 7,
+    "rows_removed_by_status": 4,
+    "rows_final": 3,
+    "timezone": "Europe/Madrid",
+    "date_mode": "event_or_user",
+    "local_date": "2026-06-20",
+    "include_live": true,
+    "include_completed": false,
+    "include_unknown_status": true,
+    "local_filter_warning": null,
+    "status_counts": {
+      "scheduled": 2,
+      "live": 1
+    }
+  },
+  "source_report": {
+    "provider": "espn",
+    "dates": [
+      "20260619",
+      "20260620",
+      "20260621"
+    ],
+    "rows_raw": 12,
+    "mode": "fetch",
+    "attempts": [
+      {
+        "provider": "sofascore",
+        "status": "error",
+        "error": "HTTPError('403 Client Error: Forbidden for url: https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-06-19')"
+      },
+      {
+        "provider": "espn",
+        "status": "ok",
+        "rows_raw": 12,
+        "rows_after_competition_filter": 7,
+        "rows_final": 7,
+        "competition_report": {
+          "include_removed_rows": 0,
+          "exclude_removed_rows": 0,
+          "competition_filter": "world_cup",
+          "include": [
+            "world cup",
+            "fifa world cup",
+            "world championship"
+          ],
+          "exclude": [
+            "women",
+            "u17",
+            "u19",
+            "u20",
+            "club",
+            "qualification",
+            "qualifying",
+            "qualifier"
+          ]
+        },
+        "local_filter_warning": "post_filtered_by_event_or_user_date_removed_rows=5"
+      }
+    ],
+    "chosen_provider": "espn",
+    "resolved_local_date": "2026-06-20",
+    "timezone": "Europe/Madrid",
+    "date_mode": "event_or_user"
+  },
+  "player_input_report": {
+    "status": "player_inputs_fetched",
+    "lineups_rows": 0,
+    "squads_rows": 156,
+    "attempts": [
+      {
+        "provider": "espn",
+        "fixture_id": "760448",
+        "kind": "summary_lineups",
+        "status": "ok",
+        "rows": 0
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760448",
+        "kind": "home_team_roster",
+        "status": "ok",
+        "rows": 26
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760448",
+        "kind": "away_team_roster",
+        "status": "ok",
+        "rows": 26
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760446",
+        "kind": "summary_lineups",
+        "status": "ok",
+        "rows": 0
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760446",
+        "kind": "home_team_roster",
+        "status": "ok",
+        "rows": 26
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760446",
+        "kind": "away_team_roster",
+        "status": "ok",
+        "rows": 26
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760449",
+        "kind": "summary_lineups",
+        "status": "ok",
+        "rows": 0
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760449",
+        "kind": "home_team_roster",
+        "status": "ok",
+        "rows": 26
+      },
+      {
+        "provider": "espn",
+        "fixture_id": "760449",
+        "kind": "away_team_roster",
+        "status": "ok",
+        "rows": 26
+      }
+    ],
+    "notes": [
+      "Confirmed lineups may only appear close to kickoff.",
+      "Squad/roster fallback is broader than an official lineup and should be treated as lower confidence."
+    ],
+    "provisional_fixture_rows": 3,
+    "provisional_builder_status": "matchday_fixtures_ready"
+  },
+  "notes": [
+    "Generated fixtures are run_statistical_matchday-compatible.",
+    "Event-local kickoff columns allow US/Canada/Mexico evening games to be selected by event date as well as user-local date.",
+    "Player props use lineups first and squads second; squad fallback is lower confidence than confirmed lineups."
+  ],
+  "lineups_csv": "C:\\Users\\Vicente\\Desktop\\BetBot\\mundialytics_betting_engine\\data\\input\\generated\\today_current_lineups.csv",
+  "lineups_rows": 0,
+  "squads_csv": "C:\\Users\\Vicente\\Desktop\\BetBot\\mundialytics_betting_engine\\data\\input\\generated\\today_squads.csv",
+  "squads_rows": 156,
+  "player_input_status": "lineups_or_squads_written",
+  "audit_json": "C:\\Users\\Vicente\\Desktop\\BetBot\\mundialytics_betting_engine\\data\\input\\generated\\today_matchday_audit.json"
+}

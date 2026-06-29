@@ -1,0 +1,5 @@
+fixture_id,date,home_team,away_team,neutral,competition,season,stage,team_scope,source
+fx_nat_001,2026-06-21,Spain,Saudi Arabia,1,World Cup,2026,Group,national,sample
+fx_nat_002,2026-06-26,Uruguay,Spain,1,World Cup,2026,Group,national,sample
+fx_club_001,2025-09-07,Barcelona,Real Madrid,0,LaLiga,2025-2026,Regular Season,club,sample
+fx_club_002,2025-09-08,Valencia,Atletico Madrid,0,LaLiga,2025-2026,Regular Season,club,sample

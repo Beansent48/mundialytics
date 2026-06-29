@@ -1,0 +1,7 @@
+fixture_id,bookmaker,market_type,selection,odds
+fx_nat_001,demo_book,match_winner,home,1.65
+fx_nat_001,demo_book,match_winner,draw,3.75
+fx_nat_001,demo_book,match_winner,away,5.80
+fx_nat_002,demo_book,match_winner,Spain,1.50
+fx_nat_002,demo_book,match_winner,draw,4.10
+fx_nat_002,demo_book,match_winner,Uruguay,7.50
