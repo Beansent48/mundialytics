@@ -99,11 +99,12 @@ class AttackDefenseModel:
         self.n_leagues_: int = 0
 
         # Fitted parameters (log-scale)
-        self.mu_: float = 0.0             # global intercept
-        self.home_adv_: float = 0.0       # log home advantage
-        self.league_effect_: np.ndarray = np.array([])  # per-league, shape (L,); [0]=0
-        self.attack_: np.ndarray = np.array([])          # per-team, shape (N,); [0]=0
-        self.defense_: np.ndarray = np.array([])         # per-team, shape (N,)
+        self.mu_: float = 0.0                      # global intercept (mean across leagues)
+        self.home_adv_: float = 0.0                # mean log home advantage (fallback)
+        self.league_effect_: np.ndarray = np.array([])   # per-league mu (goal rate)
+        self.league_home_adv_: np.ndarray = np.array([]) # per-league log(home_adv)
+        self.attack_: np.ndarray = np.array([])           # per-team, shape (N,)
+        self.defense_: np.ndarray = np.array([])          # per-team, shape (N,)
 
         self.global_goal_mean_: float = 1.25
         self.match_counts_: dict[str, int] = {}
@@ -175,8 +176,13 @@ class AttackDefenseModel:
         return -ll
 
     def _lam(self, home_idx: int, away_idx: int, league_idx: int, neutral: bool) -> tuple[float, float]:
-        ha = 0.0 if neutral else self.home_adv_
-        # league_effect_ stores per-league mu (intercept) from per-league fit
+        # Use per-league home advantage when available, fall back to global mean
+        if neutral:
+            ha = 0.0
+        elif league_idx < len(self.league_home_adv_):
+            ha = float(self.league_home_adv_[league_idx])
+        else:
+            ha = self.home_adv_
         league_mu = float(self.league_effect_[league_idx]) if league_idx < len(self.league_effect_) else self.mu_
         lh = math.exp(league_mu + ha + self.attack_[home_idx] - self.defense_[away_idx])
         la = math.exp(league_mu + self.attack_[away_idx] - self.defense_[home_idx])
@@ -268,6 +274,7 @@ class AttackDefenseModel:
         self.attack_ = np.zeros(self.n_teams_)
         self.defense_ = np.zeros(self.n_teams_)
         self.league_effect_ = np.zeros(self.n_leagues_)
+        self.league_home_adv_ = np.zeros(self.n_leagues_)
         self.global_goal_mean_ = float((df["home_goals"].mean() + df["away_goals"].mean()) / 2)
 
         for team in all_teams:
@@ -293,8 +300,8 @@ class AttackDefenseModel:
             league_mu = m_sub.mu_
             league_home_adv = m_sub.home_adv_
             league_idx = self.league_index_[comp]
-            # Store per-league intercept as league_effect (relative to global mean)
             self.league_effect_[league_idx] = league_mu
+            self.league_home_adv_[league_idx] = league_home_adv
             # Copy team attack/defense into global arrays
             for team, local_idx in m_sub.team_index_.items():
                 global_idx = self.team_index_.get(team)

@@ -410,22 +410,42 @@ class PredictionEngine:
         player_goal_counts: dict[str, list[int]] = defaultdict(list)
 
         def sim_group(teams: list[str]) -> list[str]:
-            """Return teams sorted by final group table position."""
+            """Return teams sorted by group table: pts → GD → GF → H2H pts → random."""
             table: dict[str, dict[str, int]] = {t: {"pts":0,"gf":0,"ga":0} for t in teams}
+            h2h_results: dict[tuple[str,str], tuple[int,int]] = {}
             for ht, at in itertools.combinations(teams, 2):
                 lh, la = match_cache[(ht, at)]
                 hg = int(rng.poisson(lh)); ag = int(rng.poisson(la))
                 table[ht]["gf"] += hg; table[ht]["ga"] += ag
                 table[at]["gf"] += ag; table[at]["ga"] += hg
+                h2h_results[(ht, at)] = (hg, ag)
                 if hg > ag:   table[ht]["pts"] += 3
                 elif ag > hg: table[at]["pts"] += 3
                 else:         table[ht]["pts"] += 1; table[at]["pts"] += 1
-            return sorted(
-                teams,
-                key=lambda t: (table[t]["pts"], table[t]["gf"]-table[t]["ga"],
-                               table[t]["gf"], rng.uniform()),
-                reverse=True,
-            )
+
+            def h2h_pts(t1: str, tied_teams: list[str]) -> int:
+                """H2H points for t1 against the tied group."""
+                p = 0
+                for t2 in tied_teams:
+                    if t2 == t1: continue
+                    res = h2h_results.get((t1, t2)) or h2h_results.get((t2, t1))
+                    if res:
+                        hg, ag = res if (t1, t2) in h2h_results else (res[1], res[0])
+                        if hg > ag: p += 3
+                        elif hg == ag: p += 1
+                return p
+
+            # Sort with FIFA-style tiebreaking
+            def sort_key(t: str) -> tuple:
+                pts = table[t]["pts"]
+                gd = table[t]["gf"] - table[t]["ga"]
+                gf = table[t]["gf"]
+                # Find teams tied on same points
+                tied = [x for x in teams if table[x]["pts"] == pts]
+                h2h = h2h_pts(t, tied) if len(tied) > 1 else 0
+                return (pts, gd, gf, h2h, float(rng.uniform()))
+
+            return sorted(teams, key=sort_key, reverse=True)
 
         def sim_ko(h: str, a: str) -> tuple[str, int, int]:
             """Returns (winner, hg, ag) with penalties on draw."""

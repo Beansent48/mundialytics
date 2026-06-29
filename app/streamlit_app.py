@@ -1,6 +1,6 @@
 """
-Mundialytics — Prediction Engine · Block 2
-Menu: ⚽ Partido | 🗓️ Jornada | 🏆 Competición | 🥇 Premios
+Mundialytics — Prediction Engine · Block 2 + SquadLab
+Menu: ⚽ Partido | 🗓️ Jornada | 🏆 Competición | 🥇 Premios | 🧪 SquadLab
 """
 from __future__ import annotations
 import sys
@@ -212,6 +212,7 @@ page = st.sidebar.radio("", [
     "🗓️  Jornada",
     "🏆  Competición",
     "🥇  Premios Individuales",
+    "🧪  SquadLab",
 ], label_visibility="collapsed")
 st.sidebar.divider()
 st.sidebar.caption("Big5 2021-26 · Selecciones 2010-26\nPoisson GLM · MLE Attack/Defense · ELO")
@@ -757,3 +758,12 @@ else:
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_rank, use_container_width=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SQUADLAB
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🧪  SquadLab":
+    import importlib, app.squadlab_page as sl_page
+    importlib.reload(sl_page)
+    sl_page.render(engine=engine_clubs)

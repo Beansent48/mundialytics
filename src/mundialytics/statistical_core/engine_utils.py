@@ -150,13 +150,8 @@ def bracket_html(
     sim_df: pd.DataFrame,
     n_groups: int,
 ) -> str:
-    """Generate an HTML bracket tree from simulation results.
-
-    Args:
-        sim_df : team_stats DataFrame with p_win, p_final, p_semis, p_quarters columns
-        n_groups : number of groups (determines bracket depth)
-    """
-    top = sim_df.head(16).copy()
+    """Generate a full HTML bracket showing table + odds bar per stage."""
+    top = sim_df.head(24).copy()
     top["team"] = top["team"].str.title()
 
     def pct(val: float) -> str:
@@ -168,41 +163,51 @@ def bracket_html(
         if val >= 0.05: return "#9333ea"
         return "#6b7280"
 
-    # Build simple bracket table HTML
+    # Determine which round columns exist
+    has_r16      = "p_r16"      in top.columns and top["p_r16"].sum() > 0
+    has_quarters = "p_quarters" in top.columns and top["p_quarters"].sum() > 0
+    has_semis    = "p_semis"    in top.columns and top["p_semis"].sum() > 0
+    has_final    = "p_final"    in top.columns and top["p_final"].sum() > 0
+
+    stage_cols = []
+    if "p_advance_groups" in top.columns: stage_cols.append(("Grupos",   "p_advance_groups", "#10b981"))
+    if has_r16:      stage_cols.append(("R16",       "p_r16",            "#3b82f6"))
+    if has_quarters: stage_cols.append(("QF",        "p_quarters",       "#8b5cf6"))
+    if has_semis:    stage_cols.append(("SF",        "p_semis",          "#f59e0b"))
+    if has_final:    stage_cols.append(("Final",     "p_final",          "#ef4444"))
+    stage_cols.append(("🏆 Campeón", "p_win", "#16a34a"))
+
+    header_cells = "".join(
+        f'<th style="padding:6px 8px;text-align:center;color:#6b7280;font-size:11px;'
+        f'font-weight:500;border-bottom:0.5px solid #e5e7eb">{s[0]}</th>'
+        for s in stage_cols
+    )
+
     rows_html = ""
     for _, r in top.iterrows():
-        p_w = float(r.get("p_win", 0))
-        p_f = float(r.get("p_final", 0))
-        p_s = float(r.get("p_semis", 0))
-        p_q = float(r.get("p_quarters", 0))
-        p_g = float(r.get("p_advance_groups", 0))
-        c = color(p_w)
-        bar_w = int(p_w * 200)
-        rows_html += f"""
-        <tr>
-          <td style="padding:6px 10px;font-weight:600;color:{c}">{r['team']}</td>
-          <td style="padding:6px;text-align:center;color:#4b5563">{pct(p_g)}</td>
-          <td style="padding:6px;text-align:center;color:#4b5563">{pct(p_q)}</td>
-          <td style="padding:6px;text-align:center;color:#4b5563">{pct(p_s)}</td>
-          <td style="padding:6px;text-align:center;color:#4b5563">{pct(p_f)}</td>
-          <td style="padding:6px;text-align:center;font-weight:700;color:{c}">{pct(p_w)}</td>
-          <td style="padding:6px 10px">
-            <div style="width:{bar_w}px;height:14px;background:{c};border-radius:3px;max-width:200px"></div>
-          </td>
-        </tr>"""
+        p_win = float(r.get("p_win", 0))
+        c = color(p_win)
+        cells = f'<td style="padding:6px 10px;font-weight:500;color:{c}">{r["team"]}</td>'
+        for _, col, bar_color in stage_cols:
+            val = float(r.get(col, 0))
+            bar = int(val * 120)
+            cells += (
+                f'<td style="padding:4px 8px">'
+                f'<div style="display:flex;align-items:center;gap:6px">'
+                f'<div style="width:{bar}px;max-width:120px;height:10px;background:{bar_color};'
+                f'border-radius:2px;opacity:{max(0.3, val*2):.1f}"></div>'
+                f'<span style="font-size:11px;color:#4b5563;min-width:34px">{pct(val)}</span>'
+                f'</div></td>'
+            )
+        rows_html += f"<tr>{cells}</tr>"
 
-    return f"""
-    <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
-      <thead>
-        <tr style="border-bottom:2px solid #e5e7eb">
-          <th style="padding:6px 10px;text-align:left">Equipo</th>
-          <th style="padding:6px;text-align:center;color:#6b7280;font-size:0.8rem">Grupos</th>
-          <th style="padding:6px;text-align:center;color:#6b7280;font-size:0.8rem">QF</th>
-          <th style="padding:6px;text-align:center;color:#6b7280;font-size:0.8rem">SF</th>
-          <th style="padding:6px;text-align:center;color:#6b7280;font-size:0.8rem">Final</th>
-          <th style="padding:6px;text-align:center;color:#f59e0b;font-weight:700">🏆 Campeón</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>{rows_html}</tbody>
-    </table>"""
+    return (
+        f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        f'<thead><tr>'
+        f'<th style="padding:6px 10px;text-align:left;border-bottom:0.5px solid #e5e7eb">Equipo</th>'
+        f'{header_cells}'
+        f'</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        f'</table>'
+    )
+
