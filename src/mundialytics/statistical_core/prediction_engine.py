@@ -440,12 +440,13 @@ class PredictionEngine:
             return (h if rng.random() < p_hp else a), hg, ag
 
         def run_ko_round(bracket: list[tuple[str, str]], stage_key: str) -> list[str]:
+            """Both teams in a matchup 'reach' this stage; only the winner advances."""
             winners = []
             for h, a in bracket:
+                team_counts[h][stage_key] += 1   # both reach this round
+                team_counts[a][stage_key] += 1
                 w, hg, ag = sim_ko(h, a)
-                team_counts[w][stage_key] += 1
                 winners.append(w)
-                # goals tracked
                 sim_goals[h] += hg; sim_goals[a] += ag
             return winners
 
@@ -478,10 +479,18 @@ class PredictionEngine:
             if len(current_round) >= 2:   # SF
                 sf_w = run_ko_round(current_round, "semis")
                 if len(sf_w) >= 2:
+                    # Both SF winners reach the Final
+                    for finalist in sf_w[:2]:
+                        team_counts[finalist]["final"] += 1
                     final_pair = [(sf_w[0], sf_w[1])]
-                    champions = run_ko_round(final_pair, "final")
-                    if champions:
-                        team_counts[champions[0]]["win"] += 1
+                    # run without stage_key (final already tracked above)
+                    winners_final = []
+                    for h, a in final_pair:
+                        w, hg, ag = sim_ko(h, a)
+                        winners_final.append(w)
+                        sim_goals[h] += hg; sim_goals[a] += ag
+                    if winners_final:
+                        team_counts[winners_final[0]]["win"] += 1
 
             # Team goals
             for t, g in sim_goals.items():
