@@ -107,39 +107,51 @@ class PlayerStrengthModel:
                 continue
             df[stat] = pd.to_numeric(df[stat], errors="coerce").fillna(0.0)
 
-        # Compute composite scores
-        def percentile_rank(val: float, pos: str, stat: str) -> float:
-            sub = df[pos_groups == pos][stat].dropna()
-            if len(sub) == 0:
-                return 50.0
-            return float(100.0 * (sub < val).mean())
-
-        # Offensive raw score: weighted average of percentile ranks
+        # Pre-compute percentile rank columns vectorised (O(n·stats) instead of O(n²))
+        # scipy.stats.rankdata normalised to 0-100 within each position group
         off_weights = {"goals_per_match": 0.30, "assists_per_match": 0.20,
                         "sot_per_match": 0.25, "shots_per_match": 0.25}
         def_weights = {"tackles_per_match": 0.45, "pressures_per_match": 0.45,
                         "fouls_per_match": -0.05, "yellow_cards_per_match": -0.05}
+
+        pct_cols: dict[str, str] = {}
+        for stat in list(off_weights) + list(def_weights):
+            if stat not in df.columns:
+                continue
+            pct_col = f"_pct_{stat}"
+            df[pct_col] = 50.0
+            for pos in df["position_group"].unique():
+                mask = df["position_group"] == pos
+                vals = df.loc[mask, stat].fillna(0.0)
+                if len(vals) > 1:
+                    from scipy.stats import rankdata
+                    df.loc[mask, pct_col] = 100.0 * (rankdata(vals) - 1) / (len(vals) - 1)
+            pct_cols[stat] = pct_col
 
         for _, row in df.iterrows():
             pos = str(row.get("position_group", "Unknown"))
             player = str(row.get("player", ""))
             matches = int(row.get("matches", 0))
 
-            # Offensive score
-            off_vals = []
+            # Offensive score — weighted average of percentiles
+            off_num = off_den = 0.0
             for stat, w in off_weights.items():
-                if stat in row.index:
-                    p = percentile_rank(float(row[stat]), pos, stat)
-                    off_vals.append(p * abs(w) * (1 if w > 0 else -1))
-            off_score = float(np.mean(off_vals)) if off_vals else 50.0
+                pcol = pct_cols.get(stat)
+                if pcol and pcol in row.index:
+                    p = float(row[pcol])
+                    off_num += p * abs(w) * (1 if w > 0 else -1)
+                    off_den += abs(w)
+            off_score = float(off_num / off_den) if off_den > 0 else 50.0
 
-            # Defensive score
-            def_vals = []
+            # Defensive score — weighted average of percentiles
+            def_num = def_den = 0.0
             for stat, w in def_weights.items():
-                if stat in row.index:
-                    p = percentile_rank(float(row[stat]), pos, stat)
-                    def_vals.append(p * abs(w) * (1 if w > 0 else -1))
-            def_score = float(np.mean(def_vals)) if def_vals else 50.0
+                pcol = pct_cols.get(stat)
+                if pcol and pcol in row.index:
+                    p = float(row[pcol])
+                    def_num += p * abs(w) * (1 if w > 0 else -1)
+                    def_den += abs(w)
+            def_score = float(def_num / def_den) if def_den > 0 else 50.0
 
             # GK score (placeholder — saves not in current data)
             gk_score = 50.0
