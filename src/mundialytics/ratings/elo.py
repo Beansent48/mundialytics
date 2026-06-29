@@ -18,7 +18,7 @@ class EloConfig:
     goal_diff_multiplier: bool = True
     # Fraction of the gap to the mean that gets closed at the start of each season.
     # 0.0 = no reset, 0.30 = FiveThirtyEight-style partial regression.
-    season_reset_fraction: float = 0.30
+    season_reset_fraction: float = 0.40
     tournament_weights: dict[str, float] = field(default_factory=lambda: {
         "friendly": 0.70,
         "qualifier": 1.00,
