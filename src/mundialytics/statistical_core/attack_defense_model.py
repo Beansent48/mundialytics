@@ -202,7 +202,7 @@ class AttackDefenseModel:
             x0,
             args=(hg, ag, hi, ai, w),
             method="L-BFGS-B",
-            options={"maxiter": 2000, "ftol": 1e-12, "gtol": 1e-8},
+            options={"maxiter": 5000, "maxfun": 100_000, "ftol": 1e-9, "gtol": 1e-4},
         )
 
         self.mu_, self.home_adv_, self.attack_, self.defense_ = self._unpack(result.x)
@@ -220,18 +220,26 @@ class AttackDefenseModel:
         return self
 
     def team_params(self) -> pd.DataFrame:
-        """Return a sorted DataFrame with attack, defense, and net strength per team."""
+        """Return a sorted DataFrame of per-team parameters.
+
+        ``strength`` = attack + defense (log-scale sum): both positive means you
+        score AND prevent goals above average — the best overall quality metric.
+        ``attack_balance`` = attack - defense: positive means offensive profile
+        (score more than you defend), negative means defensive profile.
+        """
         rows = []
         for team in self.teams_:
             i = self.team_index_[team]
+            a, d = float(self.attack_[i]), float(self.defense_[i])
             rows.append({
                 "team": team,
-                "attack": round(float(self.attack_[i]), 4),
-                "defense": round(float(self.defense_[i]), 4),
-                "net_strength": round(float(self.attack_[i] - self.defense_[i]), 4),
+                "attack": round(a, 4),
+                "defense": round(d, 4),
+                "strength": round(a + d, 4),       # overall quality
+                "attack_balance": round(a - d, 4), # offensive vs defensive profile
                 "matches": self.match_counts_.get(team, 0),
             })
-        return pd.DataFrame(rows).sort_values("net_strength", ascending=False).reset_index(drop=True)
+        return pd.DataFrame(rows).sort_values("strength", ascending=False).reset_index(drop=True)
 
     def expected_goals(self, home_team: str, away_team: str, neutral: int | bool = 0) -> tuple[float, float, list[str]]:
         ht = canonical_name(home_team)
