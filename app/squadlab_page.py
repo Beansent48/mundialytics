@@ -12,6 +12,8 @@ lineups, ratings) and the 1M-sim Monte Carlo award/odds layer are the
 next phase — this file currently builds the draft + squad foundation.
 """
 from __future__ import annotations
+import hashlib
+import random
 import sys
 from pathlib import Path
 
@@ -51,13 +53,34 @@ MATCH_COMP_MAP = {
 }
 DRAFT_COMPETITIONS = list(PLAYER_COMP_MAP.keys())
 
-# Pitch coordinates (% of width/height) for a 4-3-3, attacking toward y=0.
-FORMATION_COORDS = {
-    "Goalkeeper": [(50, 92)],
-    "Defender":   [(15, 72), (38, 76), (62, 76), (85, 72)],
-    "Midfielder": [(25, 50), (50, 45), (75, 50)],
-    "Forward":    [(20, 18), (50, 12), (80, 18)],
+# Pitch coordinates (% of width/height) per formation, attacking toward y=0.
+FORMATIONS = {
+    "4-3-3": {
+        "Goalkeeper": [(50, 92)],
+        "Defender":   [(15, 72), (38, 76), (62, 76), (85, 72)],
+        "Midfielder": [(25, 50), (50, 45), (75, 50)],
+        "Forward":    [(20, 18), (50, 12), (80, 18)],
+    },
+    "4-4-2": {
+        "Goalkeeper": [(50, 92)],
+        "Defender":   [(15, 72), (38, 76), (62, 76), (85, 72)],
+        "Midfielder": [(15, 48), (38, 44), (62, 44), (85, 48)],
+        "Forward":    [(35, 16), (65, 16)],
+    },
+    "4-2-3-1": {
+        "Goalkeeper": [(50, 92)],
+        "Defender":   [(15, 72), (38, 76), (62, 76), (85, 72)],
+        "Midfielder": [(35, 58), (65, 58), (15, 38), (50, 34), (85, 38)],
+        "Forward":    [(50, 14)],
+    },
+    "3-5-2": {
+        "Goalkeeper": [(50, 92)],
+        "Defender":   [(25, 75), (50, 80), (75, 75)],
+        "Midfielder": [(10, 50), (30, 42), (50, 38), (70, 42), (90, 50)],
+        "Forward":    [(35, 16), (65, 16)],
+    },
 }
+DEFAULT_FORMATION = "4-3-3"
 
 
 @st.cache_resource(show_spinner="Cargando perfiles de jugadores...")
@@ -204,7 +227,7 @@ def compute_standings(df_clubs: pd.DataFrame, comp_id: str, season: str) -> pd.D
     return table.sort_values(["pts", "gd", "gf"], ascending=False).reset_index(drop=True)
 
 
-def pitch_svg(picks: dict) -> str:
+def pitch_svg(picks: dict, coords: dict) -> str:
     w, h = 460, 600
     svg = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
            f'style="width:100%;max-width:460px;display:block;margin:0 auto">']
@@ -215,8 +238,8 @@ def pitch_svg(picks: dict) -> str:
     svg.append(f'<rect x="{w/2-85}" y="8" width="170" height="58" fill="none" stroke="#ffffff66" stroke-width="2"/>')
     svg.append(f'<rect x="{w/2-85}" y="{h-66}" width="170" height="58" fill="none" stroke="#ffffff66" stroke-width="2"/>')
 
-    for pos, coords in FORMATION_COORDS.items():
-        for slot, (xp, yp) in enumerate(coords):
+    for pos, pos_coords in coords.items():
+        for slot, (xp, yp) in enumerate(pos_coords):
             key = f"{pos}_{slot}"
             profile = picks.get(key)
             cx, cy = xp / 100 * w, yp / 100 * h
@@ -236,18 +259,61 @@ def pitch_svg(picks: dict) -> str:
     return "".join(svg)
 
 
+def seeded_candidates(pool: list, pos: str, seed_str: str, excluded: set,
+                      current: str | None, model: PlayerStrengthModel,
+                      n: int = 5, shortlist_size: int = 15) -> list:
+    """Pick a random-but-stable sample of n candidates for one slot.
+
+    Drawing from a wider shortlist (top `shortlist_size` by overall) and
+    seeding the RNG per slot/reroll means each position slot — including
+    siblings like Defender #1..#4 — gets a different set of 5 instead of
+    always showing the same top-5 overall players.
+    """
+    cands = [p for p in pool if p.position == pos and p.player not in excluded and p.matches >= 3]
+    cands = sorted(cands, key=lambda p: -p.overall)[:shortlist_size]
+    if len(cands) <= n:
+        sample = cands
+    else:
+        seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
+        sample = random.Random(seed).sample(cands, n)
+    sample = sorted(sample, key=lambda p: -p.overall)
+    if current:
+        cp = model.get(current)
+        if cp and cp.player not in [s.player for s in sample]:
+            sample = [cp] + sample[:n - 1]
+    return sample
+
+
+def next_empty_slot(coords: dict, picks: dict) -> str | None:
+    for pos in POSITIONS_ORDER:
+        for slot in range(len(coords.get(pos, []))):
+            key = f"{pos}_{slot}"
+            if key not in picks:
+                return key
+    return None
+
+
 def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
     st.markdown("### 🎮 Draft de temporada")
     st.caption("Elige una competición: tu club sustituye al colista actual. Cada jugador fichado deja "
-              "de estar disponible para su equipo de origen — sin duplicados.")
+              "de estar disponible para su equipo de origen — sin duplicados. Pulsa una posición para "
+              "ver candidatos.")
 
-    comp_d = st.selectbox("Competición", DRAFT_COMPETITIONS, key="draft_comp_v2")
+    col_comp, col_form = st.columns([2, 1])
+    with col_comp:
+        comp_d = st.selectbox("Competición", DRAFT_COMPETITIONS, key="draft_comp_v2")
+    with col_form:
+        formation_name = st.selectbox("Formación", list(FORMATIONS.keys()), key="draft_formation")
+    coords = FORMATIONS[formation_name]
 
-    # Reset draft state on competition change
-    if st.session_state.get("draft_active_comp") != comp_d:
+    # Reset draft state on competition or formation change
+    active_key = (comp_d, formation_name)
+    if st.session_state.get("draft_active_comp") != active_key:
         st.session_state.draft_picks = {}
         st.session_state.draft_excluded = set()
-        st.session_state.draft_active_comp = comp_d
+        st.session_state.draft_active_slot = None
+        st.session_state.draft_reroll = {}
+        st.session_state.draft_active_comp = active_key
 
     comp_match_id = MATCH_COMP_MAP[comp_d]
     seasons = sorted(df_clubs.loc[df_clubs["competition"] == comp_match_id, "season"].unique(), reverse=True)
@@ -276,7 +342,7 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
     col_pitch, col_pick = st.columns([2, 3])
 
     with col_pitch:
-        st.markdown(pitch_svg(picks_resolved), unsafe_allow_html=True)
+        st.markdown(pitch_svg(picks_resolved, coords), unsafe_allow_html=True)
         n_picked = len(picks_resolved)
         st.markdown(f"<div style='text-align:center;font-weight:600;margin-top:6px'>"
                    f"{n_picked}/11 fichados</div>", unsafe_allow_html=True)
@@ -290,49 +356,74 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
             if st.button("🔄 Reiniciar draft", key="draft_reset"):
                 st.session_state.draft_picks = {}
                 st.session_state.draft_excluded = set()
+                st.session_state.draft_active_slot = None
+                st.session_state.draft_reroll = {}
                 st.rerun()
 
     with col_pick:
-        tabs = st.tabs([f"{pos} ({n})" for pos, n in POSITION_SLOTS.items()])
-        for tab, (pos, n_slots) in zip(tabs, POSITION_SLOTS.items()):
-            with tab:
-                for slot in range(n_slots):
-                    key = f"{pos}_{slot}"
-                    current = st.session_state.draft_picks.get(key)
+        st.caption("El número en cada candidato es su **valoración global (0-100)**: combina su percentil "
+                  "de ataque y de defensa frente a otros jugadores de su misma posición, a partir de sus "
+                  "estadísticas reales por partido (goles, asistencias, tiros, entradas, presiones...).")
 
-                    available = [p for p in pool if p.position == pos
-                                and p.player not in st.session_state.draft_excluded
-                                and p.matches >= 3]
-                    available = sorted(available, key=lambda p: -p.overall)[:5]
-                    if current:
-                        cp = model.get(current)
-                        if cp and cp.player not in [a.player for a in available]:
-                            available = [cp] + available[:4]
+        st.markdown("**Elige una posición:**")
+        for pos in POSITIONS_ORDER:
+            pos_coords = coords.get(pos, [])
+            if not pos_coords:
+                continue
+            st.markdown(f"<div style='font-size:11px;color:#9ca3af;margin-top:6px'>{pos}</div>",
+                       unsafe_allow_html=True)
+            slot_cols = st.columns(len(pos_coords))
+            for slot, sc in enumerate(slot_cols):
+                key = f"{pos}_{slot}"
+                current = st.session_state.draft_picks.get(key)
+                is_active = st.session_state.draft_active_slot == key
+                label = (current.split()[-1][:10] if current else f"#{slot + 1}")
+                if sc.button(("🟢 " if is_active else ("✅ " if current else "")) + label,
+                           key=f"slotbtn_{comp_d}_{formation_name}_{key}",
+                           use_container_width=True):
+                    st.session_state.draft_active_slot = None if is_active else key
+                    st.rerun()
 
-                    st.markdown(f"**{pos} #{slot + 1}**" + ("  ✅" if current else ""))
-                    if not available:
-                        st.caption("Sin candidatos disponibles en esta competición.")
-                        continue
-                    cand_cols = st.columns(len(available))
-                    for cc, cand in zip(cand_cols, available):
-                        is_current = current == cand.player
-                        ov_c = "#16a34a" if cand.overall >= 70 else "#2563eb"
-                        border = "border:2px solid #16a34a;" if is_current else ""
-                        cc.markdown(
-                            f'<div style="background:var(--secondary-background-color);border-radius:8px;'
-                            f'padding:6px;text-align:center;font-size:11px;{border}">'
-                            f'<div style="font-weight:700;font-size:16px;color:{ov_c}">{cand.overall:.0f}</div>'
-                            f'<div style="font-weight:500">{cand.player.split()[-1][:10]}</div>'
-                            f'<div style="color:#9ca3af;font-size:9px">{cand.team.title()[:14]}</div>'
-                            f'</div>', unsafe_allow_html=True)
-                        if cc.button("Elegido" if is_current else "Elegir",
-                                    key=f"pick_{comp_d}_{key}_{cand.player}",
-                                    disabled=is_current):
-                            if current:
-                                st.session_state.draft_excluded.discard(current)
-                            st.session_state.draft_picks[key] = cand.player
-                            st.session_state.draft_excluded.add(cand.player)
-                            st.rerun()
+        active_slot = st.session_state.draft_active_slot
+        if active_slot:
+            pos = active_slot.rsplit("_", 1)[0]
+            current = st.session_state.draft_picks.get(active_slot)
+            reroll_n = st.session_state.draft_reroll.get(active_slot, 0)
+            seed_str = f"{comp_d}|{formation_name}|{active_slot}|{reroll_n}"
+            candidates = seeded_candidates(pool, pos, seed_str, st.session_state.draft_excluded,
+                                          current, model)
+
+            st.markdown("---")
+            st.markdown(f"**Candidatos a {pos} — slot #{int(active_slot.rsplit('_',1)[1]) + 1}**")
+            if not candidates:
+                st.caption("Sin candidatos disponibles en esta competición.")
+            else:
+                cand_cols = st.columns(len(candidates))
+                for cc, cand in zip(cand_cols, candidates):
+                    is_current = current == cand.player
+                    ov_c = "#16a34a" if cand.overall >= 70 else "#2563eb"
+                    border = "border:2px solid #16a34a;" if is_current else ""
+                    cc.markdown(
+                        f'<div style="background:var(--secondary-background-color);border-radius:8px;'
+                        f'padding:6px;text-align:center;font-size:11px;{border}">'
+                        f'<div style="font-weight:700;font-size:16px;color:{ov_c}">{cand.overall:.0f}</div>'
+                        f'<div style="font-weight:500">{cand.player.split()[-1][:10]}</div>'
+                        f'<div style="color:#9ca3af;font-size:9px">{cand.team.title()[:14]}</div>'
+                        f'</div>', unsafe_allow_html=True)
+                    if cc.button("Elegido" if is_current else "Elegir",
+                                key=f"pick_{comp_d}_{formation_name}_{active_slot}_{cand.player}",
+                                disabled=is_current):
+                        if current:
+                            st.session_state.draft_excluded.discard(current)
+                        st.session_state.draft_picks[active_slot] = cand.player
+                        st.session_state.draft_excluded.add(cand.player)
+                        st.session_state.draft_active_slot = next_empty_slot(coords, st.session_state.draft_picks)
+                        st.rerun()
+                if st.button("🎲 Ver otros 5 candidatos", key=f"reroll_{comp_d}_{formation_name}_{active_slot}"):
+                    st.session_state.draft_reroll[active_slot] = reroll_n + 1
+                    st.rerun()
+        else:
+            st.caption("👆 Pulsa una posición arriba para ver sus 5 candidatos.")
 
 
 def render_sandbox_mode(model: PlayerStrengthModel, engine=None):
