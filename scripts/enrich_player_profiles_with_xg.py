@@ -9,6 +9,13 @@ existing profiles CSV used by PlayerStrengthModel:
   - npxg_per_match:                sum(non-penalty shot xG) / matches
   - big_chances_missed_per_match:  shots with xg >= BIG_CHANCE_XG_THRESHOLD
                                     that did not result in a goal, / matches
+  - big_chance_miss_rate:          big_chances_missed / big_chances_total (0-1).
+                                    Rate, not a raw count, so it doesn't
+                                    structurally penalise high-volume elite
+                                    scorers who simply take more big chances
+                                    than everyone else (and so rack up more
+                                    misses in absolute terms even with a great
+                                    conversion rate).
 
 "matches" is taken from the existing profiles CSV (not recomputed from the
 shots file) so the rate stays consistent with every other *_per_match column
@@ -56,6 +63,7 @@ def main() -> None:
             total_xg=("xg", "sum"),
             total_npxg=("npxg", "sum"),
             total_shots_xg_sample=("xg", "size"),
+            big_chances_total=("is_big_chance", "sum"),
             big_chances_missed=("is_big_chance_missed", "sum"),
         )
         .reset_index()
@@ -63,16 +71,22 @@ def main() -> None:
 
     before_cols = set(profiles.columns)
     profiles = profiles.merge(agg, on="player", how="left")
-    for c in ("total_xg", "total_npxg", "total_shots_xg_sample", "big_chances_missed"):
+    for c in ("total_xg", "total_npxg", "total_shots_xg_sample", "big_chances_total", "big_chances_missed"):
         profiles[c] = profiles[c].fillna(0.0)
 
     matches = profiles["matches"].clip(lower=1)
     profiles["xg_per_match"] = profiles["total_xg"] / matches
     profiles["npxg_per_match"] = profiles["total_npxg"] / matches
     profiles["big_chances_missed_per_match"] = profiles["big_chances_missed"] / matches
+    profiles["big_chance_miss_rate"] = (
+        profiles["big_chances_missed"] / profiles["big_chances_total"].clip(lower=1)
+    ).where(profiles["big_chances_total"] > 0, 0.0)
     profiles["xg_sample"] = profiles["total_shots_xg_sample"].astype(int)
 
-    profiles = profiles.drop(columns=["total_xg", "total_npxg", "total_shots_xg_sample", "big_chances_missed"])
+    profiles = profiles.drop(columns=[
+        "total_xg", "total_npxg", "total_shots_xg_sample",
+        "big_chances_total", "big_chances_missed",
+    ])
 
     new_cols = set(profiles.columns) - before_cols
     matched = int((profiles["xg_sample"] > 0).sum())
