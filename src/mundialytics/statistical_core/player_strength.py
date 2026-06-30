@@ -24,28 +24,46 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 
-# Weights per position for offensive vs defensive contribution to team lambda
+# Weights per position for offensive vs defensive contribution to team lambda.
+# Only the ratio between the two matters (team_strength() and fit() both
+# renormalise so they sum to 1), so they're written pre-normalised here.
 POSITION_ATTACK_WEIGHT = {
-    "Forward":    0.85,
-    "Midfielder": 0.50,
-    "Defender":   0.15,
-    "Goalkeeper": 0.05,
-    "Unknown":    0.45,
+    "Forward":    0.8947,   # was 0.85 / 0.95
+    "Midfielder": 0.5263,   # was 0.50 / 0.95
+    "Defender":   0.1579,   # was 0.15 / 0.95
+    "Goalkeeper": 0.0667,   # was 0.05 / 0.75
+    "Unknown":    0.5294,   # was 0.45 / 0.85
 }
 POSITION_DEFENSE_WEIGHT = {
-    "Forward":    0.10,
-    "Midfielder": 0.45,
-    "Defender":   0.80,
-    "Goalkeeper": 0.70,
-    "Unknown":    0.40,
+    "Forward":    0.1053,
+    "Midfielder": 0.4737,
+    "Defender":   0.8421,
+    "Goalkeeper": 0.9333,
+    "Unknown":    0.4706,
 }
 
 # Stats that drive each composite score
-OFFENSIVE_STATS = ["xg_per_match", "goals_per_match", "sot_per_match",
-                    "shots_per_match", "assists_per_match"]
+OFFENSIVE_STATS = ["xg_per_match", "goals_per_match",
+                    "assists_per_match", "big_chances_missed_per_match"]
 DEFENSIVE_STATS = ["tackles_per_match", "interceptions_per_match",
                     "pressures_per_match"]
-GK_STATS: list[str] = []  # computed from saves column if available
+# GK rating (saves, clean sheets) is intentionally not implemented yet: real
+# goalkeeper data (data/processed/goalkeeper_match_stats.csv) exists but isn't
+# merged into player_profiles_with_positions.csv. gk_strength stays a 50.0
+# placeholder and goalkeepers fall back to the generic offense/defense blend.
+GK_STATS: list[str] = []
+
+# Players with few matches get their percentile shrunk toward the 50 (average)
+# baseline so a hot streak over 1-3 games can't outrank a proven starter.
+# credibility = matches / (matches + SHRINKAGE_MATCHES)
+SHRINKAGE_MATCHES = 8.0
+
+# Percentile-based scores are centred on 50 by construction (half the pool is
+# always below average). That reads as "everyone is mediocre" on a 0-100 card.
+# Bending the curve (overall ** CURVE_EXPONENT) keeps 0->0 and 100->100 but
+# pushes a league-average player up toward ~65 and compresses the bottom end,
+# matching how FIFA/Football-Manager-style ratings are usually read.
+CURVE_EXPONENT = 0.65
 
 
 @dataclass
@@ -109,8 +127,14 @@ class PlayerStrengthModel:
 
         # Pre-compute percentile rank columns vectorised (O(n·stats) instead of O(n²))
         # scipy.stats.rankdata normalised to 0-100 within each position group
-        off_weights = {"goals_per_match": 0.30, "assists_per_match": 0.20,
-                        "sot_per_match": 0.25, "shots_per_match": 0.25}
+        # Goals and assists are weighted equally (both are a finished chance for
+        # the team); xg_per_match (real shot-level StatsBomb xG, see
+        # scripts/enrich_player_profiles_with_xg.py) replaces raw shot/SOT volume
+        # since it already captures shot quality and quantity together.
+        # big_chances_missed_per_match penalises forwards who rack up high-xG
+        # shots (xg >= 0.3) without converting them.
+        off_weights = {"goals_per_match": 0.30, "assists_per_match": 0.30,
+                        "xg_per_match": 0.25, "big_chances_missed_per_match": -0.15}
         def_weights = {"tackles_per_match": 0.45, "pressures_per_match": 0.45,
                         "fouls_per_match": -0.05, "yellow_cards_per_match": -0.05}
 
@@ -132,34 +156,45 @@ class PlayerStrengthModel:
             pos = str(row.get("position_group", "Unknown"))
             player = str(row.get("player", ""))
             matches = int(row.get("matches", 0))
+            credibility = matches / (matches + SHRINKAGE_MATCHES)
 
-            # Offensive score — weighted average of percentiles
+            def shrunk_pct(raw_pct: float) -> float:
+                """Regress toward the 50 baseline for players with few matches."""
+                return 50.0 + (raw_pct - 50.0) * credibility
+
+            # Offensive score — weighted average of credibility-shrunk percentiles
             off_num = off_den = 0.0
             for stat, w in off_weights.items():
                 pcol = pct_cols.get(stat)
                 if pcol and pcol in row.index:
-                    p = float(row[pcol])
+                    p = shrunk_pct(float(row[pcol]))
                     off_num += p * abs(w) * (1 if w > 0 else -1)
                     off_den += abs(w)
-            off_score = float(off_num / off_den) if off_den > 0 else 50.0
+            off_score = float(np.clip(off_num / off_den, 0, 100)) if off_den > 0 else 50.0
 
-            # Defensive score — weighted average of percentiles
+            # Defensive score — weighted average of credibility-shrunk percentiles
             def_num = def_den = 0.0
             for stat, w in def_weights.items():
                 pcol = pct_cols.get(stat)
                 if pcol and pcol in row.index:
-                    p = float(row[pcol])
+                    p = shrunk_pct(float(row[pcol]))
                     def_num += p * abs(w) * (1 if w > 0 else -1)
                     def_den += abs(w)
-            def_score = float(def_num / def_den) if def_den > 0 else 50.0
+            def_score = float(np.clip(def_num / def_den, 0, 100)) if def_den > 0 else 50.0
 
             # GK score (placeholder — saves not in current data)
             gk_score = 50.0
 
-            # Overall = position-weighted
+            # Overall = position-weighted blend of attack/defense (weights
+            # normalised to sum to 1 so positions like GK, whose raw weights
+            # only summed to 0.75, aren't artificially deflated), then bent
+            # through CURVE_EXPONENT so an average player reads ~65 not ~50.
             atk_w = POSITION_ATTACK_WEIGHT.get(pos, 0.45)
             def_w = POSITION_DEFENSE_WEIGHT.get(pos, 0.40)
-            overall = float(np.clip(atk_w * off_score + def_w * def_score, 0, 100))
+            w_sum = atk_w + def_w
+            atk_w, def_w = atk_w / w_sum, def_w / w_sum
+            overall_raw = float(np.clip(atk_w * off_score + def_w * def_score, 0, 100))
+            overall = float(np.clip(100.0 * (overall_raw / 100.0) ** CURVE_EXPONENT, 0, 100))
 
             self.profiles_[player] = PlayerStrengthProfile(
                 player=player,
@@ -171,7 +206,7 @@ class PlayerStrengthModel:
                 defensive_strength=round(def_score, 1),
                 gk_strength=gk_score,
                 overall=round(overall, 1),
-                xg_per_match=float(row.get("sot_per_match", row.get("goals_per_match", 0)) * 0.6),
+                xg_per_match=float(row.get("xg_per_match", 0)),
                 goals_per_match=float(row.get("goals_per_match", 0)),
                 assists_per_match=float(row.get("assists_per_match", 0)),
                 shots_per_match=float(row.get("shots_per_match", 0)),
