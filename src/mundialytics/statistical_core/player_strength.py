@@ -3,17 +3,30 @@ PlayerStrength model for SquadLab.
 
 Converts per-match player event rates (from StatsBomb) into two composite
 scores per player:
-  - offensive_strength  (0-100): xG, xA, shots, key passes, carries
-  - defensive_strength  (0-100): tackles, interceptions, pressures, blocks
-  - gk_strength         (0-100): saves, psxg (goalkeepers only)
+  - offensive_strength  (0-100): goals, assists, xG, big-chance conversion
+  - defensive_strength  (0-100): tackles, pressures, discipline
+  - gk_strength         (0-100): saves, psxg (goalkeepers only — placeholder)
   - overall             (0-100): position-weighted combination
 
-offensive_strength/defensive_strength are percentile-normalised within each
-position group (a 75 means "better than 75% of players at that position").
-overall blends the two with position-specific weights, then ranks that blend
-GLOBALLY across every position so star quality from any position can reach
-the top — capped at OVERALL_CEILING (~92) rather than a flat 100, so a real
-top-tier player reads like one instead of "the platonic ideal".
+This is an ABSOLUTE rating, not a percentile rank. Each stat is mapped to a
+0-100 score through a fixed, hand-calibrated curve (see the ANCHOR_* tables
+below) anchored on real reference points — e.g. peak Messi's 0.83
+goals/match reads ~95, a median established forward's 0.16 reads ~58. The
+curve is calibrated once from the data (median/p75/p90/p95 of players with
+20+ matches) but does NOT re-rank players against each other at score time.
+
+This was a deliberate move away from an earlier percentile-based design: a
+percentile rank compares each player only to whoever else happens to be in
+the data pool, and that pool is dominated by short-sample cameo players
+(the median "Forward" row has just 4 matches) — so a merely-good player with
+a real sample could out-rank historically great players just by being a
+credible regular in a noisy pool (e.g. Troy Deeney over Messi). An absolute
+anchor curve doesn't have that failure mode: the same raw stat always maps
+to the same score regardless of who else is in the dataset.
+
+Small samples are still discounted via SHRINKAGE_MATCHES (pulls the score
+toward a neutral 50 baseline until a player has accumulated enough matches
+to trust the rate), so a 3-game hot streak can't fake an anchor score.
 
 Men's competitions only — see WOMENS_COMPETITION_MARKERS.
 
@@ -50,29 +63,79 @@ POSITION_DEFENSE_WEIGHT = {
 
 # Stats that drive each composite score
 OFFENSIVE_STATS = ["xg_per_match", "goals_per_match",
-                    "assists_per_match", "big_chances_missed_per_match"]
-DEFENSIVE_STATS = ["tackles_per_match", "interceptions_per_match",
-                    "pressures_per_match"]
+                    "assists_per_match", "big_chance_miss_rate"]
+DEFENSIVE_STATS = ["tackles_per_match", "pressures_per_match",
+                    "fouls_per_match", "yellow_cards_per_match"]
 # GK rating (saves, clean sheets) is intentionally not implemented yet: real
 # goalkeeper data (data/processed/goalkeeper_match_stats.csv) exists but isn't
 # merged into player_profiles_with_positions.csv. gk_strength stays a 50.0
 # placeholder and goalkeepers fall back to the generic offense/defense blend.
 GK_STATS: list[str] = []
 
-# Players with few matches get their percentile shrunk toward the 50 (average)
-# baseline so a hot streak over 1-3 games can't outrank a proven starter.
+# Players with few matches get their score shrunk toward the 50 (neutral)
+# baseline so a 2-3 game hot streak can't fake an elite anchor score.
 # credibility = matches / (matches + SHRINKAGE_MATCHES)
-SHRINKAGE_MATCHES = 8.0
+SHRINKAGE_MATCHES = 12.0
 
-# Percentile-based scores are centred on 50 by construction (half the pool is
-# always below average). That reads as "everyone is mediocre" on a 0-100 card.
-# Bending the curve (overall ** CURVE_EXPONENT, then scaled to OVERALL_CEILING)
-# keeps 0->0 and pushes a league-average player up toward ~65, while capping
-# the single best player in the whole pool at ~92 instead of a flat 100 — a
-# literal 100 reads as "the platonic ideal player", whereas a real-world star
-# (any position) should read 90-92, leaving room above for outliers.
-CURVE_EXPONENT = 0.5
-OVERALL_CEILING = 92.0
+# --- Absolute anchor curves -------------------------------------------------
+# Each table is a sorted list of (raw_stat_value, score) control points;
+# values are linearly interpolated (and clamped at the ends) via np.interp.
+# Calibrated from two reference sets pulled directly from
+# player_profiles_with_positions.csv:
+#   1. Players with 20+ matches at each position (median/p75/p90/p95), so the
+#      mid-curve reflects "what a real established player's rate looks like".
+#   2. Recognisable world-class reference players (peak Messi 0.83
+#      goals/match, Ronaldo 0.78 xG/match, Suarez/Mbappe ~0.69, etc.) anchor
+#      the top end so genuine stars land around 90-95, not just "best of a
+#      noisy pool".
+# All curves are pre-oriented so higher score == better (the miss-rate and
+# discipline curves are already inverted, unlike the old percentile weights
+# which needed a +/-1 sign flip).
+ANCHOR_GOALS_PER_MATCH = [
+    (0.00, 35), (0.08, 48), (0.156, 58), (0.231, 67),
+    (0.343, 75), (0.43, 80), (0.60, 87), (0.834, 95),
+]
+ANCHOR_ASSISTS_PER_MATCH = [
+    (0.00, 35), (0.04, 48), (0.083, 58), (0.135, 66),
+    (0.20, 74), (0.238, 79), (0.35, 88), (0.50, 95),
+]
+ANCHOR_XG_PER_MATCH = [
+    (0.00, 35), (0.07, 48), (0.142, 58), (0.233, 66),
+    (0.348, 74), (0.442, 80), (0.60, 88), (0.777, 95),
+]
+# Lower miss rate = better. Deliberately narrow band (48-68): this stat is
+# noisy for players with very few big chances, so it shouldn't swing the
+# offensive score on its own the way goals/assists/xG can.
+ANCHOR_BIG_CHANCE_MISS_RATE = [
+    (0.0, 68), (0.33, 62), (0.43, 60), (0.67, 55), (1.0, 48),
+]
+ANCHOR_TACKLES_PER_MATCH = [
+    (0.0, 35), (0.5, 46), (1.0, 52), (1.754, 60),
+    (2.081, 67), (2.519, 75), (2.726, 80), (3.95, 92),
+]
+ANCHOR_PRESSURES_PER_MATCH = [
+    (0.0, 35), (5.0, 48), (10.5, 58), (12.18, 65),
+    (14.23, 72), (15.45, 77), (21.5, 90),
+]
+# Fewer fouls = better.
+ANCHOR_FOULS_PER_MATCH = [
+    (0.0, 70), (0.5, 65), (0.937, 60), (1.17, 56), (1.4, 50), (2.18, 35),
+]
+# Fewer cards = better.
+ANCHOR_YELLOW_CARDS_PER_MATCH = [
+    (0.0, 68), (0.06, 63), (0.121, 60), (0.185, 55), (0.24, 50), (0.47, 35),
+]
+
+ANCHOR_CURVES: dict[str, list[tuple[float, float]]] = {
+    "goals_per_match": ANCHOR_GOALS_PER_MATCH,
+    "assists_per_match": ANCHOR_ASSISTS_PER_MATCH,
+    "xg_per_match": ANCHOR_XG_PER_MATCH,
+    "big_chance_miss_rate": ANCHOR_BIG_CHANCE_MISS_RATE,
+    "tackles_per_match": ANCHOR_TACKLES_PER_MATCH,
+    "pressures_per_match": ANCHOR_PRESSURES_PER_MATCH,
+    "fouls_per_match": ANCHOR_FOULS_PER_MATCH,
+    "yellow_cards_per_match": ANCHOR_YELLOW_CARDS_PER_MATCH,
+}
 
 # Competitions to exclude entirely from the rating pool. Men's and women's
 # football have different physical/statistical baselines (event rates aren't
@@ -89,7 +152,7 @@ class PlayerStrengthProfile:
     competition: str
     position: str
     matches: int
-    offensive_strength: float = 0.0   # 0-100 percentile within position
+    offensive_strength: float = 0.0   # 0-100 absolute (anchor-curve) score
     defensive_strength: float = 0.0
     gk_strength: float = 0.0
     overall: float = 0.0
@@ -151,125 +214,75 @@ class PlayerStrengthModel:
         if "big_chance_miss_rate" in df.columns:
             df["big_chance_miss_rate"] = pd.to_numeric(df["big_chance_miss_rate"], errors="coerce").fillna(0.0)
 
-        # Pre-compute percentile rank columns vectorised (O(n·stats) instead of O(n²))
-        # scipy.stats.rankdata normalised to 0-100 within each position group
-        # Goals and assists are weighted equally (both are a finished chance for
-        # the team); xg_per_match (real shot-level StatsBomb xG, see
-        # scripts/enrich_player_profiles_with_xg.py) replaces raw shot/SOT volume
-        # since it already captures shot quality and quantity together.
-        # big_chance_miss_rate (missed / created, both xg>=0.3) penalises
-        # wasteful finishing as a RATE rather than a raw count, so a
-        # high-volume elite scorer isn't dragged down just for taking more
-        # big chances than everyone else.
+        # Goals and assists are weighted equally (both are a finished chance
+        # for the team); xg_per_match (real shot-level StatsBomb xG, see
+        # scripts/enrich_player_profiles_with_xg.py) replaces raw shot/SOT
+        # volume since it already captures shot quality and quantity
+        # together. All weights are positive: each stat's ANCHOR_CURVES entry
+        # is already oriented so a higher score is always better (miss rate
+        # and discipline stats are pre-inverted).
         off_weights = {"goals_per_match": 0.30, "assists_per_match": 0.30,
-                        "xg_per_match": 0.25, "big_chance_miss_rate": -0.15}
+                        "xg_per_match": 0.25, "big_chance_miss_rate": 0.15}
         def_weights = {"tackles_per_match": 0.45, "pressures_per_match": 0.45,
-                        "fouls_per_match": -0.05, "yellow_cards_per_match": -0.05}
+                        "fouls_per_match": 0.05, "yellow_cards_per_match": 0.05}
 
-        pct_cols: dict[str, str] = {}
+        # Map every stat through its fixed anchor curve (absolute, not
+        # ranked against the rest of the pool) via np.interp — vectorised,
+        # values outside the anchor range just clamp to the nearest end.
+        score_cols: dict[str, str] = {}
         for stat in list(off_weights) + list(def_weights):
             if stat not in df.columns:
                 continue
-            pct_col = f"_pct_{stat}"
-            df[pct_col] = 50.0
-            for pos in df["position_group"].unique():
-                mask = df["position_group"] == pos
-                vals = df.loc[mask, stat].fillna(0.0)
-                if len(vals) > 1:
-                    from scipy.stats import rankdata
-                    df.loc[mask, pct_col] = 100.0 * (rankdata(vals) - 1) / (len(vals) - 1)
-            pct_cols[stat] = pct_col
+            anchors = ANCHOR_CURVES[stat]
+            xs, ys = zip(*anchors)
+            score_col = f"_score_{stat}"
+            df[score_col] = np.interp(df[stat], xs, ys)
+            score_cols[stat] = score_col
 
-        # Pass 1: per-row offensive/defensive composites — weighted averages
-        # of credibility-shrunk percentiles. off_score and def_score live on
-        # different stat sets with different distribution shapes (e.g.
-        # defensive percentiles cluster higher at the top because
-        # tackles/pressures are correlated workrate stats and there are only
-        # two of them, while the offensive blend averages three positively
-        # weighted stats plus a penalty, which is structurally harder to max
-        # out) — so they are NOT comparable to each other yet.
-        row_data: list[dict] = []
-        for idx, row in df.iterrows():
-            pos = str(row.get("position_group", "Unknown"))
-            matches = int(row.get("matches", 0))
-            credibility = matches / (matches + SHRINKAGE_MATCHES)
+        # Shrink each stat's anchor score toward the neutral 50 baseline for
+        # players with few matches, so a 2-3 game hot streak can't fake an
+        # elite anchor score (e.g. 2 goals in 3 matches = 0.67 goals/match,
+        # which would otherwise read as near-Messi on the raw curve alone).
+        credibility = df["matches"] / (df["matches"] + SHRINKAGE_MATCHES)
+        for stat, score_col in score_cols.items():
+            df[score_col] = 50.0 + (df[score_col] - 50.0) * credibility
 
-            def shrunk_pct(raw_pct: float, credibility: float = credibility) -> float:
-                """Regress toward the 50 baseline for players with few matches."""
-                return 50.0 + (raw_pct - 50.0) * credibility
+        off_num = sum(df[score_cols[s]] * w for s, w in off_weights.items() if s in score_cols)
+        off_den = sum(w for s, w in off_weights.items() if s in score_cols)
+        df["off_score"] = (off_num / off_den).clip(0, 100) if off_den > 0 else 50.0
 
-            off_num = off_den = 0.0
-            for stat, w in off_weights.items():
-                pcol = pct_cols.get(stat)
-                if pcol and pcol in row.index:
-                    p = shrunk_pct(float(row[pcol]))
-                    off_num += p * abs(w) * (1 if w > 0 else -1)
-                    off_den += abs(w)
-            off_score = float(np.clip(off_num / off_den, 0, 100)) if off_den > 0 else 50.0
+        def_num = sum(df[score_cols[s]] * w for s, w in def_weights.items() if s in score_cols)
+        def_den = sum(w for s, w in def_weights.items() if s in score_cols)
+        df["def_score"] = (def_num / def_den).clip(0, 100) if def_den > 0 else 50.0
 
-            def_num = def_den = 0.0
-            for stat, w in def_weights.items():
-                pcol = pct_cols.get(stat)
-                if pcol and pcol in row.index:
-                    p = shrunk_pct(float(row[pcol]))
-                    def_num += p * abs(w) * (1 if w > 0 else -1)
-                    def_den += abs(w)
-            def_score = float(np.clip(def_num / def_den, 0, 100)) if def_den > 0 else 50.0
-
-            row_data.append({"idx": idx, "off_score": off_score, "def_score": def_score})
-
-        scores_df = pd.DataFrame(row_data).set_index("idx")
-        df = df.join(scores_df)
-
-        # Pass 2: re-rank off_score and def_score to a percentile WITHIN each
-        # position group, independently of each other. This is what makes
-        # attack and defense comparable: the best forward by off_score and
-        # the best defender by def_score both land at off_pct/def_pct = 100,
-        # removing the structural ceiling gap from Pass 1 (different stat
-        # counts/correlations) at the component level — not by forcing the
-        # final blended overall to tie, just the inputs to that blend.
-        from scipy.stats import rankdata
-
-        def _rerank_within_position(col: str, out_col: str) -> None:
-            df[out_col] = 50.0
-            for pos in df["position_group"].unique():
-                mask = df["position_group"] == pos
-                vals = df.loc[mask, col]
-                if len(vals) > 1:
-                    df.loc[mask, out_col] = 100.0 * (rankdata(vals) - 1) / (len(vals) - 1)
-
-        _rerank_within_position("off_score", "off_pct")
-        _rerank_within_position("def_score", "def_pct")
-
+        # overall = position-weighted blend of the two absolute scores. No
+        # percentile re-rank, no curve — the anchor tables already calibrate
+        # the 0-100 range (median established player ~58-60, genuine legends
+        # ~90-95), so the blend doesn't need further reshaping.
         atk_w_s = df["position_group"].map(POSITION_ATTACK_WEIGHT).fillna(0.45)
         def_w_s = df["position_group"].map(POSITION_DEFENSE_WEIGHT).fillna(0.40)
         w_sum_s = atk_w_s + def_w_s
-        df["overall_raw"] = (atk_w_s / w_sum_s) * df["off_pct"] + (def_w_s / w_sum_s) * df["def_pct"]
+        df["overall"] = (
+            (atk_w_s / w_sum_s) * df["off_score"] + (def_w_s / w_sum_s) * df["def_score"]
+        ).clip(0, 100)
 
-        # Pass 3: rank overall_raw GLOBALLY (across every position at once,
-        # not within each position group), so star quality can cluster near
-        # the top from whichever positions actually have it instead of
-        # forcing the #1 player at every position to tie at the same value.
-        if len(df) > 1:
-            df["_overall_pctile"] = 100.0 * (rankdata(df["overall_raw"]) - 1) / (len(df) - 1)
-        else:
-            df["_overall_pctile"] = 50.0
-
-        # FIFA-style curve, then rescaled so the single best player in the
-        # whole pool reads ~OVERALL_CEILING (92) instead of a flat 100, and
-        # an average player still reads ~65.
-        df["overall"] = OVERALL_CEILING * (df["_overall_pctile"].clip(0, 100) / 100.0) ** CURVE_EXPONENT
+        # Goalkeepers are a special case: the tackles/pressures anchor curve
+        # is calibrated on outfield defenders, and keepers naturally record
+        # almost none of either, so the blend above crushes every keeper to
+        # ~43-44 regardless of how good they actually are — that's a curve
+        # mismatch, not a real signal. Until a dedicated save%/clean-sheet GK
+        # rating exists (see GK_STATS), keep their overall at the same
+        # neutral 50 placeholder as gk_strength instead of showing a
+        # misleadingly bad number.
+        df.loc[df["position_group"] == "Goalkeeper", "overall"] = 50.0
 
         for _, row in df.iterrows():
             pos = str(row.get("position_group", "Unknown"))
             player = str(row.get("player", ""))
             matches = int(row.get("matches", 0))
-            # Displayed off/def scores are the within-position re-rank
-            # (off_pct/def_pct), the same comparable scale the overall blend
-            # uses — not the raw stat-weighted composite from Pass 1.
-            off_score = float(row["off_pct"])
-            def_score = float(row["def_pct"])
-            overall = float(np.clip(row["overall"], 0, 100))
+            off_score = float(row["off_score"])
+            def_score = float(row["def_score"])
+            overall = float(row["overall"])
 
             # GK score (placeholder — saves not in current data)
             gk_score = 50.0
