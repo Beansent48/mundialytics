@@ -1,8 +1,15 @@
 """
 SquadLab page — shown inside the main Streamlit app.
 Two modes:
-  Sandbox  : pick any 11 players freely, simulate match/tournament
-  Draft    : 5 players shown per position slot, user picks one each round
+  Draft    : pick a competition, your club replaces the league's current
+             last-place team, draft 11 players from 5 candidates per slot
+             (each pick is removed from the global pool — no duplicates,
+             no player available to a club after being drafted away).
+  Sandbox  : pick any 11 players freely, quick single-match simulation.
+
+Season-long match-by-match simulation (Football-Manager style results,
+lineups, ratings) and the 1M-sim Monte Carlo award/odds layer are the
+next phase — this file currently builds the draft + squad foundation.
 """
 from __future__ import annotations
 import sys
@@ -27,6 +34,32 @@ POSITION_SLOTS = {
     "Forward":    3,
 }
 
+# Player-profiles CSV and match-results CSV spell competition names differently.
+PLAYER_COMP_MAP = {
+    "LaLiga":         "La Liga",
+    "Premier League": "Premier League",
+    "Serie A":        "Serie A",
+    "Bundesliga":     "1. Bundesliga",
+    "Ligue 1":        "Ligue 1",
+}
+MATCH_COMP_MAP = {
+    "LaLiga":         "LaLiga",
+    "Premier League": "Premier League",
+    "Serie A":        "Serie A",
+    "Bundesliga":     "Bundesliga",
+    "Ligue 1":        "Ligue 1",
+}
+DRAFT_COMPETITIONS = list(PLAYER_COMP_MAP.keys())
+
+# Pitch coordinates (% of width/height) for a 4-3-3, attacking toward y=0.
+FORMATION_COORDS = {
+    "Goalkeeper": [(50, 92)],
+    "Defender":   [(15, 72), (38, 76), (62, 76), (85, 72)],
+    "Midfielder": [(25, 50), (50, 45), (75, 50)],
+    "Forward":    [(20, 18), (50, 12), (80, 18)],
+}
+
+
 @st.cache_resource(show_spinner="Cargando perfiles de jugadores...")
 def load_strength_model() -> PlayerStrengthModel:
     m = PlayerStrengthModel()
@@ -41,40 +74,39 @@ def render_player_card(p, compact: bool = False) -> str:
     ov_color = "#16a34a" if p.overall >= 70 else ("#2563eb" if p.overall >= 50 else "#9ca3af")
     if compact:
         return (
-            f'<div style="background:var(--surface-1);border-radius:8px;padding:8px 10px;'
-            f'border:0.5px solid var(--border)">'
+            f'<div style="background:var(--secondary-background-color);border-radius:8px;padding:8px 10px;">'
             f'<div style="display:flex;justify-content:space-between;align-items:center">'
             f'<span style="font-weight:500;font-size:12px">{p.player.split()[0]}</span>'
             f'<span style="font-weight:700;color:{ov_color};font-size:14px">{p.overall:.0f}</span>'
             f'</div>'
-            f'<div style="font-size:10px;color:var(--text-muted)">{p.team.title()} · {p.position[:3]}</div>'
+            f'<div style="font-size:10px;color:#9ca3af">{p.team.title()} · {p.position[:3]}</div>'
             f'</div>'
         )
     return (
-        f'<div style="background:var(--surface-1);border-radius:10px;padding:12px 14px;'
-        f'border:0.5px solid var(--border);margin-bottom:8px">'
+        f'<div style="background:var(--secondary-background-color);border-radius:10px;padding:12px 14px;'
+        f'margin-bottom:8px">'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
         f'<div>'
         f'<div style="font-weight:500;font-size:13px">{p.player}</div>'
-        f'<div style="font-size:11px;color:var(--text-muted)">{p.team.title()} · {p.competition}</div>'
+        f'<div style="font-size:11px;color:#9ca3af">{p.team.title()} · {p.competition}</div>'
         f'</div>'
         f'<div style="font-size:22px;font-weight:700;color:{ov_color}">{p.overall:.0f}</div>'
         f'</div>'
         f'<div style="margin-top:8px">'
         f'<div style="display:flex;align-items:center;gap:6px;margin:3px 0">'
-        f'<span style="font-size:10px;color:var(--text-muted);width:44px">Ataque</span>'
-        f'<div style="flex:1;background:var(--surface-2);border-radius:2px;height:8px">'
+        f'<span style="font-size:10px;color:#9ca3af;width:44px">Ataque</span>'
+        f'<div style="flex:1;background:#e5e7eb33;border-radius:2px;height:8px">'
         f'<div style="width:{off_bar}%;height:8px;background:#3b82f6;border-radius:2px"></div>'
         f'</div><span style="font-size:10px;width:28px;text-align:right">{p.offensive_strength:.0f}</span>'
         f'</div>'
         f'<div style="display:flex;align-items:center;gap:6px;margin:3px 0">'
-        f'<span style="font-size:10px;color:var(--text-muted);width:44px">Defensa</span>'
-        f'<div style="flex:1;background:var(--surface-2);border-radius:2px;height:8px">'
+        f'<span style="font-size:10px;color:#9ca3af;width:44px">Defensa</span>'
+        f'<div style="flex:1;background:#e5e7eb33;border-radius:2px;height:8px">'
         f'<div style="width:{def_bar}%;height:8px;background:#10b981;border-radius:2px"></div>'
         f'</div><span style="font-size:10px;width:28px;text-align:right">{p.defensive_strength:.0f}</span>'
         f'</div>'
         f'</div>'
-        f'<div style="display:flex;gap:10px;margin-top:8px;font-size:11px;color:var(--text-muted)">'
+        f'<div style="display:flex;gap:10px;margin-top:8px;font-size:11px;color:#9ca3af">'
         f'<span>xG {p.xg_per_match:.2f}</span>'
         f'<span>Goles {p.goals_per_match:.2f}</span>'
         f'<span>Tackl {p.tackles_per_match:.2f}</span>'
@@ -118,14 +150,13 @@ def simulate_match_with_squad(
     lh_base = home_str["xg_per_match"]
     la_base = away_str["xg_per_match"]
 
-    # Defense adjustment: opponent's defense index lowers attacking lambda
     def_ratio_h = away_str["defense_index"] / 50.0
     def_ratio_a = home_str["defense_index"] / 50.0
     lh = float(np.clip(lh_base / (def_ratio_h ** 0.5), 0.3, 4.0))
     la = float(np.clip(la_base / (def_ratio_a ** 0.5), 0.3, 4.0))
 
     if not neutral:
-        lh *= 1.12  # home advantage ~12%
+        lh *= 1.12
 
     rng = np.random.default_rng(42)
     hg = rng.poisson(lh, n_sims)
@@ -134,7 +165,6 @@ def simulate_match_with_squad(
     p_draw = float((hg == ag).mean())
     p_away = float((ag > hg).mean())
 
-    # Score matrix
     goals = np.arange(7)
     matrix = np.outer(poisson.pmf(goals, lh), poisson.pmf(goals, la))
 
@@ -144,183 +174,250 @@ def simulate_match_with_squad(
         "p_btts": float(1 - poisson.cdf(0, lh) - poisson.cdf(0, la) + poisson.cdf(0, lh) * poisson.cdf(0, la)),
         "p_over25": float(1 - sum(poisson.pmf(k, lh + la) for k in range(3))),
         "score_matrix": matrix,
-        "home_attack": home_str["attack_index"],
-        "home_defense": home_str["defense_index"],
-        "away_attack": away_str["attack_index"],
-        "away_defense": away_str["defense_index"],
+        "home_attack": home_str["attack_index"], "home_defense": home_str["defense_index"],
+        "away_attack": away_str["attack_index"], "away_defense": away_str["defense_index"],
     }
 
 
-def render(engine=None):
-    """Main SquadLab render function — called from streamlit_app.py."""
-    st.title("🧪 SquadLab")
+# ── Draft mode helpers ──────────────────────────────────────────────────────
+def compute_standings(df_clubs: pd.DataFrame, comp_id: str, season: str) -> pd.DataFrame:
+    """Current league table from played matches (works mid-season too)."""
+    mask = (df_clubs["competition"] == comp_id) & (df_clubs["season"] == season)
+    df = df_clubs[mask].dropna(subset=["home_goals", "away_goals"])
+    if df.empty:
+        return pd.DataFrame()
 
-    sq_model = load_strength_model()
+    rows: dict[str, dict] = {}
+    for _, m in df.iterrows():
+        h, a, hg, ag = m["home_team"], m["away_team"], m["home_goals"], m["away_goals"]
+        for t in (h, a):
+            rows.setdefault(t, {"team": t, "played": 0, "pts": 0, "gf": 0, "ga": 0})
+        rows[h]["played"] += 1; rows[a]["played"] += 1
+        rows[h]["gf"] += hg; rows[h]["ga"] += ag
+        rows[a]["gf"] += ag; rows[a]["ga"] += hg
+        if hg > ag: rows[h]["pts"] += 3
+        elif hg < ag: rows[a]["pts"] += 3
+        else: rows[h]["pts"] += 1; rows[a]["pts"] += 1
 
-    if not sq_model.profiles_:
-        st.warning("Perfiles de jugadores no disponibles. Asegúrate de que data/processed/player_profiles_with_positions.csv existe.")
+    table = pd.DataFrame(rows.values())
+    table["gd"] = table["gf"] - table["ga"]
+    return table.sort_values(["pts", "gd", "gf"], ascending=False).reset_index(drop=True)
+
+
+def pitch_svg(picks: dict) -> str:
+    w, h = 460, 600
+    svg = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
+           f'style="width:100%;max-width:460px;display:block;margin:0 auto">']
+    svg.append(f'<rect width="{w}" height="{h}" fill="#1f7a3d" rx="12"/>')
+    svg.append(f'<rect x="8" y="8" width="{w-16}" height="{h-16}" fill="none" stroke="#ffffff66" stroke-width="2"/>')
+    svg.append(f'<circle cx="{w/2}" cy="{h/2}" r="48" fill="none" stroke="#ffffff66" stroke-width="2"/>')
+    svg.append(f'<line x1="8" y1="{h/2}" x2="{w-8}" y2="{h/2}" stroke="#ffffff66" stroke-width="2"/>')
+    svg.append(f'<rect x="{w/2-85}" y="8" width="170" height="58" fill="none" stroke="#ffffff66" stroke-width="2"/>')
+    svg.append(f'<rect x="{w/2-85}" y="{h-66}" width="170" height="58" fill="none" stroke="#ffffff66" stroke-width="2"/>')
+
+    for pos, coords in FORMATION_COORDS.items():
+        for slot, (xp, yp) in enumerate(coords):
+            key = f"{pos}_{slot}"
+            profile = picks.get(key)
+            cx, cy = xp / 100 * w, yp / 100 * h
+            if profile:
+                label = profile.player.split()[-1][:11]
+                ov = f"{profile.overall:.0f}"
+                color = "#16a34a" if profile.overall >= 70 else "#2563eb"
+            else:
+                label, ov, color = "vacío", "", "#9ca3af99"
+            svg.append(f'<circle cx="{cx}" cy="{cy}" r="22" fill="{color}" stroke="white" stroke-width="2"/>')
+            if ov:
+                svg.append(f'<text x="{cx}" y="{cy+5}" text-anchor="middle" font-size="13" '
+                          f'font-weight="700" fill="white">{ov}</text>')
+            svg.append(f'<text x="{cx}" y="{cy+38}" text-anchor="middle" font-size="11" '
+                      f'fill="white" style="text-shadow:0 1px 2px #00000088">{label}</text>')
+    svg.append('</svg>')
+    return "".join(svg)
+
+
+def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
+    st.markdown("### 🎮 Draft de temporada")
+    st.caption("Elige una competición: tu club sustituye al colista actual. Cada jugador fichado deja "
+              "de estar disponible para su equipo de origen — sin duplicados.")
+
+    comp_d = st.selectbox("Competición", DRAFT_COMPETITIONS, key="draft_comp_v2")
+
+    # Reset draft state on competition change
+    if st.session_state.get("draft_active_comp") != comp_d:
+        st.session_state.draft_picks = {}
+        st.session_state.draft_excluded = set()
+        st.session_state.draft_active_comp = comp_d
+
+    comp_match_id = MATCH_COMP_MAP[comp_d]
+    seasons = sorted(df_clubs.loc[df_clubs["competition"] == comp_match_id, "season"].unique(), reverse=True)
+    if not seasons:
+        st.warning("Sin datos de calendario para esta competición.")
+        return
+    season_d = seasons[0]
+    table = compute_standings(df_clubs, comp_match_id, season_d)
+    if table.empty:
+        st.warning("Sin partidos disputados todavía esta temporada.")
         return
 
-    mode = st.radio("Modo", ["🔬 Sandbox — elige tu equipo libre", "🎲 Draft — 5 candidatos por posición"], horizontal=True)
+    last_row = table.iloc[-1]
+    last_team = last_row["team"]
+    st.info(f"🔻 Tu club sustituye a **{last_team.title()}**, colista de {comp_d} {season_d} "
+           f"({int(last_row['pts'])} pts en {int(last_row['played'])} partidos).")
 
-    # ── SANDBOX MODE ──────────────────────────────────────────────────────────
-    if "Sandbox" in mode:
-        st.markdown("### Construye tu equipo ideal")
-        st.caption("Mezcla jugadores de cualquier época o liga — es un experimento estadístico.")
+    player_comp = PLAYER_COMP_MAP[comp_d]
+    pool = [p for p in model.profiles_.values() if p.competition == player_comp]
+    if not pool:
+        st.warning(f"No hay jugadores con perfil para {comp_d} en los datos disponibles.")
+        return
 
-        all_players = sorted(sq_model.profiles_.keys())
+    picks_resolved = {k: model.get(v) for k, v in st.session_state.draft_picks.items() if model.get(v)}
 
-        col_setup, col_squad = st.columns([2, 3])
-        with col_setup:
-            competition_filter = st.selectbox(
-                "Filtrar por competición", ["Todas", "La Liga", "Premier League", "Serie A", "Bundesliga", "Ligue 1"],
-                key="sb_comp")
-            search_q = st.text_input("Buscar jugador", placeholder="Ej: Messi, Ronaldo...", key="sb_search")
+    col_pitch, col_pick = st.columns([2, 3])
 
-            if search_q:
-                comp_f = None if competition_filter == "Todas" else competition_filter
-                results = sq_model.search(search_q, competition=comp_f, top_n=8)
-                if results:
-                    st.markdown("**Resultados:**")
-                    for p in results:
-                        st.markdown(render_player_card(p, compact=True), unsafe_allow_html=True)
-                else:
-                    st.caption("Sin resultados.")
+    with col_pitch:
+        st.markdown(pitch_svg(picks_resolved), unsafe_allow_html=True)
+        n_picked = len(picks_resolved)
+        st.markdown(f"<div style='text-align:center;font-weight:600;margin-top:6px'>"
+                   f"{n_picked}/11 fichados</div>", unsafe_allow_html=True)
+        if picks_resolved:
+            strength = model.team_strength(list(picks_resolved.values()))
+            st.plotly_chart(team_strength_visual(strength, "Tu equipo"), use_container_width=True)
+        if n_picked == 11:
+            st.success("Plantilla completa. La simulación de temporada partido a partido "
+                      "(resultados, alineaciones, ratings y el Monte Carlo de premios) "
+                      "llega en la siguiente fase.")
+            if st.button("🔄 Reiniciar draft", key="draft_reset"):
+                st.session_state.draft_picks = {}
+                st.session_state.draft_excluded = set()
+                st.rerun()
 
-        with col_squad:
-            st.markdown("#### Alineación (4-3-3)")
-            squad_selected: list = []
-
-            for pos, n_slots in POSITION_SLOTS.items():
-                st.markdown(f"**{pos}** ({n_slots})")
-                cols = st.columns(n_slots)
-                for i, col in enumerate(cols):
-                    key = f"sb_{pos}_{i}"
-                    # Filter candidates by position
-                    if competition_filter == "Todas":
-                        candidates = [name for name, p in sq_model.profiles_.items() if p.position == pos]
-                    else:
-                        candidates = [name for name, p in sq_model.profiles_.items()
-                                       if p.position == pos and competition_filter.lower() in p.competition.lower()]
-                    candidates = sorted(candidates)
-                    default_idx = 0
-                    if key not in st.session_state and candidates:
-                        st.session_state[key] = candidates[0]
-                    sel = col.selectbox(f"#{i+1}", candidates, key=key)
-                    if sel and sel in sq_model.profiles_:
-                        squad_selected.append(sq_model.profiles_[sel])
-
-            if len(squad_selected) >= 4:
-                strength = sq_model.team_strength(squad_selected)
-                st.markdown("---")
-                st.plotly_chart(team_strength_visual(strength, "Tu equipo"), use_container_width=True)
-                mc1, mc2, mc3 = st.columns(3)
-                mc1.metric("Índice ataque", f"{strength['attack_index']:.0f}/100")
-                mc2.metric("Índice defensa", f"{strength['defense_index']:.0f}/100")
-                mc3.metric("xGoals estimados", f"{strength['xg_per_match']:.2f}/partido")
-
-    # ── DRAFT MODE ────────────────────────────────────────────────────────────
-    else:
-        st.markdown("### Draft de jugadores")
-        st.caption("Se muestran 5 candidatos por posición ordenados por rating. Elige uno de cada.")
-
-        competition_d = st.selectbox("Liga de referencia",
-                                      ["La Liga", "Premier League", "Serie A", "Bundesliga", "Ligue 1"],
-                                      key="draft_comp")
-
-        draft_squad: list = []
+    with col_pick:
         tabs = st.tabs([f"{pos} ({n})" for pos, n in POSITION_SLOTS.items()])
-
         for tab, (pos, n_slots) in zip(tabs, POSITION_SLOTS.items()):
             with tab:
-                top_players = sq_model.top_by_position(pos, competition=competition_d, n=5)
-                if not top_players:
-                    st.caption(f"Sin datos de {pos} en {competition_d}")
-                    continue
-
-                st.markdown(f"**Elige {n_slots} {pos}(s):**")
-                cols = st.columns(len(top_players))
-                for i, (col, candidate) in enumerate(zip(cols, top_players)):
-                    ov_c = "#16a34a" if candidate.overall >= 70 else "#2563eb"
-                    col.markdown(
-                        f'<div style="background:var(--surface-1);border-radius:8px;padding:8px;'
-                        f'border:0.5px solid var(--border);text-align:center">'
-                        f'<div style="font-weight:700;font-size:18px;color:{ov_c}">{candidate.overall:.0f}</div>'
-                        f'<div style="font-size:11px;font-weight:500">{candidate.player.split()[0]}</div>'
-                        f'<div style="font-size:10px;color:var(--text-muted)">{candidate.team.title()}</div>'
-                        f'<div style="font-size:10px;color:var(--text-muted)">xG {candidate.xg_per_match:.2f} | Tackl {candidate.tackles_per_match:.2f}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-
-                selected_names = [p.player for p in top_players]
-                picks = []
                 for slot in range(n_slots):
-                    key = f"draft_{pos}_{slot}"
-                    default = min(slot, len(selected_names) - 1)
-                    pick = st.selectbox(f"{pos} #{slot+1}", selected_names, index=default, key=key)
-                    p = sq_model.get(pick)
-                    if p:
-                        picks.append(p)
-                        draft_squad.append(p)
+                    key = f"{pos}_{slot}"
+                    current = st.session_state.draft_picks.get(key)
 
-        if len(draft_squad) >= 8:
+                    available = [p for p in pool if p.position == pos
+                                and p.player not in st.session_state.draft_excluded
+                                and p.matches >= 3]
+                    available = sorted(available, key=lambda p: -p.overall)[:5]
+                    if current:
+                        cp = model.get(current)
+                        if cp and cp.player not in [a.player for a in available]:
+                            available = [cp] + available[:4]
+
+                    st.markdown(f"**{pos} #{slot + 1}**" + ("  ✅" if current else ""))
+                    if not available:
+                        st.caption("Sin candidatos disponibles en esta competición.")
+                        continue
+                    cand_cols = st.columns(len(available))
+                    for cc, cand in zip(cand_cols, available):
+                        is_current = current == cand.player
+                        ov_c = "#16a34a" if cand.overall >= 70 else "#2563eb"
+                        border = "border:2px solid #16a34a;" if is_current else ""
+                        cc.markdown(
+                            f'<div style="background:var(--secondary-background-color);border-radius:8px;'
+                            f'padding:6px;text-align:center;font-size:11px;{border}">'
+                            f'<div style="font-weight:700;font-size:16px;color:{ov_c}">{cand.overall:.0f}</div>'
+                            f'<div style="font-weight:500">{cand.player.split()[-1][:10]}</div>'
+                            f'<div style="color:#9ca3af;font-size:9px">{cand.team.title()[:14]}</div>'
+                            f'</div>', unsafe_allow_html=True)
+                        if cc.button("Elegido" if is_current else "Elegir",
+                                    key=f"pick_{comp_d}_{key}_{cand.player}",
+                                    disabled=is_current):
+                            if current:
+                                st.session_state.draft_excluded.discard(current)
+                            st.session_state.draft_picks[key] = cand.player
+                            st.session_state.draft_excluded.add(cand.player)
+                            st.rerun()
+
+
+def render_sandbox_mode(model: PlayerStrengthModel, engine=None):
+    st.markdown("### 🔬 Construye tu equipo ideal")
+    st.caption("Mezcla jugadores de cualquier época o liga — experimento estadístico sin restricciones, "
+              "pensado para escenarios tipo 'el Mundial si España tuviera a Messi'.")
+
+    all_players = sorted(model.profiles_.keys())
+
+    col_setup, col_squad = st.columns([2, 3])
+    with col_setup:
+        competition_filter = st.selectbox(
+            "Filtrar por competición", ["Todas"] + DRAFT_COMPETITIONS, key="sb_comp")
+        search_q = st.text_input("Buscar jugador", placeholder="Ej: Messi, Ronaldo...", key="sb_search")
+
+        if search_q:
+            comp_f = None if competition_filter == "Todas" else PLAYER_COMP_MAP[competition_filter]
+            results = model.search(search_q, competition=comp_f, top_n=8)
+            if results:
+                st.markdown("**Resultados:**")
+                for p in results:
+                    st.markdown(render_player_card(p, compact=True), unsafe_allow_html=True)
+            else:
+                st.caption("Sin resultados.")
+
+    squad_selected: list = []
+    with col_squad:
+        st.markdown("#### Alineación (4-3-3)")
+        for pos, n_slots in POSITION_SLOTS.items():
+            st.markdown(f"**{pos}** ({n_slots})")
+            cols = st.columns(n_slots)
+            for i, col in enumerate(cols):
+                key = f"sb_{pos}_{i}"
+                if competition_filter == "Todas":
+                    candidates = [name for name, p in model.profiles_.items() if p.position == pos]
+                else:
+                    comp_f = PLAYER_COMP_MAP[competition_filter]
+                    candidates = [name for name, p in model.profiles_.items()
+                                if p.position == pos and p.competition == comp_f]
+                candidates = sorted(candidates)
+                if key not in st.session_state and candidates:
+                    st.session_state[key] = candidates[0]
+                sel = col.selectbox(f"#{i+1}", candidates, key=key)
+                if sel and sel in model.profiles_:
+                    squad_selected.append(model.profiles_[sel])
+
+        if len(squad_selected) >= 4:
+            strength = model.team_strength(squad_selected)
             st.markdown("---")
-            st.markdown("### Tu equipo draft")
-            strength_d = sq_model.team_strength(draft_squad)
-            st.plotly_chart(team_strength_visual(strength_d, "Equipo draft"), use_container_width=True)
+            st.plotly_chart(team_strength_visual(strength, "Tu equipo"), use_container_width=True)
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric("Índice ataque", f"{strength['attack_index']:.0f}/100")
+            mc2.metric("Índice defensa", f"{strength['defense_index']:.0f}/100")
+            mc3.metric("xGoals estimados", f"{strength['xg_per_match']:.2f}/partido")
 
-            dcols = st.columns(3)
-            dcols[0].metric("Índice ataque", f"{strength_d['attack_index']:.0f}/100")
-            dcols[1].metric("Índice defensa", f"{strength_d['defense_index']:.0f}/100")
-            dcols[2].metric("xGoals estimados", f"{strength_d['xg_per_match']:.2f}/partido")
+    if len(squad_selected) < 8:
+        return
 
-    # ── MATCH SIMULATION ──────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### Simular partido con tu equipo")
-
-    if "squad_selected" in dir() and len(squad_selected) >= 8:
-        home_squad = squad_selected
-    elif "draft_squad" in dir() and len(draft_squad) >= 8:
-        home_squad = draft_squad
-    else:
-        home_squad = []
+    st.markdown("### Simulación rápida de partido")
+    st.caption("Vista previa de un único partido. La simulación de torneo completo (1M sims, "
+              "% de campeón, bota de oro, etc.) llega en la siguiente fase.")
 
     col_sim1, col_sim2 = st.columns(2)
     with col_sim1:
         st.markdown("**Tu equipo** (de arriba)")
-        if not home_squad:
-            st.caption("Construye tu equipo primero.")
     with col_sim2:
         st.markdown("**Rival**")
-        rival_option = st.radio("Rival", ["Equipo real", "Custom"], horizontal=True, key="rival_opt")
-        if rival_option == "Equipo real" and engine is not None:
+        if engine is not None:
             rival_teams = sorted(engine.ad_model_.team_index_.keys())
             rival_team = st.selectbox("Equipo rival", rival_teams, key="rival_team")
-            rival_comp = st.selectbox("Competición rival", ["LaLiga","Premier League","Serie A","Bundesliga","Ligue 1"], key="rival_comp_sel")
         else:
             rival_team = "Selección genérica"
-            rival_comp = "Other"
 
-    n_sims_sl = st.select_slider("Simulaciones", [1_000, 10_000, 50_000], value=10_000, key="sl_n")
-
-    if home_squad and st.button("Simular partido", key="sl_sim"):
-        # Build away squad from top players of rival team
-        away_squad_candidates = [p for p in sq_model.profiles_.values()
-                                   if p.team.lower() == rival_team.lower() or
-                                   (rival_team in sq_model.profiles_ and sq_model.profiles_[rival_team].team.lower() == p.team.lower())]
+    if st.button("Simular partido", key="sl_sim"):
+        away_squad_candidates = [p for p in model.profiles_.values() if p.team.lower() == rival_team.lower()]
         away_squad_candidates = sorted(away_squad_candidates, key=lambda p: -p.overall)[:11]
-
         if len(away_squad_candidates) < 3:
-            # Fallback: top players from first competition by overall
-            away_squad_candidates = sorted(sq_model.profiles_.values(), key=lambda p: -p.overall)[:11]
+            away_squad_candidates = sorted(model.profiles_.values(), key=lambda p: -p.overall)[:11]
 
         with st.spinner("Simulando..."):
-            result = simulate_match_with_squad(home_squad, away_squad_candidates, sq_model, n_sims=n_sims_sl, neutral=False)
+            result = simulate_match_with_squad(squad_selected, away_squad_candidates, model,
+                                               n_sims=50_000, neutral=False)
 
-        # Show result
-        home_label = "Tu equipo"
-        away_label = rival_team.title()
+        home_label, away_label = "Tu equipo", rival_team.title()
         st.markdown(f"#### {home_label} vs {away_label}")
 
         rc1, rc2, rc3, rc4, rc5 = st.columns(5)
@@ -330,15 +427,12 @@ def render(engine=None):
         rc4.metric("xG", f"{result['lambda_home']:.2f}–{result['lambda_away']:.2f}")
         rc5.metric("BTTS", f"{result['p_btts']:.1%}")
 
-        # Score matrix
         matrix = result["score_matrix"]
         fig_mat = go.Figure(go.Heatmap(
             z=matrix * 100,
-            x=[str(i) for i in range(7)],
-            y=[str(i) for i in range(7)],
+            x=[str(i) for i in range(7)], y=[str(i) for i in range(7)],
             text=[[f"{v:.1f}%" for v in row] for row in matrix * 100],
-            texttemplate="%{text}",
-            colorscale="Blues", showscale=False,
+            texttemplate="%{text}", colorscale="Blues", showscale=False,
             hovertemplate=f"{home_label} %{{y}}–%{{x}} {away_label}: %{{z:.2f}}%<extra></extra>",
         ))
         fig_mat.update_layout(
@@ -348,5 +442,25 @@ def render(engine=None):
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_mat, use_container_width=True)
+        st.markdown(f"**En 50k simulaciones:** tu equipo gana el **{result['p_home']:.0%}** de las veces.")
 
-        st.markdown(f"**En 100k simulaciones:** tu equipo gana el **{result['p_home']:.0%}** de las veces — {result['p_home']*100:.0f} de cada 100 partidos.")
+
+def render(engine=None, df_clubs: pd.DataFrame | None = None):
+    """Main SquadLab render function — called from streamlit_app.py."""
+    st.title("🧪 SquadLab")
+
+    sq_model = load_strength_model()
+    if not sq_model.profiles_:
+        st.warning("Perfiles de jugadores no disponibles. Asegúrate de que "
+                  "data/processed/player_profiles_with_positions.csv existe.")
+        return
+
+    mode = st.radio("Modo", ["🎮 Draft — temporada FM-style", "🔬 Sandbox — equipo libre"], horizontal=True)
+
+    if "Draft" in mode:
+        if df_clubs is None:
+            st.warning("Datos de calendario no disponibles para calcular el colista.")
+            return
+        render_draft_mode(sq_model, df_clubs)
+    else:
+        render_sandbox_mode(sq_model, engine)
