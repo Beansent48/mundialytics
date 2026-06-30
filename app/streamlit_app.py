@@ -1,13 +1,16 @@
 """
 Mundialytics — Prediction Engine · Block 2 + SquadLab
-Menu: ⚽ Partido | 🗓️ Jornada | 🏆 Competición | 🥇 Premios | 🧪 SquadLab
+Menu: 🗓️ Jornada | 🏆 Competición | 🥇 Premios | 🧪 SquadLab
 """
 from __future__ import annotations
 import sys
+import importlib
+import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(Path(__file__).parent))
 
 import numpy as np
 import pandas as pd
@@ -36,6 +39,9 @@ st.markdown("""<style>
     .form-W{background:#16a34a;color:#fff}
     .form-D{background:#9ca3af;color:#fff}
     .form-L{background:#dc2626;color:#fff}
+    .fixture-row{padding:10px 14px;border-radius:8px;margin:4px 0;
+        background:var(--secondary-background-color)}
+    .fixture-row:hover{background:#e5e7eb22}
     h3{margin-top:1.2rem!important}
     div[data-testid="stSidebarNav"]{display:none}
 </style>""", unsafe_allow_html=True)
@@ -65,10 +71,27 @@ COPA_2024 = {
     "C": ["united states","uruguay","panama","bolivia"],
     "D": ["brazil","colombia","paraguay","costa rica"],
 }
-CA2025_QUALIF = {
-    "A": ["spain","france","germany","portugal"],
-    "B": ["england","netherlands","belgium","italy"],
+CHAMPIONS_LEAGUE_TOP = [
+    "real madrid","barcelona","man city","bayern munich","liverpool","arsenal",
+    "inter","paris sg","dortmund","atletico madrid","juventus","leverkusen",
+    "milan","napoli","chelsea","aston villa","leipzig","benfica",
+]
+
+# ── Competition catalogue (knows its own format — no user prompt needed) ───────
+COMP_CONFIG = {
+    "LaLiga":           {"type": "liga",   "engine": "clubs", "comp_id": "LaLiga"},
+    "Premier League":   {"type": "liga",   "engine": "clubs", "comp_id": "Premier League"},
+    "Serie A":          {"type": "liga",   "engine": "clubs", "comp_id": "Serie A"},
+    "Bundesliga":       {"type": "liga",   "engine": "clubs", "comp_id": "Bundesliga"},
+    "Ligue 1":          {"type": "liga",   "engine": "clubs", "comp_id": "Ligue 1"},
+    "Champions League": {"type": "torneo", "engine": "clubs", "groups": None, "teams": CHAMPIONS_LEAGUE_TOP},
+    "World Cup":        {"type": "torneo", "engine": "intl",  "groups": WC_2022},
+    "UEFA Euro":        {"type": "torneo", "engine": "intl",  "groups": EURO_2024},
+    "Copa América":     {"type": "torneo", "engine": "intl",  "groups": COPA_2024},
 }
+COMPETITIONS = list(COMP_CONFIG.keys())
+LEAGUE_COMPETITIONS = [c for c, cfg in COMP_CONFIG.items() if cfg["type"] == "liga"]
+TOURNAMENT_COMPETITIONS = [c for c, cfg in COMP_CONFIG.items() if cfg["type"] == "torneo"]
 
 
 # ── Engine loading ─────────────────────────────────────────────────────────────
@@ -98,25 +121,19 @@ engine_clubs, CLUB_TEAMS, df_clubs = load_club_engine()
 engine_intl,  INTL_TEAMS,  df_intl  = load_intl_engine()
 
 ALL_TEAMS_COMBINED = sorted(set(CLUB_TEAMS) | set(INTL_TEAMS))
-COMPETITIONS = ["LaLiga","Premier League","Serie A","Bundesliga","Ligue 1",
-                "World Cup","UEFA Euro","Copa América","Champions League","Other"]
 
 
 # ── Helper functions ───────────────────────────────────────────────────────────
 def pick_engine(competition: str) -> tuple[PredictionEngine, list[str], pd.DataFrame]:
+    cfg = COMP_CONFIG.get(competition)
+    if cfg and cfg["engine"] == "intl":
+        return engine_intl, INTL_TEAMS, df_intl
+    if cfg and cfg["engine"] == "clubs":
+        return engine_clubs, CLUB_TEAMS, df_clubs
     intl_kw = {"world cup","euro","copa","nations","international","afcon","afc","concacaf"}
     if any(k in competition.lower() for k in intl_kw):
         return engine_intl, INTL_TEAMS, df_intl
     return engine_clubs, CLUB_TEAMS, df_clubs
-
-
-def resolve_team(name: str, teams: list[str]) -> str:
-    """Return closest matching team name or original if not found."""
-    if name in teams:
-        return name
-    lower = name.lower()
-    matches = [t for t in teams if lower in t or t in lower]
-    return matches[0] if matches else name
 
 
 def predict_safe(engine: PredictionEngine, home: str, away: str,
@@ -203,61 +220,27 @@ def tourn_bar(df: pd.DataFrame, col: str, title: str, color="#3b82f6") -> go.Fig
     return fig
 
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
-st.sidebar.markdown("## ⚽ Mundialytics")
-st.sidebar.caption("Motor estadístico de predicción")
-st.sidebar.divider()
-page = st.sidebar.radio("", [
-    "⚽  Partido",
-    "🗓️  Jornada",
-    "🏆  Competición",
-    "🥇  Premios Individuales",
-    "🧪  SquadLab",
-], label_visibility="collapsed")
-st.sidebar.divider()
-st.sidebar.caption("Big5 2021-26 · Selecciones 2010-26\nPoisson GLM · MLE Attack/Defense · ELO")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  PARTIDO
-# ══════════════════════════════════════════════════════════════════════════════
-if page == "⚽  Partido":
-    st.title("⚽  Predicción de partido")
-
-    c1, c2, c3, c4 = st.columns([3, 1, 3, 2])
-    with c1:
-        hi = ALL_TEAMS_COMBINED.index("barcelona") if "barcelona" in ALL_TEAMS_COMBINED else 0
-        home = st.selectbox("Equipo local", ALL_TEAMS_COMBINED, index=hi, key="p_home")
-    with c2:
-        st.markdown("<br><h3 style='text-align:center;margin:6px 0'>vs</h3>",
-                    unsafe_allow_html=True)
-    with c3:
-        ai = ALL_TEAMS_COMBINED.index("real madrid") if "real madrid" in ALL_TEAMS_COMBINED else 1
-        away = st.selectbox("Equipo visitante", ALL_TEAMS_COMBINED, index=ai, key="p_away")
-    with c4:
-        competition = st.selectbox("Competición", COMPETITIONS, key="p_comp")
-        neutral = st.checkbox("Campo neutro", value=False, key="p_neutral")
-
-    if home == away:
-        st.warning("Selecciona dos equipos distintos.")
-        st.stop()
-
+def render_partido_detail(home: str, away: str, competition: str, neutral: bool,
+                          actual_result: str | None = None):
+    """Full match-prediction breakdown, reused by the Jornada flow."""
     eng, eng_teams, df_hist = pick_engine(competition)
     pred = predict_safe(eng, home, away, competition, neutral)
     if pred is None:
-        st.error("Error al generar predicción."); st.stop()
+        st.error("Error al generar predicción para este partido.")
+        return
 
-    # Fallback warning
+    st.markdown(f"## ⚽ {home.title()} vs {away.title()}")
+    if actual_result:
+        st.markdown(f"**Resultado real:** {actual_result}")
+
     if home not in eng_teams or away not in eng_teams:
         missing = [t.title() for t in [home, away] if t not in eng_teams]
         st.info(f"ℹ️ {', '.join(missing)} no está en el dataset de entrenamiento. Se usa prior global.")
 
-    # ── Prob bar ──────────────────────────────────────────────────────────
     st.markdown("### Resultado")
     st.plotly_chart(prob_bar_chart(pred.p_home_win, pred.p_draw, pred.p_away_win, home, away),
                     use_container_width=True)
 
-    # ── Metric cards ──────────────────────────────────────────────────────
     cols = st.columns(6)
     data = [
         (home.title(),  f"{pred.p_home_win:.1%}", "#3b82f6"),
@@ -272,7 +255,6 @@ if page == "⚽  Partido":
 
     st.markdown("")
 
-    # ── Score matrix + scorelines ──────────────────────────────────────────
     col_heat, col_scores = st.columns([3, 2])
     with col_heat:
         st.markdown("### Matriz de resultados (%)")
@@ -291,7 +273,6 @@ if page == "⚽  Partido":
                 f'</div><span style="width:40px;text-align:right;color:#6b7280;font-size:.8rem">{pct:.1%}</span>'
                 f'</div>', unsafe_allow_html=True)
 
-    # ── Over/Under markets ────────────────────────────────────────────────
     st.markdown("### Mercados de goles")
     ocols = st.columns(5)
     ou = [("Over 1.5", pred.p_over_15), ("Under 2.5", pred.p_under_25),
@@ -301,7 +282,6 @@ if page == "⚽  Partido":
         c = "#16a34a" if val >= 0.55 else ("#dc2626" if val <= 0.45 else "#2563eb")
         col.markdown(metric_card(label, f"{val:.1%}", c), unsafe_allow_html=True)
 
-    # ── Team events ───────────────────────────────────────────────────────
     st.markdown("### Estadísticas esperadas")
     ev_cols = st.columns(5)
     events = [
@@ -321,7 +301,6 @@ if page == "⚽  Partido":
             f'<span style="color:#ef4444;font-weight:700;font-size:1.05rem">{av:.1f}</span></div>',
             unsafe_allow_html=True)
 
-    # ── H2H + Form ────────────────────────────────────────────────────────
     st.markdown("---")
     col_h2h, col_form = st.columns(2)
 
@@ -353,7 +332,7 @@ if page == "⚽  Partido":
             st.caption("Sin historial disponible entre estos equipos.")
 
     with col_form:
-        st.markdown(f"### Forma reciente")
+        st.markdown("### Forma reciente")
         for team, color in [(home, "#3b82f6"), (away, "#ef4444")]:
             form = get_form(team, df_hist, n=5)
             badges = form_badges(form)
@@ -373,118 +352,130 @@ if page == "⚽  Partido":
                         unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  JORNADA
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "🗓️  Jornada":
-    st.title("🗓️  Predicción de jornada")
-    st.caption("Introduce los partidos de la jornada y obtén todas las predicciones de una vez.")
+def get_round_fixtures(competition: str, season: str, round_num: int, df: pd.DataFrame):
+    """Derive a matchday's fixtures from chronologically-ordered season data."""
+    cfg = COMP_CONFIG.get(competition, {})
+    comp_id = cfg.get("comp_id", competition)
+    mask = (df["competition"] == comp_id) & (df["season"] == season)
+    df_season = df[mask].copy().sort_values("date").reset_index(drop=True)
+    if df_season.empty:
+        return pd.DataFrame(), 0
+    n_teams = len(set(df_season["home_team"]) | set(df_season["away_team"]))
+    n_per_round = max(1, n_teams // 2)
+    total_rounds = max(1, -(-len(df_season) // n_per_round))
+    start = (round_num - 1) * n_per_round
+    return df_season.iloc[start:start + n_per_round], total_rounds
 
-    col_in, col_out = st.columns([2, 3])
-    with col_in:
-        competition_j = st.selectbox("Competición", COMPETITIONS, key="j_comp")
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+st.sidebar.markdown("## ⚽ Mundialytics")
+st.sidebar.caption("Motor estadístico de predicción")
+st.sidebar.divider()
+page = st.sidebar.radio("", [
+    "🗓️  Jornada",
+    "🏆  Competición",
+    "🥇  Premios Individuales",
+    "🧪  SquadLab",
+], label_visibility="collapsed")
+st.sidebar.divider()
+st.sidebar.caption("Big5 2021-26 · Selecciones 2010-26\nPoisson GLM · MLE Attack/Defense · ELO")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  JORNADA  (competición → jornada → partido, todo encadenado)
+# ══════════════════════════════════════════════════════════════════════════════
+if page == "🗓️  Jornada":
+    st.title("🗓️  Jornada")
+    st.caption("Elige una competición y una jornada para ver todos sus partidos y análisis.")
+
+    if "j_selected" not in st.session_state:
+        st.session_state.j_selected = None
+
+    col_j1, col_j2, col_j3 = st.columns([2, 2, 1])
+    with col_j1:
+        comp_j = st.selectbox("Competición", LEAGUE_COMPETITIONS, key="j_comp",
+                              on_change=lambda: st.session_state.update(j_selected=None))
+    with col_j2:
+        comp_id_j = COMP_CONFIG[comp_j]["comp_id"]
+        seasons_j = sorted(df_clubs.loc[df_clubs["competition"] == comp_id_j, "season"].unique(), reverse=True)
+        season_j = st.selectbox("Temporada", seasons_j, key="j_season",
+                                on_change=lambda: st.session_state.update(j_selected=None))
+    with col_j3:
         neutral_j = st.checkbox("Campo neutro", value=False, key="j_neutral")
-        fixtures_raw = st.text_area(
-            "Partidos (local vs visitante, uno por línea)",
-            value="real madrid vs barcelona\nman city vs arsenal\nparis sg vs marseille\ninter vs juventus\nbayern munich vs dortmund",
-            height=220, key="j_fixtures",
-        )
 
-    with col_out:
-        fixtures = []
-        for line in fixtures_raw.strip().split("\n"):
-            line = line.strip().lower()
-            if " vs " in line:
-                h, a = line.split(" vs ", 1)
-                fixtures.append((h.strip(), a.strip()))
+    df_round, total_rounds = get_round_fixtures(comp_j, season_j, 1, df_clubs)
+    if total_rounds == 0:
+        st.warning("No hay datos disponibles para esta competición/temporada.")
+        st.stop()
 
-        if not fixtures:
-            st.info("Introduce partidos en el formato 'local vs visitante'.")
-        else:
-            eng_j, eng_teams_j, _ = pick_engine(competition_j)
-            rows = []
-            for home_j, away_j in fixtures:
-                pred_j = predict_safe(eng_j, home_j, away_j, competition_j, neutral_j)
-                if pred_j:
-                    rows.append({
-                        "Partido": f"{home_j.title()} vs {away_j.title()}",
-                        "Local %": f"{pred_j.p_home_win:.1%}",
-                        "Empate %": f"{pred_j.p_draw:.1%}",
-                        "Visitante %": f"{pred_j.p_away_win:.1%}",
-                        "xG L": f"{pred_j.lambda_home:.2f}",
-                        "xG V": f"{pred_j.lambda_away:.2f}",
-                        "O2.5": f"{pred_j.p_over_25:.1%}",
-                        "BTTS": f"{pred_j.p_btts:.1%}",
-                        "Más probable": pred_j.top_scorelines[0]["score"] if pred_j.top_scorelines else "—",
-                    })
+    jornada_num = st.slider("Jornada", 1, total_rounds, total_rounds, key="j_num",
+                            on_change=lambda: st.session_state.update(j_selected=None))
+    df_round, _ = get_round_fixtures(comp_j, season_j, jornada_num, df_clubs)
 
-            if rows:
-                st.markdown(f"### {len(rows)} partido{'s' if len(rows)>1 else ''}")
-                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    if df_round.empty:
+        st.info("Sin partidos para esta jornada.")
+        st.stop()
 
-                # Visual summary
-                st.markdown("### % Victoria local por partido")
-                df_j = pd.DataFrame(rows)
-                home_probs = [float(r.split("%")[0]) / 100 for r in df_j["Local %"]]
-                matches_labels = [r["Partido"].split(" vs ")[0] + " H" for r in rows]
-                fig_j = go.Figure(go.Bar(
-                    x=matches_labels, y=home_probs,
-                    marker_color=["#16a34a" if p > 0.5 else ("#9ca3af" if p > 0.38 else "#dc2626")
-                                  for p in home_probs],
-                    text=[f"{p:.0%}" for p in home_probs], textposition="outside",
-                ))
-                fig_j.update_layout(
-                    height=300, yaxis=dict(tickformat=".0%", range=[0, 1]),
-                    margin=dict(l=20, r=20, t=20, b=60),
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    xaxis=dict(showgrid=False),
-                )
-                st.plotly_chart(fig_j, use_container_width=True)
+    date_min, date_max = df_round["date"].min(), df_round["date"].max()
+    st.markdown(f"### Jornada {jornada_num} de {total_rounds} "
+               f"<span style='color:#9ca3af;font-size:.9rem'>"
+               f"({date_min.strftime('%d %b')} – {date_max.strftime('%d %b %Y')})</span>",
+               unsafe_allow_html=True)
+
+    for i, (_, row) in enumerate(df_round.iterrows()):
+        home, away = row["home_team"], row["away_team"]
+        played = pd.notna(row["home_goals"]) and pd.notna(row["away_goals"])
+        result_str = f"{int(row['home_goals'])} – {int(row['away_goals'])}" if played else "vs"
+
+        c_home, c_score, c_away, c_btn = st.columns([3, 1, 3, 2])
+        c_home.markdown(f"<div style='text-align:right;font-weight:600;padding-top:6px'>{home.title()}</div>",
+                        unsafe_allow_html=True)
+        c_score.markdown(f"<div style='text-align:center;font-weight:700;padding-top:6px;font-size:1.05rem'>{result_str}</div>",
+                         unsafe_allow_html=True)
+        c_away.markdown(f"<div style='text-align:left;font-weight:600;padding-top:6px'>{away.title()}</div>",
+                        unsafe_allow_html=True)
+        btn_label = "Ver resultado y análisis" if played else "Ver predicción"
+        if c_btn.button(btn_label, key=f"j_btn_{i}"):
+            st.session_state.j_selected = {
+                "home": home, "away": away,
+                "result": result_str if played else None,
+            }
+
+    sel = st.session_state.j_selected
+    if sel:
+        st.markdown("---")
+        render_partido_detail(sel["home"], sel["away"], comp_j, neutral_j,
+                              actual_result=sel["result"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMPETICIÓN
+#  COMPETICIÓN  (formato auto-detectado, sin elegir liga/torneo a mano)
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "🏆  Competición":
     st.title("🏆  Simulación de competición")
 
-    mode = st.radio("Tipo", ["Liga", "Torneo (grupos + eliminatorias)"], horizontal=True, key="comp_mode")
+    competition_c = st.selectbox("Competición", COMPETITIONS, key="comp_select")
+    cfg = COMP_CONFIG[competition_c]
+    eng_c, teams_c, _ = pick_engine(competition_c)
 
-    # ── LIGA ──────────────────────────────────────────────────────────────
-    if mode == "Liga":
+    # ── LIGA (formato detectado automáticamente) ────────────────────────────
+    if cfg["type"] == "liga":
+        comp_id_c = cfg["comp_id"]
+        league_teams = sorted(set(df_clubs.loc[df_clubs["competition"] == comp_id_c, "home_team"]) |
+                              set(df_clubs.loc[df_clubs["competition"] == comp_id_c, "away_team"]))
+        league_teams = [t for t in league_teams if t in teams_c]
+
         col_l1, col_l2 = st.columns([2, 3])
         with col_l1:
-            competition_l = st.selectbox("Competición", COMPETITIONS, key="liga_comp")
-            eng_l, teams_l, _ = pick_engine(competition_l)
             n_sims_l = st.select_slider("Simulaciones", [1_000, 10_000, 50_000, 100_000], value=10_000, key="liga_n")
             home_away_l = st.checkbox("Ida y vuelta", value=True, key="liga_ha")
-
-            # Smart defaults based on competition
-            if "laliga" in competition_l.lower() or "la liga" in competition_l.lower():
-                default_t = [t for t in ["real madrid","barcelona","atletico madrid","athletic bilbao",
-                                          "villarreal","real sociedad","girona","rayo vallecano"] if t in teams_l]
-            elif "premier" in competition_l.lower():
-                default_t = [t for t in ["man city","arsenal","liverpool","chelsea",
-                                          "tottenham","man united","newcastle","aston villa"] if t in teams_l]
-            elif "bundesliga" in competition_l.lower():
-                default_t = [t for t in ["bayern munich","dortmund","leverkusen","rb leipzig",
-                                          "frankfurt","stuttgart","freiburg","wolfsburg"] if t in teams_l]
-            elif "ligue" in competition_l.lower():
-                default_t = [t for t in ["paris sg","marseille","lyon","monaco",
-                                          "lens","lille","nice","rennes"] if t in teams_l]
-            elif "serie" in competition_l.lower():
-                default_t = [t for t in ["inter","juventus","milan","napoli",
-                                          "roma","lazio","atalanta","bologna"] if t in teams_l]
-            else:
-                default_t = teams_l[:8]
-
-            selected_l = st.multiselect("Equipos", teams_l, default=default_t[:8], key="liga_teams")
+            st.caption(f"{len(league_teams)} equipos de {competition_c} cargados automáticamente.")
 
         with col_l2:
-            if len(selected_l) >= 2:
+            if len(league_teams) >= 2:
                 with st.spinner(f"Simulando {n_sims_l:,} temporadas..."):
                     res_l = engine_clubs.simulate_league(
-                        selected_l, n_sims=n_sims_l, competition=competition_l, home_away=home_away_l
+                        league_teams, n_sims=n_sims_l, competition=competition_c, home_away=home_away_l
                     )
                 df_l = res_l.team_stats.copy()
                 df_l["team"] = df_l["team"].str.title()
@@ -500,67 +491,44 @@ elif page == "🏆  Competición":
                 st.dataframe(fmt_l, hide_index=True, use_container_width=True)
 
                 if "p_win" in res_l.team_stats.columns:
-                    st.plotly_chart(tourn_bar(res_l.team_stats, "p_win", "% Campeón de liga", "#f59e0b"),
+                    st.plotly_chart(tourn_bar(res_l.team_stats, "p_win", f"% Campeón de {competition_c}", "#f59e0b"),
                                     use_container_width=True)
             else:
-                st.info("Selecciona al menos 2 equipos.")
+                st.warning("No se encontraron suficientes equipos para esta liga en el dataset.")
 
-    # ── TORNEO ────────────────────────────────────────────────────────────
+    # ── TORNEO (grupos conocidos automáticamente) ────────────────────────────
     else:
         col_t1, col_t2 = st.columns([2, 3])
         with col_t1:
-            preset = st.selectbox("Plantilla", [
-                "Personalizado", "World Cup 2022", "Euro 2024", "Copa América 2024"
-            ], key="preset")
-            competition_t = st.selectbox("Competición (modelo)", COMPETITIONS, key="t_comp")
-            eng_t, teams_t, _ = pick_engine(competition_t)
             n_sims_t = st.select_slider("Simulaciones", [1_000, 10_000, 50_000, 100_000], value=10_000, key="t_n")
             bracket_fmt = st.selectbox("Formato bracket", ["auto","wc","euro","sequential"], key="t_fmt")
             neutral_t = st.checkbox("Campo neutro", value=True, key="t_neutral")
 
-        if preset == "World Cup 2022":     groups_raw = WC_2022
-        elif preset == "Euro 2024":        groups_raw = EURO_2024
-        elif preset == "Copa América 2024": groups_raw = COPA_2024
-        else:
-            with col_t1:
-                raw_txt = st.text_area(
-                    "Grupos (equipo por línea, línea vacía = nuevo grupo)",
-                    value="spain\nfrance\ngermany\nportugal\n\nengland\nnetherlands\nbelgium\nitaly",
-                    height=200, key="t_custom")
-                groups_raw = {}
-                letter, cur = "A", []
-                for line in raw_txt.strip().split("\n"):
-                    line = line.strip().lower()
-                    if not line:
-                        if cur: groups_raw[letter] = cur; letter = chr(ord(letter)+1); cur = []
-                    else:
-                        cur.append(line)
-                if cur: groups_raw[letter] = cur
+        groups_raw = cfg.get("groups")
+        if groups_raw is None:
+            # No fixed groups (e.g. Champions League) — seed a single open pool
+            flat_teams = [t for t in cfg.get("teams", []) if t in teams_c]
+            groups_raw = {chr(65+i//4): flat_teams[i:i+4] for i in range(0, len(flat_teams), 4)}
 
-        groups = {g: [t for t in teams if t in teams_t] for g, teams in groups_raw.items()}
+        groups = {g: [t for t in teams if t in teams_c] for g, teams in groups_raw.items()}
         groups = {g: t for g, t in groups.items() if len(t) >= 2}
 
         with col_t2:
             if not groups:
-                st.warning("Ningún equipo del preset está en el dataset seleccionado.")
-                missing = [t for teams in groups_raw.values() for t in teams if t not in teams_t]
-                if missing:
-                    st.caption(f"Equipos no encontrados: {', '.join(sorted(set(missing))[:15])}")
+                st.warning("Ningún equipo de esta competición está en el dataset seleccionado.")
             else:
-                # Show groups
                 for g, tms in groups.items():
                     st.markdown(f"**Grupo {g}**: " + "  ·  ".join(t.title() for t in tms))
 
-                with st.spinner(f"Simulando torneo ({n_sims_t:,} veces)..."):
-                    res_t = eng_t.simulate_tournament(
+                with st.spinner(f"Simulando {competition_c} ({n_sims_t:,} veces)..."):
+                    res_t = eng_c.simulate_tournament(
                         groups, knockout_slots=2, n_sims=n_sims_t,
-                        competition=competition_t, neutral=neutral_t,
+                        competition=competition_c, neutral=neutral_t,
                         bracket_format=bracket_fmt,
                     )
                 df_t = res_t.team_stats
 
                 st.markdown(f"### Resultados — {n_sims_t:,} simulaciones")
-                # Bracket-style table
                 n_groups = len(groups)
                 st.markdown(bracket_html(df_t, n_groups), unsafe_allow_html=True)
 
@@ -579,24 +547,23 @@ elif page == "🏆  Competición":
 # ══════════════════════════════════════════════════════════════════════════════
 #  PREMIOS INDIVIDUALES
 # ══════════════════════════════════════════════════════════════════════════════
-else:
+elif page == "🥇  Premios Individuales":
     st.title("🥇  Premios Individuales")
 
-    tab_gb, tab_profile, tab_teams = st.tabs(["🥾 Bota de Oro", "👤 Perfil de jugador", "📊 Ranking de equipos"])
+    tab_gb, tab_profile, tab_teams = st.tabs(["🥾 Máximo goleador", "👤 Perfil de jugador", "📊 Ranking de equipos"])
 
-    # ── BOTA DE ORO ───────────────────────────────────────────────────────
+    # ── MÁXIMO GOLEADOR — predicción determinista (sin nº de simulaciones) ──
     with tab_gb:
-        st.markdown("### Simulación de Bota de Oro")
-        st.caption("Usa las tasas de gol por partido del PlayerProfileModel combinadas con la simulación de torneo.")
+        st.markdown("### Predicción de máximo goleador")
+        st.caption("Calculado a partir de las tasas de gol esperadas (xG) del jugador frente al calendario del torneo.")
 
         col_gb1, col_gb2 = st.columns([2, 3])
         with col_gb1:
-            competition_gb = st.selectbox("Competición", COMPETITIONS, key="gb_comp")
+            preset_gb = st.selectbox("Torneo", ["World Cup 2022","Euro 2024","Copa América 2024"], key="gb_preset")
+            comp_map_gb = {"World Cup 2022": "World Cup", "Euro 2024": "UEFA Euro", "Copa América 2024": "Copa América"}
+            competition_gb = comp_map_gb[preset_gb]
             eng_gb, teams_gb, _ = pick_engine(competition_gb)
-            n_sims_gb = st.select_slider("Simulaciones", [1_000, 5_000, 10_000, 50_000], value=5_000, key="gb_n")
-            preset_gb = st.selectbox("Torneo", ["World Cup 2022","Euro 2024","Copa América 2024","Personalizado"], key="gb_preset")
 
-            # Player goal rates
             try:
                 profiles = pd.read_csv(ROOT / "data/processed/player_profiles_with_positions.csv")
                 all_players = sorted(profiles["player"].dropna().unique())
@@ -612,41 +579,35 @@ else:
 
         with col_gb2:
             if not selected_players:
-                st.info("Selecciona jugadores para la simulación.")
+                st.info("Selecciona jugadores para la predicción.")
             else:
-                if preset_gb == "World Cup 2022":   groups_gb = WC_2022
-                elif preset_gb == "Euro 2024":       groups_gb = EURO_2024
-                elif preset_gb == "Copa América 2024": groups_gb = COPA_2024
-                else:
-                    groups_gb = {"A": ["spain","france","germany","portugal"],
-                                  "B": ["england","netherlands","belgium","italy"]}
-
+                groups_gb = {"World Cup 2022": WC_2022, "Euro 2024": EURO_2024,
+                            "Copa América 2024": COPA_2024}[preset_gb]
                 groups_gb_f = {g: [t for t in ts if t in teams_gb] for g, ts in groups_gb.items()}
                 groups_gb_f = {g: t for g, t in groups_gb_f.items() if len(t) >= 2}
 
-                # Build player_goals dict
-                player_goals_map = {}
                 profiles_local = pd.read_csv(ROOT / "data/processed/player_profiles_with_positions.csv")
+                player_goals_map = {}
                 for player_name in selected_players:
                     row = profiles_local[profiles_local["player"] == player_name]
                     if row.empty: continue
                     r = row.iloc[0]
-                    team = str(r.get("team_c", "")).lower()
-                    goals_pm = float(r.get("goals_per_match", r.get("goals_per90", 0.15)))
+                    team = str(r.get("team", "")).lower()
+                    goals_pm = float(r.get("goals_per_match", 0.15))
                     player_goals_map[player_name] = {team: goals_pm}
 
                 if groups_gb_f and player_goals_map:
-                    with st.spinner("Simulando Bota de Oro..."):
+                    with st.spinner("Calculando predicción de máximo goleador..."):
                         res_gb = eng_gb.simulate_tournament(
-                            groups_gb_f, n_sims=n_sims_gb,
+                            groups_gb_f, n_sims=20_000,
                             competition=competition_gb, neutral=True,
                             player_goals=player_goals_map,
                         )
 
                     if not res_gb.golden_boot.empty:
                         gb_df = res_gb.golden_boot.copy()
-                        gb_df["player"] = gb_df["player"].str.split().str[0]  # first name only
-                        st.markdown("#### 🥾 Bota de Oro — ranking")
+                        gb_df["player"] = gb_df["player"].str.split().str[0]
+                        st.markdown("#### 🥾 Máximo goleador — predicción")
                         st.dataframe(gb_df.head(10), hide_index=True, use_container_width=True)
 
                         fig_gb = go.Figure(go.Bar(
@@ -657,13 +618,13 @@ else:
                             textposition="outside",
                         ))
                         fig_gb.update_layout(
-                            title="Goles medios en el torneo",
+                            title="Goles esperados en el torneo",
                             height=280, margin=dict(l=100,r=60,t=40,b=10),
                             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         )
                         st.plotly_chart(fig_gb, use_container_width=True)
                     else:
-                        st.info("Sin datos de Bota de Oro suficientes.")
+                        st.info("Sin datos suficientes para calcular el máximo goleador.")
                 else:
                     st.warning("Equipos del torneo no encontrados en el motor seleccionado.")
 
@@ -681,9 +642,9 @@ else:
                 r = row_p.iloc[0]
                 c_info, c_chart = st.columns([1, 2])
                 with c_info:
-                    st.markdown(f"**Equipo:** {str(r.get('team_c','')).title()}")
-                    st.markdown(f"**Posición:** {r.get('position_group','—')}")
-                    st.markdown(f"**Competición:** {r.get('competition_c','—')}")
+                    st.markdown(f"**Equipo:** {str(r.get('team','')).title()}")
+                    st.markdown(f"**Posición:** {r.get('position','—')}")
+                    st.markdown(f"**Competición:** {r.get('competition','—')}")
                     st.markdown(f"**Partidos:** {int(r.get('matches', 0))}")
                     st.markdown(f"**Confianza:** {min(100, int(r.get('matches',0)/50*100))}%")
                 with c_chart:
@@ -708,8 +669,8 @@ else:
                     st.plotly_chart(fig_p, use_container_width=True)
 
                 # Compare with position median
-                pos = str(r.get("position_group","Unknown"))
-                pos_median = profiles_p[profiles_p["position_group"] == pos]
+                pos = str(r.get("position","Unknown"))
+                pos_median = profiles_p[profiles_p["position"] == pos]
                 if not pos_median.empty:
                     st.markdown(f"**vs mediana de {pos}s:**")
                     compare_cols = [c for c in stat_map.keys() if c in profiles_p.columns]
@@ -764,6 +725,8 @@ else:
 #  SQUADLAB
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "🧪  SquadLab":
-    import importlib, app.squadlab_page as sl_page
-    importlib.reload(sl_page)
-    sl_page.render(engine=engine_clubs)
+    spec = importlib.util.spec_from_file_location(
+        "squadlab_page", Path(__file__).parent / "squadlab_page.py")
+    sl_page = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sl_page)
+    sl_page.render(engine=engine_clubs, df_clubs=df_clubs)
