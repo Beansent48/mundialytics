@@ -14,11 +14,14 @@ from __future__ import annotations
 import hashlib
 import random
 import sys
+import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -27,10 +30,18 @@ from mundialytics.statistical_core.player_strength import PlayerStrengthModel
 from mundialytics.statistical_core.schemas import canonical_name
 from mundialytics.statistical_core.squadlab.calendar import generate_double_round_robin
 from mundialytics.statistical_core.squadlab.lambda_source import RealTeamLambdaSource, SeasonLambdaSource
-from mundialytics.statistical_core.squadlab.season_simulator import SeasonOrchestrator, SeasonResult
+from mundialytics.statistical_core.squadlab.season_simulator import (
+    MatchResult, SeasonOrchestrator, SeasonResult, table_through_matchday,
+)
 from mundialytics.statistical_core.squadlab.squad_lambda_model import SquadLambdaModel
 
 SQUAD_TEAM_NAME = "Tu Equipo"
+
+# Capped per explicit user request ("para no petar mucho") — no configurable
+# up-to-1M option anymore, 100k is fast enough (~seconds) to just always run.
+MC_N_SIMS = 100_000
+LIVE_HALF_TICKS = 10
+LIVE_TICK_SECONDS = 1.0
 
 POSITIONS_ORDER = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 
@@ -182,9 +193,10 @@ def _build_season_orchestrator(
     )
 
 
-def render_season_result(result: SeasonResult, squad_team_name: str = SQUAD_TEAM_NAME) -> None:
-    st.markdown("#### 📊 Clasificación final")
-    table_display = result.table.copy()
+def render_standings_table(table_df: pd.DataFrame, squad_team_name: str = SQUAD_TEAM_NAME,
+                           title: str = "📊 Clasificación") -> None:
+    st.markdown(f"#### {title}")
+    table_display = table_df.copy()
     table_display.insert(0, "pos", range(1, len(table_display) + 1))
     table_display["team"] = table_display["team"].apply(
         lambda t: f"⭐ {t}" if t == squad_team_name else t.title()
@@ -193,6 +205,10 @@ def render_season_result(result: SeasonResult, squad_team_name: str = SQUAD_TEAM
         "pos": "#", "team": "Equipo", "played": "PJ", "pts": "Pts",
         "gf": "GF", "ga": "GC", "gd": "DG",
     }), use_container_width=True, hide_index=True)
+
+
+def render_season_result(result: SeasonResult, squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    render_standings_table(result.table, squad_team_name, title="📊 Clasificación final")
 
     if not result.player_season_tallies.empty:
         st.markdown("#### ⚽ Máximos goleadores de tu plantilla")
@@ -229,6 +245,187 @@ def render_monte_carlo_result(mc: pd.DataFrame, n_sims: int, squad_team_name: st
         "team": "Equipo", "p_champion": "% Campeón", "p_top2": "% Top 2", "p_top4": "% Top 4",
         "p_relegation": "% Descenso", "avg_pts": "Pts medios", "avg_goals": "Goles medios",
     }), use_container_width=True, hide_index=True)
+
+
+# ── Background Monte Carlo (runs while the user watches the live season) ────
+
+def _run_monte_carlo_background(orchestrator: SeasonOrchestrator, holder: dict, n_sims: int) -> None:
+    try:
+        holder["result"] = orchestrator.run_monte_carlo(n_sims=n_sims)
+    except Exception as exc:  # surfaced in the UI via holder["error"], not swallowed
+        holder["error"] = str(exc)
+    finally:
+        holder["done"] = True
+
+
+def start_monte_carlo_background(orchestrator: SeasonOrchestrator, n_sims: int = MC_N_SIMS) -> dict:
+    """Kicks off run_monte_carlo() on a background thread so the user can
+    watch the live matchday-by-matchday playback instead of staring at a
+    spinner. The orchestrator's lambda cache is already warm by the time
+    this is called (play_once() just ran), so the thread only does
+    read-only array/model access — no shared-state mutation races with the
+    main thread."""
+    holder: dict = {"done": False, "result": None, "error": None}
+    thread = threading.Thread(target=_run_monte_carlo_background, args=(orchestrator, holder, n_sims), daemon=True)
+    thread.start()
+    holder["thread"] = thread
+    return holder
+
+
+def render_monte_carlo_status(holder: dict | None, n_sims: int = MC_N_SIMS,
+                              squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    st.markdown("### 🎲 Probabilidades (Monte Carlo)")
+    if holder is None:
+        return
+    if not holder["done"]:
+        st.info(f"⏳ Calculando {n_sims:,} simulaciones en segundo plano — aparecerán solas "
+               "al pasar de jornada (o pulsa cualquier botón para comprobar).")
+        return
+    if holder.get("error"):
+        st.error(f"Error calculando probabilidades: {holder['error']}")
+        return
+    render_monte_carlo_result(holder["result"], n_sims, squad_team_name)
+
+
+# ── Live matchday playback ───────────────────────────────────────────────────
+
+def _stat_grid_html(events: list[tuple[str, float, float]]) -> str:
+    boxes = []
+    for label, hv, av in events:
+        boxes.append(
+            '<div style="flex:1;text-align:center;background:var(--secondary-background-color);'
+            'border-radius:8px;padding:6px 4px">'
+            f'<div style="font-size:10px;color:#9ca3af">{label}</div>'
+            f'<div style="font-weight:700;font-size:1.0rem">{hv:.0f} '
+            f'<span style="color:#9ca3af;font-weight:400;font-size:.8rem">–</span> {av:.0f}</div>'
+            '</div>'
+        )
+    return f'<div style="display:flex;gap:6px;margin-top:6px">{"".join(boxes)}</div>'
+
+
+def render_other_results(other_matches: list[MatchResult], squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    st.markdown("#### 📰 Otros resultados de la jornada")
+    for m in other_matches:
+        st.markdown(f"{m.home.title()} **{m.home_goals}-{m.away_goals}** {m.away.title()}")
+
+
+def play_live_match(match: MatchResult, squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    """Blocks for ~21s (two 10-tick, 10s halves + a half-time beat),
+    progressively revealing the already-simulated result: a minute clock,
+    goal/card events surfacing at pseudo-random minutes, and stats growing
+    toward their true final values. Nothing here changes the result —
+    it's a presentation-layer replay of what SeasonOrchestrator already
+    computed, the same way a video game "simulates" a match by animating a
+    pre-determined outcome.
+    """
+    squad_is_home = match.home == squad_team_name
+    home_label = ("⭐ " + match.home) if squad_is_home else match.home.title()
+    away_label = match.away.title() if squad_is_home else ("⭐ " + match.away)
+
+    rng = np.random.default_rng(abs(hash((match.matchday, match.home, match.away))) % (2**32))
+    timeline: list[tuple[int, str, str]] = []  # (minute, side, description)
+
+    def _add_goals(goal_events: list[tuple[str, str | None]] | None, side: str) -> None:
+        for scorer, assister in (goal_events or []):
+            minute = int(rng.integers(1, 91))
+            desc = f"⚽ Gol de {scorer.split()[-1]}" + (f" (asist. {assister.split()[-1]})" if assister else "")
+            timeline.append((minute, side, desc))
+
+    def _add_cards(card_players: list[str] | None, side: str) -> None:
+        for player in (card_players or []):
+            minute = int(rng.integers(1, 91))
+            timeline.append((minute, side, f"🟨 Amarilla a {player.split()[-1]}"))
+
+    _add_goals(match.home_goal_events, "home")
+    _add_goals(match.away_goal_events, "away")
+    _add_cards(match.home_card_players, "home")
+    _add_cards(match.away_card_players, "away")
+
+    # Real-team opponents have no player-level attribution (out of scope —
+    # see season_simulator.py) — represent their goals generically so the
+    # scoreline still updates live, without inventing a scorer's name.
+    tracked_home_goals = sum(1 for _, side, d in timeline if side == "home" and d.startswith("⚽"))
+    tracked_away_goals = sum(1 for _, side, d in timeline if side == "away" and d.startswith("⚽"))
+    for _ in range(match.home_goals - tracked_home_goals):
+        timeline.append((int(rng.integers(1, 91)), "home", f"⚽ Gol de {match.home.title()}"))
+    for _ in range(match.away_goals - tracked_away_goals):
+        timeline.append((int(rng.integers(1, 91)), "away", f"⚽ Gol de {match.away.title()}"))
+    timeline.sort(key=lambda x: x[0])
+
+    score_ph = st.empty()
+    clock_ph = st.empty()
+    feed_ph = st.empty()
+    stats_ph = st.empty()
+
+    home_score = away_score = 0
+    revealed: list[str] = []
+    idx = 0
+
+    def _reveal_up_to(virtual_minute: int) -> None:
+        nonlocal idx, home_score, away_score
+        while idx < len(timeline) and timeline[idx][0] <= virtual_minute:
+            minute, side, desc = timeline[idx]
+            if desc.startswith("⚽"):
+                if side == "home":
+                    home_score += 1
+                else:
+                    away_score += 1
+            revealed.append(f"{minute}' {desc}")
+            idx += 1
+
+    def _render(minute_label: str, fraction: float) -> None:
+        score_ph.markdown(f"### {home_label}&nbsp;&nbsp;**{home_score} - {away_score}**&nbsp;&nbsp;{away_label}")
+        clock_ph.markdown(f"**⏱️ Minuto {minute_label}**")
+        feed_ph.markdown("<br>".join(reversed(revealed[-6:])) or "_Sin novedades todavía..._",
+                         unsafe_allow_html=True)
+        stats_ph.markdown(_stat_grid_html([
+            ("Disparos",  match.home_shots * fraction,        match.away_shots * fraction),
+            ("A puerta",  match.home_sot * fraction,          match.away_sot * fraction),
+            ("Córners",   match.home_corners * fraction,      match.away_corners * fraction),
+            ("Amarillas", match.home_yellow_cards * fraction, match.away_yellow_cards * fraction),
+        ]), unsafe_allow_html=True)
+
+    for tick in range(LIVE_HALF_TICKS):
+        minute = min(45, int((tick + 1) * 45 / LIVE_HALF_TICKS))
+        _reveal_up_to(minute)
+        _render(f"{minute}'", minute / 90)
+        time.sleep(LIVE_TICK_SECONDS)
+
+    score_ph.markdown(f"### {home_label}&nbsp;&nbsp;**{home_score} - {away_score}**&nbsp;&nbsp;{away_label}")
+    clock_ph.info("🟨 Descanso")
+    time.sleep(LIVE_TICK_SECONDS)
+
+    for tick in range(LIVE_HALF_TICKS):
+        minute = min(90, 45 + int((tick + 1) * 45 / LIVE_HALF_TICKS))
+        _reveal_up_to(minute)
+        _render(f"{minute}'", minute / 90)
+        time.sleep(LIVE_TICK_SECONDS)
+
+    clock_ph.markdown("**⏱️ Final del partido**")
+
+
+def render_matchday_summary(season_result: SeasonResult, matchday: int,
+                            squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    matchday_matches = [m for m in season_result.matches if m.matchday == matchday]
+    squad_match = next(m for m in matchday_matches if m.home == squad_team_name or m.away == squad_team_name)
+    other_matches = [m for m in matchday_matches if m is not squad_match]
+
+    home_label = f"⭐ {squad_match.home}" if squad_match.home == squad_team_name else squad_match.home.title()
+    away_label = f"⭐ {squad_match.away}" if squad_match.away == squad_team_name else squad_match.away.title()
+    st.markdown(f"### {home_label} {squad_match.home_goals} - {squad_match.away_goals} {away_label}")
+    st.markdown("#### 📈 Estadísticas del partido")
+    st.markdown(_stat_grid_html([
+        ("Disparos",  squad_match.home_shots,        squad_match.away_shots),
+        ("A puerta",  squad_match.home_sot,          squad_match.away_sot),
+        ("Córners",   squad_match.home_corners,      squad_match.away_corners),
+        ("Amarillas", squad_match.home_yellow_cards, squad_match.away_yellow_cards),
+    ]), unsafe_allow_html=True)
+
+    if other_matches:
+        render_other_results(other_matches, squad_team_name)
+
+    table_so_far = table_through_matchday(season_result.matches, matchday)
+    render_standings_table(table_so_far, squad_team_name, title=f"Clasificación tras la jornada {matchday}")
 
 
 # ── Draft mode helpers ──────────────────────────────────────────────────────
@@ -385,7 +582,9 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
                 st.session_state.draft_excluded = set()
                 st.session_state.draft_active_slot = None
                 st.session_state.draft_reroll = {}
-                for k in ("draft_orch_key", "draft_orchestrator", "draft_season_result", "draft_mc_result"):
+                for k in ("draft_orch_key", "draft_orchestrator", "draft_season_result",
+                         "draft_playback_matchday", "draft_watched_matchdays",
+                         "draft_playback_done", "draft_mc_holder"):
                     st.session_state.pop(k, None)
                 st.rerun()
 
@@ -458,7 +657,7 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
         return
 
     st.markdown("---")
-    st.markdown("### 🏆 Simulación de temporada")
+    st.markdown("### 🏆 Temporada en directo")
     if engine is None:
         st.warning("Motor de predicción no disponible; no se puede simular la temporada.")
         return
@@ -472,23 +671,74 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
         st.session_state.draft_orchestrator = _build_season_orchestrator(
             model, engine, squad_11, real_opponents, competition=comp_match_id,
         )
-        st.session_state.pop("draft_season_result", None)
-        st.session_state.pop("draft_mc_result", None)
+        for k in ("draft_season_result", "draft_playback_matchday", "draft_watched_matchdays",
+                 "draft_playback_done", "draft_mc_holder"):
+            st.session_state.pop(k, None)
 
-    b1, b2, b3 = st.columns([1, 1, 1])
-    if b1.button("▶️ Simular temporada", key="draft_sim_season", use_container_width=True):
-        with st.spinner("Jugando la temporada completa, partido a partido..."):
-            st.session_state.draft_season_result = st.session_state.draft_orchestrator.play_once(narrative=True)
-    n_sims = b2.selectbox("Simulaciones Monte Carlo", [10_000, 50_000, 100_000, 1_000_000],
-                          index=1, key="draft_mc_n")
-    if b3.button("🎲 Calcular probabilidades", key="draft_mc", use_container_width=True):
-        with st.spinner(f"Corriendo {n_sims:,} simulaciones..."):
-            st.session_state.draft_mc_result = st.session_state.draft_orchestrator.run_monte_carlo(n_sims=n_sims)
+    orchestrator: SeasonOrchestrator = st.session_state.draft_orchestrator
 
-    if "draft_season_result" in st.session_state:
-        render_season_result(st.session_state.draft_season_result)
-    if "draft_mc_result" in st.session_state:
-        render_monte_carlo_result(st.session_state.draft_mc_result, n_sims)
+    if "draft_season_result" not in st.session_state:
+        st.caption("Juega tu jornada a jornada, en directo — mientras tanto calculamos "
+                  f"{MC_N_SIMS:,} simulaciones Monte Carlo en segundo plano.")
+        if st.button("🎬 Empezar temporada en directo", key="draft_start_live", use_container_width=True):
+            with st.spinner("Preparando la temporada..."):
+                st.session_state.draft_season_result = orchestrator.play_once(narrative=True)
+            st.session_state.draft_playback_matchday = 1
+            st.session_state.draft_watched_matchdays = set()
+            st.session_state.draft_playback_done = False
+            st.session_state.draft_mc_holder = start_monte_carlo_background(orchestrator, MC_N_SIMS)
+            st.rerun()
+        return
+
+    season_result: SeasonResult = st.session_state.draft_season_result
+    total_matchdays = max(m.matchday for m in season_result.matches)
+
+    if not st.session_state.get("draft_playback_done", False):
+        matchday = st.session_state.draft_playback_matchday
+        st.markdown(f"#### 🗓️ Jornada {matchday} de {total_matchdays}")
+
+        matchday_matches = [m for m in season_result.matches if m.matchday == matchday]
+        squad_match = next(m for m in matchday_matches if m.home == SQUAD_TEAM_NAME or m.away == SQUAD_TEAM_NAME)
+
+        already_watched = matchday in st.session_state.draft_watched_matchdays
+        if not already_watched:
+            home_label = "⭐ " + squad_match.home if squad_match.home == SQUAD_TEAM_NAME else squad_match.home.title()
+            away_label = "⭐ " + squad_match.away if squad_match.away == SQUAD_TEAM_NAME else squad_match.away.title()
+            st.markdown(f"**{home_label} vs {away_label}**")
+            wc1, wc2 = st.columns([2, 1])
+            play_clicked = wc1.button("▶️ Reproducir partido en directo", key=f"draft_play_{matchday}",
+                                      use_container_width=True)
+            skip_anim = wc2.button("⏭️ Saltar animación", key=f"draft_skip_anim_{matchday}",
+                                   use_container_width=True)
+            if play_clicked:
+                play_live_match(squad_match, SQUAD_TEAM_NAME)
+                st.session_state.draft_watched_matchdays.add(matchday)
+                already_watched = True
+            elif skip_anim:
+                st.session_state.draft_watched_matchdays.add(matchday)
+                already_watched = True
+
+        if already_watched:
+            render_matchday_summary(season_result, matchday, SQUAD_TEAM_NAME)
+            nb1, nb2 = st.columns([2, 1])
+            if matchday < total_matchdays:
+                if nb1.button("▶️ Siguiente jornada", key=f"draft_next_{matchday}", use_container_width=True):
+                    st.session_state.draft_playback_matchday += 1
+                    st.rerun()
+            else:
+                if nb1.button("🏁 Ver resumen final de temporada", key="draft_finish", use_container_width=True):
+                    st.session_state.draft_playback_done = True
+                    st.rerun()
+            if nb2.button("⏭️ Saltar al resultado final", key=f"draft_skip_all_{matchday}", use_container_width=True):
+                st.session_state.draft_playback_done = True
+                st.rerun()
+
+    if st.session_state.get("draft_playback_done", False):
+        st.markdown("---")
+        render_season_result(season_result)
+
+    st.markdown("---")
+    render_monte_carlo_status(st.session_state.get("draft_mc_holder"), MC_N_SIMS)
 
 
 def render_sandbox_mode(model: PlayerStrengthModel, engine=None, df_clubs: pd.DataFrame | None = None):
@@ -585,7 +835,7 @@ def render_sandbox_mode(model: PlayerStrengthModel, engine=None, df_clubs: pd.Da
     if b1.button("▶️ Simular temporada", key="sb_sim_season", use_container_width=True):
         with st.spinner("Jugando la temporada completa, partido a partido..."):
             st.session_state.sb_season_result = st.session_state.sb_orchestrator.play_once(narrative=True)
-    n_sims = b2.selectbox("Simulaciones Monte Carlo", [10_000, 50_000, 100_000, 1_000_000],
+    n_sims = b2.selectbox("Simulaciones Monte Carlo", [10_000, 50_000, MC_N_SIMS],
                           index=1, key="sb_mc_n")
     if b3.button("🎲 Calcular probabilidades", key="sb_mc", use_container_width=True):
         with st.spinner(f"Corriendo {n_sims:,} simulaciones..."):

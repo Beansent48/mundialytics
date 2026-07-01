@@ -39,6 +39,27 @@ class MatchResult:
     away_goals: int
     home_events: dict[str, PlayerMatchEvent] | None = None   # None when side is a real team
     away_events: dict[str, PlayerMatchEvent] | None = None
+    # Granular per-goal/per-card detail for squad-involved matches, kept
+    # around (not just the aggregated *_events totals above) so a UI can
+    # replay "who scored, who assisted, who got booked" as a sequence of
+    # moments — e.g. a live-playback animation — rather than just a final
+    # tally. None when the corresponding side isn't a squad.
+    home_goal_events: list[tuple[str, str | None]] | None = None   # [(scorer, assister), ...]
+    away_goal_events: list[tuple[str, str | None]] | None = None
+    home_card_players: list[str] | None = None
+    away_card_players: list[str] | None = None
+    # Match-level advanced stats (only drawn for squad-involved fixtures —
+    # real-vs-real matches don't need them for anything currently built).
+    home_shots: int = 0
+    away_shots: int = 0
+    home_sot: int = 0
+    away_sot: int = 0
+    home_corners: int = 0
+    away_corners: int = 0
+    home_fouls: int = 0
+    away_fouls: int = 0
+    home_yellow_cards: int = 0
+    away_yellow_cards: int = 0
 
 
 @dataclass
@@ -60,6 +81,30 @@ def _build_table(team_results: dict[str, dict]) -> pd.DataFrame:
     if df.empty:
         return df
     return df.sort_values(["pts", "gd", "gf"], ascending=False).reset_index(drop=True)
+
+
+def table_through_matchday(matches: list[MatchResult], up_to_matchday: int) -> pd.DataFrame:
+    """Standings using only matches played on or before `up_to_matchday` —
+    for a live-playback UI that reveals the table progressively, one
+    matchday at a time, instead of only at the end of the season."""
+    subset = [m for m in matches if m.matchday <= up_to_matchday]
+    teams = sorted({m.home for m in subset} | {m.away for m in subset})
+    state = {t: {"played": 0, "pts": 0, "gf": 0, "ga": 0} for t in teams}
+    for m in subset:
+        state[m.home]["played"] += 1
+        state[m.away]["played"] += 1
+        state[m.home]["gf"] += m.home_goals
+        state[m.home]["ga"] += m.away_goals
+        state[m.away]["gf"] += m.away_goals
+        state[m.away]["ga"] += m.home_goals
+        if m.home_goals > m.away_goals:
+            state[m.home]["pts"] += POINTS_WIN
+        elif m.away_goals > m.home_goals:
+            state[m.away]["pts"] += POINTS_WIN
+        else:
+            state[m.home]["pts"] += POINTS_DRAW
+            state[m.away]["pts"] += POINTS_DRAW
+    return _build_table(state)
 
 
 class SeasonOrchestrator:
@@ -130,13 +175,13 @@ class SeasonOrchestrator:
 
     def _squad_match_events(
         self, team: str, goals_for: int, goals_against: int,
-        card_lambda: float, rng: np.random.Generator,
-    ) -> dict[str, PlayerMatchEvent]:
+        n_cards: int, rng: np.random.Generator,
+    ) -> tuple[dict[str, PlayerMatchEvent], list[tuple[str, str | None]], list[str]]:
         squad = self.squad_roster[team]
-        n_cards = int(rng.poisson(card_lambda))
         goal_events = attribute_goals(squad, goals_for, rng)
         card_players = attribute_cards(squad, n_cards, rng)
-        return compute_match_ratings(squad, goal_events, card_players, goals_conceded=goals_against, rng=rng)
+        ratings = compute_match_ratings(squad, goal_events, card_players, goals_conceded=goals_against, rng=rng)
+        return ratings, goal_events, card_players
 
     def play_once(self, *, narrative: bool = True) -> SeasonResult:
         """narrative=True: full per-match player events/ratings, for the
@@ -167,18 +212,40 @@ class SeasonOrchestrator:
                 table_state[fixture.away]["pts"] += POINTS_DRAW
 
             home_events = away_events = None
+            home_goal_events = away_goal_events = None
+            home_card_players = away_card_players = None
+            stats: dict[str, int] = {}
             involves_squad = fixture.home in self.squad_roster or fixture.away in self.squad_roster
             if narrative and involves_squad:
                 ev_lams = self.lambda_source.event_lambdas(fixture.home, fixture.away, competition=self.competition)
-                yc_home, yc_away = ev_lams.get("yellow_cards_for", (0.0, 0.0))
+
+                def _draw(market: str) -> tuple[int, int]:
+                    lh, la = ev_lams.get(market, (0.0, 0.0))
+                    return int(rng.poisson(lh)), int(rng.poisson(la))
+
+                sh_h, sh_a = _draw("shots_for")
+                sot_h, sot_a = _draw("sot_for")
+                cor_h, cor_a = _draw("corners_for")
+                fo_h, fo_a = _draw("fouls_for")
+                yc_h, yc_a = _draw("yellow_cards_for")
+                stats = dict(
+                    home_shots=sh_h, away_shots=sh_a, home_sot=sot_h, away_sot=sot_a,
+                    home_corners=cor_h, away_corners=cor_a, home_fouls=fo_h, away_fouls=fo_a,
+                    home_yellow_cards=yc_h, away_yellow_cards=yc_a,
+                )
                 if fixture.home in self.squad_roster:
-                    home_events = self._squad_match_events(fixture.home, hg, ag, yc_home, rng)
+                    home_events, home_goal_events, home_card_players = self._squad_match_events(
+                        fixture.home, hg, ag, yc_h, rng)
                 if fixture.away in self.squad_roster:
-                    away_events = self._squad_match_events(fixture.away, ag, hg, yc_away, rng)
+                    away_events, away_goal_events, away_card_players = self._squad_match_events(
+                        fixture.away, ag, hg, yc_a, rng)
 
             matches.append(MatchResult(
                 matchday=fixture.matchday, home=fixture.home, away=fixture.away,
                 home_goals=hg, away_goals=ag, home_events=home_events, away_events=away_events,
+                home_goal_events=home_goal_events, away_goal_events=away_goal_events,
+                home_card_players=home_card_players, away_card_players=away_card_players,
+                **stats,
             ))
 
         table = _build_table(table_state)

@@ -220,18 +220,66 @@ def tourn_bar(df: pd.DataFrame, col: str, title: str, color="#3b82f6") -> go.Fig
     return fig
 
 
+def render_stat_grid(events: list[tuple[str, float, float]]) -> None:
+    """Shared 'home vs away' stat-card row, used for both real and predicted stats."""
+    ev_cols = st.columns(len(events))
+    for col, (label, hv, av) in zip(ev_cols, events):
+        col.markdown(f"**{label}**")
+        col.markdown(
+            f'<div style="display:flex;justify-content:space-between;background:'
+            f'var(--secondary-background-color);border-radius:8px;padding:8px 12px">'
+            f'<span style="color:#3b82f6;font-weight:700;font-size:1.05rem">{hv:.1f}</span>'
+            f'<span style="color:#9ca3af;font-size:.8rem">vs</span>'
+            f'<span style="color:#ef4444;font-weight:700;font-size:1.05rem">{av:.1f}</span></div>',
+            unsafe_allow_html=True)
+
+
+def render_real_match_stats(row: dict, home: str, away: str) -> None:
+    """Actual historical stats for an already-played match — no model involved."""
+    st.markdown(f"## ⚽ {home.title()} {int(row['home_goals'])} – {int(row['away_goals'])} {away.title()}")
+    st.caption(f"Resultado y estadísticas reales · {str(row.get('date', ''))[:10]}")
+
+    st.markdown("### Estadísticas reales del partido")
+    events = [
+        ("Disparos",  row.get("home_shots"),  row.get("away_shots")),
+        ("A puerta",  row.get("home_sot"),    row.get("away_sot")),
+        ("Córners",   row.get("home_corners"), row.get("away_corners")),
+        ("Faltas",    row.get("home_fouls"),  row.get("away_fouls")),
+        ("Amarillas", row.get("home_yellow_cards"), row.get("away_yellow_cards")),
+    ]
+    events = [(label, float(hv) if pd.notna(hv) else 0.0, float(av) if pd.notna(av) else 0.0)
+              for label, hv, av in events]
+    render_stat_grid(events)
+
+
 def render_partido_detail(home: str, away: str, competition: str, neutral: bool,
-                          actual_result: str | None = None):
-    """Full match-prediction breakdown, reused by the Jornada flow."""
+                          actual_result: str | None = None, row: dict | None = None):
+    """Full match-prediction breakdown, reused by the Jornada flow.
+
+    When `row` is given (the match already has a real result), the real
+    historical stats are shown by default instead of the model's
+    predicted ones — the prediction breakdown becomes an opt-in toggle,
+    kept around for the user's own testing/comparison, not the default view.
+    """
+    if row is not None:
+        render_real_match_stats(row, home, away)
+        show_prediction = st.checkbox(
+            "🔮 Ver predicción del modelo (uso de pruebas)", key=f"pred_toggle_{home}_{away}")
+        if not show_prediction:
+            return
+        st.markdown("---")
+        st.caption("Predicción del modelo para este partido (no es lo que ocurrió realmente).")
+
     eng, eng_teams, df_hist = pick_engine(competition)
     pred = predict_safe(eng, home, away, competition, neutral)
     if pred is None:
         st.error("Error al generar predicción para este partido.")
         return
 
-    st.markdown(f"## ⚽ {home.title()} vs {away.title()}")
-    if actual_result:
-        st.markdown(f"**Resultado real:** {actual_result}")
+    if row is None:
+        st.markdown(f"## ⚽ {home.title()} vs {away.title()}")
+        if actual_result:
+            st.markdown(f"**Resultado real:** {actual_result}")
 
     if home not in eng_teams or away not in eng_teams:
         missing = [t.title() for t in [home, away] if t not in eng_teams]
@@ -283,23 +331,13 @@ def render_partido_detail(home: str, away: str, competition: str, neutral: bool,
         col.markdown(metric_card(label, f"{val:.1%}", c), unsafe_allow_html=True)
 
     st.markdown("### Estadísticas esperadas")
-    ev_cols = st.columns(5)
-    events = [
+    render_stat_grid([
         ("Disparos",  pred.expected_shots_home,   pred.expected_shots_away),
         ("A puerta",  pred.expected_sot_home,     pred.expected_sot_away),
         ("Córners",   pred.expected_corners_home, pred.expected_corners_away),
         ("Faltas",    pred.expected_fouls_home,   pred.expected_fouls_away),
         ("Amarillas", pred.expected_yellows_home, pred.expected_yellows_away),
-    ]
-    for col, (label, hv, av) in zip(ev_cols, events):
-        col.markdown(f"**{label}**")
-        col.markdown(
-            f'<div style="display:flex;justify-content:space-between;background:'
-            f'var(--secondary-background-color);border-radius:8px;padding:8px 12px">'
-            f'<span style="color:#3b82f6;font-weight:700;font-size:1.05rem">{hv:.1f}</span>'
-            f'<span style="color:#9ca3af;font-size:.8rem">vs</span>'
-            f'<span style="color:#ef4444;font-weight:700;font-size:1.05rem">{av:.1f}</span></div>',
-            unsafe_allow_html=True)
+    ])
 
     st.markdown("---")
     col_h2h, col_form = st.columns(2)
@@ -439,13 +477,14 @@ if page == "🗓️  Jornada":
             st.session_state.j_selected = {
                 "home": home, "away": away,
                 "result": result_str if played else None,
+                "row": row.to_dict() if played else None,
             }
 
     sel = st.session_state.j_selected
     if sel:
         st.markdown("---")
         render_partido_detail(sel["home"], sel["away"], comp_j, neutral_j,
-                              actual_result=sel["result"])
+                              actual_result=sel["result"], row=sel.get("row"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
