@@ -4,12 +4,11 @@ Two modes:
   Draft    : pick a competition, your club replaces the league's current
              last-place team, draft 11 players from 5 candidates per slot
              (each pick is removed from the global pool — no duplicates,
-             no player available to a club after being drafted away).
-  Sandbox  : pick any 11 players freely, quick single-match simulation.
-
-Season-long match-by-match simulation (Football-Manager style results,
-lineups, ratings) and the 1M-sim Monte Carlo award/odds layer are the
-next phase — this file currently builds the draft + squad foundation.
+             no player available to a club after being drafted away),
+             then play a full season match-by-match (results, standings,
+             top scorer/assist board) plus a Monte Carlo odds layer.
+  Sandbox  : pick any 11 players freely, same season + Monte Carlo engine
+             against a reference competition's real clubs.
 """
 from __future__ import annotations
 import hashlib
@@ -20,12 +19,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from mundialytics.statistical_core.player_strength import PlayerStrengthModel
+from mundialytics.statistical_core.schemas import canonical_name
+from mundialytics.statistical_core.squadlab.calendar import generate_double_round_robin
+from mundialytics.statistical_core.squadlab.lambda_source import RealTeamLambdaSource, SeasonLambdaSource
+from mundialytics.statistical_core.squadlab.season_simulator import SeasonOrchestrator, SeasonResult
+from mundialytics.statistical_core.squadlab.squad_lambda_model import SquadLambdaModel
+
+SQUAD_TEAM_NAME = "Tu Equipo"
 
 POSITIONS_ORDER = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 
@@ -158,48 +163,72 @@ def team_strength_visual(strength: dict, team_name: str) -> go.Figure:
     return fig
 
 
-def simulate_match_with_squad(
-    squad_home: list,
-    squad_away: list,
-    model: PlayerStrengthModel,
-    n_sims: int = 50_000,
-    neutral: bool = True,
-) -> dict:
-    """Simple Poisson match simulation from squad strength."""
-    from scipy.stats import poisson
-    home_str = model.team_strength(squad_home)
-    away_str = model.team_strength(squad_away)
+def _build_season_orchestrator(
+    model: PlayerStrengthModel, engine, squad: list, real_teams: list[str],
+    competition: str, squad_team_name: str = SQUAD_TEAM_NAME,
+) -> SeasonOrchestrator:
+    """Wires a drafted/sandbox squad into the same Poisson/Dixon-Coles
+    machinery real teams already use (see squadlab/lambda_source.py) and
+    builds a full double round-robin calendar against the given real
+    opponents. Reused by both Draft and Sandbox — this IS the mechanism
+    that makes Sandbox's Monte Carlo layer "fall out almost for free" once
+    the Draft narrative engine exists."""
+    real_source = RealTeamLambdaSource(engine)
+    bridge = SquadLambdaModel(model)
+    lambda_source = SeasonLambdaSource(squad_team_name, squad, bridge, real_source, engine.ad_model_)
+    fixtures = generate_double_round_robin([squad_team_name] + real_teams)
+    return SeasonOrchestrator(
+        lambda_source, fixtures, squad_roster={squad_team_name: squad}, competition=competition,
+    )
 
-    lh_base = home_str["xg_per_match"]
-    la_base = away_str["xg_per_match"]
 
-    def_ratio_h = away_str["defense_index"] / 50.0
-    def_ratio_a = home_str["defense_index"] / 50.0
-    lh = float(np.clip(lh_base / (def_ratio_h ** 0.5), 0.3, 4.0))
-    la = float(np.clip(la_base / (def_ratio_a ** 0.5), 0.3, 4.0))
+def render_season_result(result: SeasonResult, squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    st.markdown("#### 📊 Clasificación final")
+    table_display = result.table.copy()
+    table_display.insert(0, "pos", range(1, len(table_display) + 1))
+    table_display["team"] = table_display["team"].apply(
+        lambda t: f"⭐ {t}" if t == squad_team_name else t.title()
+    )
+    st.dataframe(table_display.rename(columns={
+        "pos": "#", "team": "Equipo", "played": "PJ", "pts": "Pts",
+        "gf": "GF", "ga": "GC", "gd": "DG",
+    }), use_container_width=True, hide_index=True)
 
-    if not neutral:
-        lh *= 1.12
+    if not result.player_season_tallies.empty:
+        st.markdown("#### ⚽ Máximos goleadores de tu plantilla")
+        tallies = result.player_season_tallies.head(10).copy()
+        st.dataframe(tallies.rename(columns={
+            "player": "Jugador", "position": "Pos", "goals": "Goles",
+            "assists": "Asist.", "yellow_cards": "TA", "matches": "PJ", "avg_rating": "Rating medio",
+        })[["Jugador", "Pos", "Goles", "Asist.", "TA", "PJ", "Rating medio"]],
+        use_container_width=True, hide_index=True)
 
-    rng = np.random.default_rng(42)
-    hg = rng.poisson(lh, n_sims)
-    ag = rng.poisson(la, n_sims)
-    p_home = float((hg > ag).mean())
-    p_draw = float((hg == ag).mean())
-    p_away = float((ag > hg).mean())
+    squad_matches = [m for m in result.matches if m.home == squad_team_name or m.away == squad_team_name]
+    with st.expander(f"Ver los {len(squad_matches)} partidos de tu equipo"):
+        for m in squad_matches:
+            home_label = "⭐ " + m.home if m.home == squad_team_name else m.home.title()
+            away_label = "⭐ " + m.away if m.away == squad_team_name else m.away.title()
+            st.markdown(f"J{m.matchday}: {home_label} **{m.home_goals}-{m.away_goals}** {away_label}")
 
-    goals = np.arange(7)
-    matrix = np.outer(poisson.pmf(goals, lh), poisson.pmf(goals, la))
 
-    return {
-        "p_home": p_home, "p_draw": p_draw, "p_away": p_away,
-        "lambda_home": lh, "lambda_away": la,
-        "p_btts": float(1 - poisson.cdf(0, lh) - poisson.cdf(0, la) + poisson.cdf(0, lh) * poisson.cdf(0, la)),
-        "p_over25": float(1 - sum(poisson.pmf(k, lh + la) for k in range(3))),
-        "score_matrix": matrix,
-        "home_attack": home_str["attack_index"], "home_defense": home_str["defense_index"],
-        "away_attack": away_str["attack_index"], "away_defense": away_str["defense_index"],
-    }
+def render_monte_carlo_result(mc: pd.DataFrame, n_sims: int, squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+    squad_row = mc[mc["team"] == squad_team_name]
+    if not squad_row.empty:
+        r = squad_row.iloc[0]
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("% Campeón", f"{r['p_champion']:.1%}")
+        c2.metric("% Top 4", f"{r['p_top4']:.1%}")
+        c3.metric("% Descenso", f"{r['p_relegation']:.1%}")
+        c4.metric("Puntos medios", f"{r['avg_pts']:.1f}")
+    st.caption(f"Basado en {n_sims:,} simulaciones Monte Carlo (mismo motor que la temporada narrativa).")
+    mc_display = mc.copy()
+    mc_display["team"] = mc_display["team"].apply(lambda t: f"⭐ {t}" if t == squad_team_name else t.title())
+    for col in ["p_champion", "p_top2", "p_top4", "p_relegation"]:
+        mc_display[col] = (mc_display[col] * 100).round(1)
+    st.dataframe(mc_display.rename(columns={
+        "team": "Equipo", "p_champion": "% Campeón", "p_top2": "% Top 2", "p_top4": "% Top 4",
+        "p_relegation": "% Descenso", "avg_pts": "Pts medios", "avg_goals": "Goles medios",
+    }), use_container_width=True, hide_index=True)
 
 
 # ── Draft mode helpers ──────────────────────────────────────────────────────
@@ -293,7 +322,7 @@ def next_empty_slot(coords: dict, picks: dict) -> str | None:
     return None
 
 
-def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
+def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine=None):
     st.markdown("### 🎮 Draft de temporada")
     st.caption("Elige una competición: tu club sustituye al colista actual. Cada jugador fichado deja "
               "de estar disponible para su equipo de origen — sin duplicados. Pulsa una posición para "
@@ -350,20 +379,20 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
             strength = model.team_strength(list(picks_resolved.values()))
             st.plotly_chart(team_strength_visual(strength, "Tu equipo"), use_container_width=True)
         if n_picked == 11:
-            st.success("Plantilla completa. La simulación de temporada partido a partido "
-                      "(resultados, alineaciones, ratings y el Monte Carlo de premios) "
-                      "llega en la siguiente fase.")
+            st.success("Plantilla completa. Simula la temporada más abajo.")
             if st.button("🔄 Reiniciar draft", key="draft_reset"):
                 st.session_state.draft_picks = {}
                 st.session_state.draft_excluded = set()
                 st.session_state.draft_active_slot = None
                 st.session_state.draft_reroll = {}
+                for k in ("draft_orch_key", "draft_orchestrator", "draft_season_result", "draft_mc_result"):
+                    st.session_state.pop(k, None)
                 st.rerun()
 
     with col_pick:
-        st.caption("El número en cada candidato es su **valoración global (0-100)**: combina su percentil "
-                  "de ataque y de defensa frente a otros jugadores de su misma posición, a partir de sus "
-                  "estadísticas reales por partido (goles, asistencias, tiros, entradas, presiones...).")
+        st.caption("El número en cada candidato es su **valoración global (0-100)**: una nota absoluta de "
+                  "ataque y defensa calculada a partir de sus estadísticas reales por partido (goles, "
+                  "asistencias, xG, entradas, presiones...), no un ranking relativo a otros jugadores.")
 
         st.markdown("**Elige una posición:**")
         for pos in POSITIONS_ORDER:
@@ -425,8 +454,44 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame):
         else:
             st.caption("👆 Pulsa una posición arriba para ver sus 5 candidatos.")
 
+    if len(picks_resolved) < 11:
+        return
 
-def render_sandbox_mode(model: PlayerStrengthModel, engine=None):
+    st.markdown("---")
+    st.markdown("### 🏆 Simulación de temporada")
+    if engine is None:
+        st.warning("Motor de predicción no disponible; no se puede simular la temporada.")
+        return
+
+    squad_11 = list(picks_resolved.values())
+    real_opponents = [canonical_name(t) for t in table["team"].tolist() if t != last_team]
+    squad_key = (comp_d, formation_name, tuple(sorted(st.session_state.draft_picks.items())))
+
+    if st.session_state.get("draft_orch_key") != squad_key:
+        st.session_state.draft_orch_key = squad_key
+        st.session_state.draft_orchestrator = _build_season_orchestrator(
+            model, engine, squad_11, real_opponents, competition=comp_match_id,
+        )
+        st.session_state.pop("draft_season_result", None)
+        st.session_state.pop("draft_mc_result", None)
+
+    b1, b2, b3 = st.columns([1, 1, 1])
+    if b1.button("▶️ Simular temporada", key="draft_sim_season", use_container_width=True):
+        with st.spinner("Jugando la temporada completa, partido a partido..."):
+            st.session_state.draft_season_result = st.session_state.draft_orchestrator.play_once(narrative=True)
+    n_sims = b2.selectbox("Simulaciones Monte Carlo", [10_000, 50_000, 100_000, 1_000_000],
+                          index=1, key="draft_mc_n")
+    if b3.button("🎲 Calcular probabilidades", key="draft_mc", use_container_width=True):
+        with st.spinner(f"Corriendo {n_sims:,} simulaciones..."):
+            st.session_state.draft_mc_result = st.session_state.draft_orchestrator.run_monte_carlo(n_sims=n_sims)
+
+    if "draft_season_result" in st.session_state:
+        render_season_result(st.session_state.draft_season_result)
+    if "draft_mc_result" in st.session_state:
+        render_monte_carlo_result(st.session_state.draft_mc_result, n_sims)
+
+
+def render_sandbox_mode(model: PlayerStrengthModel, engine=None, df_clubs: pd.DataFrame | None = None):
     st.markdown("### 🔬 Construye tu equipo ideal")
     st.caption("Mezcla jugadores de cualquier época o liga — experimento estadístico sin restricciones, "
               "pensado para escenarios tipo 'el Mundial si España tuviera a Messi'.")
@@ -483,57 +548,53 @@ def render_sandbox_mode(model: PlayerStrengthModel, engine=None):
         return
 
     st.markdown("---")
-    st.markdown("### Simulación rápida de partido")
-    st.caption("Vista previa de un único partido. La simulación de torneo completo (1M sims, "
-              "% de campeón, bota de oro, etc.) llega en la siguiente fase.")
+    st.markdown("### 🏆 Simulación de temporada")
+    if engine is None or df_clubs is None:
+        st.warning("Motor de predicción o datos de calendario no disponibles; no se puede simular la temporada.")
+        return
 
-    col_sim1, col_sim2 = st.columns(2)
-    with col_sim1:
-        st.markdown("**Tu equipo** (de arriba)")
-    with col_sim2:
-        st.markdown("**Rival**")
-        if engine is not None:
-            rival_teams = sorted(engine.ad_model_.team_index_.keys())
-            rival_team = st.selectbox("Equipo rival", rival_teams, key="rival_team")
-        else:
-            rival_team = "Selección genérica"
+    st.caption("Tu equipo se une como un club más a la competición elegida (no sustituye a nadie) "
+              "y juega la temporada completa contra sus clubes reales.")
+    default_idx = DRAFT_COMPETITIONS.index(competition_filter) if competition_filter in DRAFT_COMPETITIONS else 0
+    ref_comp = st.selectbox("Competición de referencia (rivales reales)", DRAFT_COMPETITIONS,
+                            index=default_idx, key="sb_ref_comp")
+    comp_match_id = MATCH_COMP_MAP[ref_comp]
 
-    if st.button("Simular partido", key="sl_sim"):
-        away_squad_candidates = [p for p in model.profiles_.values() if p.team.lower() == rival_team.lower()]
-        away_squad_candidates = sorted(away_squad_candidates, key=lambda p: -p.overall)[:11]
-        if len(away_squad_candidates) < 3:
-            away_squad_candidates = sorted(model.profiles_.values(), key=lambda p: -p.overall)[:11]
+    seasons = sorted(df_clubs.loc[df_clubs["competition"] == comp_match_id, "season"].unique(), reverse=True)
+    if not seasons:
+        st.warning("Sin datos de calendario para esta competición.")
+        return
+    ref_teams_df = df_clubs[(df_clubs["competition"] == comp_match_id) & (df_clubs["season"] == seasons[0])]
+    real_opponents = sorted(set(ref_teams_df["home_team"].map(canonical_name))
+                            | set(ref_teams_df["away_team"].map(canonical_name)))
+    real_opponents = [t for t in real_opponents if t in engine.ad_model_.team_index_][:19]
+    if len(real_opponents) < 3:
+        st.warning("No hay suficientes clubes reales reconocidos por el motor para esta competición.")
+        return
 
-        with st.spinner("Simulando..."):
-            result = simulate_match_with_squad(squad_selected, away_squad_candidates, model,
-                                               n_sims=50_000, neutral=False)
-
-        home_label, away_label = "Tu equipo", rival_team.title()
-        st.markdown(f"#### {home_label} vs {away_label}")
-
-        rc1, rc2, rc3, rc4, rc5 = st.columns(5)
-        rc1.metric(home_label, f"{result['p_home']:.1%}")
-        rc2.metric("Empate", f"{result['p_draw']:.1%}")
-        rc3.metric(away_label, f"{result['p_away']:.1%}")
-        rc4.metric("xG", f"{result['lambda_home']:.2f}–{result['lambda_away']:.2f}")
-        rc5.metric("BTTS", f"{result['p_btts']:.1%}")
-
-        matrix = result["score_matrix"]
-        fig_mat = go.Figure(go.Heatmap(
-            z=matrix * 100,
-            x=[str(i) for i in range(7)], y=[str(i) for i in range(7)],
-            text=[[f"{v:.1f}%" for v in row] for row in matrix * 100],
-            texttemplate="%{text}", colorscale="Blues", showscale=False,
-            hovertemplate=f"{home_label} %{{y}}–%{{x}} {away_label}: %{{z:.2f}}%<extra></extra>",
-        ))
-        fig_mat.update_layout(
-            xaxis_title=f"Goles {away_label}", yaxis_title=f"Goles {home_label}",
-            yaxis=dict(autorange="reversed"), height=280,
-            margin=dict(l=50, r=10, t=10, b=50),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    squad_key = (ref_comp, tuple(sorted(p.player for p in squad_selected)))
+    if st.session_state.get("sb_orch_key") != squad_key:
+        st.session_state.sb_orch_key = squad_key
+        st.session_state.sb_orchestrator = _build_season_orchestrator(
+            model, engine, squad_selected, real_opponents, competition=comp_match_id,
         )
-        st.plotly_chart(fig_mat, use_container_width=True)
-        st.markdown(f"**En 50k simulaciones:** tu equipo gana el **{result['p_home']:.0%}** de las veces.")
+        st.session_state.pop("sb_season_result", None)
+        st.session_state.pop("sb_mc_result", None)
+
+    b1, b2, b3 = st.columns([1, 1, 1])
+    if b1.button("▶️ Simular temporada", key="sb_sim_season", use_container_width=True):
+        with st.spinner("Jugando la temporada completa, partido a partido..."):
+            st.session_state.sb_season_result = st.session_state.sb_orchestrator.play_once(narrative=True)
+    n_sims = b2.selectbox("Simulaciones Monte Carlo", [10_000, 50_000, 100_000, 1_000_000],
+                          index=1, key="sb_mc_n")
+    if b3.button("🎲 Calcular probabilidades", key="sb_mc", use_container_width=True):
+        with st.spinner(f"Corriendo {n_sims:,} simulaciones..."):
+            st.session_state.sb_mc_result = st.session_state.sb_orchestrator.run_monte_carlo(n_sims=n_sims)
+
+    if "sb_season_result" in st.session_state:
+        render_season_result(st.session_state.sb_season_result)
+    if "sb_mc_result" in st.session_state:
+        render_monte_carlo_result(st.session_state.sb_mc_result, n_sims)
 
 
 def render(engine=None, df_clubs: pd.DataFrame | None = None):
@@ -552,6 +613,6 @@ def render(engine=None, df_clubs: pd.DataFrame | None = None):
         if df_clubs is None:
             st.warning("Datos de calendario no disponibles para calcular el colista.")
             return
-        render_draft_mode(sq_model, df_clubs)
+        render_draft_mode(sq_model, df_clubs, engine)
     else:
-        render_sandbox_mode(sq_model, engine)
+        render_sandbox_mode(sq_model, engine, df_clubs)
