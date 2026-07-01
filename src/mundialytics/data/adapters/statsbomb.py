@@ -120,11 +120,16 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
                 "key_passes": 0,
                 "pressures": 0,
                 "duels": 0,
+                "duels_won": 0,
+                "duels_lost": 0,
                 "dribbles": 0,
                 "successful_dribbles": 0,
                 "tackles": 0,
                 "interceptions": 0,
                 "ball_recoveries": 0,
+                "dribbled_past": 0,
+                "clearances": 0,
+                "blocks": 0,
             }
         return rows[key]
 
@@ -185,6 +190,14 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
             duel_type = (((ev.get("duel") or {}).get("type") or {}).get("name") or "").lower()
             if "tackle" in duel_type:
                 r["tackles"] += 1
+            # Outcome is missing for a large share of duels (untagged
+            # sub-type, mostly off-ball challenges) -- those are left out of
+            # both won/lost so the win rate isn't diluted by unknowns.
+            duel_outcome = (((ev.get("duel") or {}).get("outcome") or {}).get("name") or "")
+            if duel_outcome in ("Won", "Success In Play", "Success Out"):
+                r["duels_won"] += 1
+            elif duel_outcome in ("Lost In Play", "Lost Out"):
+                r["duels_lost"] += 1
         elif typ == "Dribble":
             r["dribbles"] += 1
             outcome = (((ev.get("dribble") or {}).get("outcome") or {}).get("name") or "").lower()
@@ -194,6 +207,13 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
             r["interceptions"] += 1
         elif typ == "Ball Recovery":
             r["ball_recoveries"] += 1
+        elif typ == "Dribbled Past":
+            # Player field is the defender who got beaten, not the dribbler.
+            r["dribbled_past"] += 1
+        elif typ == "Clearance":
+            r["clearances"] += 1
+        elif typ == "Block":
+            r["blocks"] += 1
 
     for r in rows.values():
         opponents = [t for t in teams_seen if t != r["team"]]
@@ -212,6 +232,7 @@ def statsbomb_events_to_team_events(events_json: str | Path, *, match_id: str | 
         "shots", "shots_on_target", "fouls_committed", "fouls_drawn", "yellow_cards", "red_cards", "goals",
         "assists", "passes", "complete_passes", "key_passes", "pressures", "duels", "dribbles", "successful_dribbles",
         "tackles", "interceptions", "ball_recoveries",
+        "duels_won", "duels_lost", "dribbled_past", "clearances", "blocks",
     ]
     out = pe.groupby(["match_id", "date", "competition", "team_scope", "team", "opponent"], dropna=False)[agg_cols].sum().reset_index()
     out = out.rename(columns={
