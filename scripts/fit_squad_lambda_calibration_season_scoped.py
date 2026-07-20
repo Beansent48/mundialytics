@@ -35,8 +35,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.statistical_core.attack_defense_model import AttackDefenseModel
 from mundialytics.statistical_core.schemas import canonical_name
 from mundialytics.statistical_core.player_strength import (
-    ANCHOR_CURVES, DUEL_SHRINKAGE_MATCHES, POSITION_ATTACK_WEIGHT, POSITION_CREATION_WEIGHT,
-    POSITION_DEFENSE_WEIGHT, SHRINKAGE_MATCHES, _build_gk_scores,
+    ANCHOR_CURVES, CREATION_WEIGHTS, DEF_WEIGHTS, DUEL_SHRINKAGE_MATCHES, OFF_WEIGHTS,
+    POSITION_ATTACK_WEIGHT, POSITION_CREATION_WEIGHT, POSITION_DEFENSE_WEIGHT,
+    SHRINKAGE_MATCHES, _build_gk_scores,
 )
 
 # Goalkeepers get near-floor scores from the generic tackles/pressures
@@ -74,13 +75,6 @@ def _off_def_creation_scores(row: pd.Series) -> tuple[float, float, float]:
     "matches" column already is the correct credibility base for the
     defense-quality/creation stats too (no separate defense_creation_matches
     needed here, unlike the career file which mixes broader competitions)."""
-    off_weights = {"goals_per_match": 0.30, "assists_per_match": 0.30,
-                    "xg_per_match": 0.25, "big_chance_miss_rate": 0.15}
-    def_weights = {"duel_win_rate": 0.50, "dribbled_past_per_match": 0.20,
-                    "interceptions_per_match": 0.12,
-                    "clearances_per_match": 0.08, "blocks_per_match": 0.05,
-                    "fouls_per_match": 0.03, "yellow_cards_per_match": 0.02}
-    creation_weights = {"key_passes_per_match": 0.65, "pass_completion": 0.35}
     credibility = row["matches"] / (row["matches"] + SHRINKAGE_MATCHES)
     credibility_duel = row["matches"] / (row["matches"] + DUEL_SHRINKAGE_MATCHES)
 
@@ -90,11 +84,18 @@ def _off_def_creation_scores(row: pd.Series) -> tuple[float, float, float]:
         cred = credibility_duel if stat == "duel_win_rate" else credibility
         return 50.0 + (raw - 50.0) * cred
 
-    off_num = sum(_scored(s) * w for s, w in off_weights.items())
-    def_num = sum(_scored(s) * w for s, w in def_weights.items())
-    creation_num = sum(_scored(s) * w for s, w in creation_weights.items())
-    return (off_num / sum(off_weights.values()), def_num / sum(def_weights.values()),
-            creation_num / sum(creation_weights.values()))
+    # def_score here MUST match player_strength.py's smooth DEF_WEIGHTS
+    # average (defensive_strength/team_strength()'s source of truth), NOT the
+    # max-weighted def_score_primary used for the individual "overall" rating
+    # -- confirmed 2026-07-01 the max-weighted version collapses this
+    # calibration's defense R^2 from 0.354 to 0.002 (see player_strength.py's
+    # DEF_WEIGHTS docstring for the full explanation).
+    off_num = sum(_scored(s) * w for s, w in OFF_WEIGHTS.items())
+    def_num = sum(_scored(s) * w for s, w in DEF_WEIGHTS.items())
+    creation_num = sum(_scored(s) * w for s, w in CREATION_WEIGHTS.items())
+
+    return (off_num / sum(OFF_WEIGHTS.values()), def_num / sum(DEF_WEIGHTS.values()),
+            creation_num / sum(CREATION_WEIGHTS.values()))
 
 
 def _team_strength(squad: pd.DataFrame) -> tuple[float, float]:

@@ -54,6 +54,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 PROFILES_PATH = ROOT / "data/processed/player_profiles_with_positions.csv"
 PER_MATCH_PATH = ROOT / "data/processed/player_match_events.csv"
+SHOT_EVENTS_PATH = ROOT / "data/external/advanced/statsbomb/statsbomb_shot_events.csv"
 
 
 def main() -> None:
@@ -65,6 +66,19 @@ def main() -> None:
     profiles = pd.read_csv(PROFILES_PATH)
     pm = pd.read_csv(PER_MATCH_PATH)
 
+    # Ball-progression columns (added 2026-07-02) may be absent if
+    # player_match_events.csv predates the statsbomb.py adapter change -- fill
+    # zero so re-running against an older per-match file doesn't KeyError.
+    PROGRESSION = ["progressive_passes", "progressive_carries", "passes_into_final_third",
+                   "passes_into_box", "through_balls", "carries", "successful_dribbles",
+                   "crosses", "cut_backs"]
+    # Raw counts summed here, then turned into RATES below (not simple per-match).
+    RAW_EXTRA = ["passes_under_pressure", "complete_passes_under_pressure",
+                 "aerials_won", "aerials_lost"]
+    for c in PROGRESSION + RAW_EXTRA:
+        if c not in pm.columns:
+            pm[c] = 0
+
     agg = pm.groupby("player").agg(
         defense_creation_matches=("match_id", "nunique"),
         duels_won=("duels_won", "sum"), duels_lost=("duels_lost", "sum"),
@@ -72,6 +86,7 @@ def main() -> None:
         blocks=("blocks", "sum"), interceptions=("interceptions", "sum"),
         key_passes=("key_passes", "sum"), passes=("passes", "sum"),
         complete_passes=("complete_passes", "sum"),
+        **{c: (c, "sum") for c in PROGRESSION + RAW_EXTRA},
     ).reset_index()
 
     matches_safe = agg["defense_creation_matches"].clip(lower=1)
@@ -89,21 +104,94 @@ def main() -> None:
     agg["key_passes_per_match"] = agg["key_passes"] / matches_safe
     agg["passes_per_match"] = agg["passes"] / matches_safe
     agg["pass_completion"] = agg["complete_passes"] / agg["passes"].clip(lower=1)
+    for c in PROGRESSION:
+        agg[f"{c}_per_match"] = agg[c] / matches_safe
+
+    # Composure + aerial rates (fallbacks: neutral 0.75 / 0.5), plus aerial-win volume.
+    pressured = agg["passes_under_pressure"]
+    agg["pass_completion_under_pressure"] = (
+        agg["complete_passes_under_pressure"] / pressured.clip(lower=1)).where(pressured > 0, 0.75)
+    aerial_total = agg["aerials_won"] + agg["aerials_lost"]
+    agg["aerial_win_rate"] = (
+        agg["aerials_won"] / aerial_total.clip(lower=1)).where(aerial_total > 0, 0.5)
+    agg["aerials_won_per_match"] = agg["aerials_won"] / matches_safe
 
     keep = agg[[
         "player", "defense_creation_matches", "duel_win_rate", "dribbled_past_per_match",
         "clearances_per_match", "blocks_per_match", "interceptions_per_match",
         "key_passes_per_match", "passes_per_match", "pass_completion",
-    ]]
+        "pass_completion_under_pressure", "aerial_win_rate", "aerials_won_per_match",
+    ] + [f"{c}_per_match" for c in PROGRESSION]]
 
+    # Idempotent: drop any previously-enriched columns before re-merging, so a
+    # second run refreshes values instead of creating _x/_y suffix collisions
+    # (the career file already carries the earlier defense/creation columns).
+    enrich_cols = [c for c in keep.columns if c != "player"]
+    profiles = profiles.drop(columns=[c for c in enrich_cols if c in profiles.columns])
     before_cols = set(profiles.columns)
     profiles = profiles.merge(keep, on="player", how="left")
     profiles["defense_creation_matches"] = profiles["defense_creation_matches"].fillna(0).astype(int)
     profiles["duel_win_rate"] = profiles["duel_win_rate"].fillna(0.5)
-    for c in ("dribbled_past_per_match", "clearances_per_match", "blocks_per_match",
-              "interceptions_per_match", "key_passes_per_match", "passes_per_match"):
+    profiles["aerial_win_rate"] = profiles["aerial_win_rate"].fillna(0.5)
+    for c in (["dribbled_past_per_match", "clearances_per_match", "blocks_per_match",
+               "interceptions_per_match", "key_passes_per_match", "passes_per_match",
+               "aerials_won_per_match"]
+              + [f"{c}_per_match" for c in PROGRESSION]):
         profiles[c] = profiles[c].fillna(0.0)
     profiles["pass_completion"] = profiles["pass_completion"].fillna(0.75)
+    profiles["pass_completion_under_pressure"] = profiles["pass_completion_under_pressure"].fillna(0.75)
+
+    # Finishing skill = (goals - xG) per shot (overperformance vs expected).
+    # Penalties ARE included (2026-07-02, user call: converting penalties is a
+    # real skill and excluding them unfairly docked penalty-taking scorers like
+    # Ronaldo). From the shot-event file (per-shot xG). finishing_shots is
+    # carried so player_strength.py can shrink low-volume finishing toward
+    # neutral (a 5-shot hot streak isn't real finishing skill).
+    if SHOT_EVENTS_PATH.exists():
+        sh = pd.read_csv(SHOT_EVENTS_PATH, low_memory=False)
+        sh["xg"] = pd.to_numeric(sh["xg"], errors="coerce").fillna(0.0)
+        sh["is_goal"] = sh["is_goal"].astype(str).str.lower().isin(["true", "1", "1.0"])
+        fin = sh.groupby("player").agg(
+            np_goals=("is_goal", "sum"), np_xg=("xg", "sum"), finishing_shots=("xg", "size"),
+        ).reset_index()
+        fin["finishing_per_shot"] = (fin["np_goals"] - fin["np_xg"]) / fin["finishing_shots"].clip(lower=1)
+        profiles = profiles.drop(columns=[c for c in ("finishing_per_shot", "finishing_shots")
+                                          if c in profiles.columns])
+        profiles = profiles.merge(fin[["player", "finishing_per_shot", "finishing_shots"]],
+                                  on="player", how="left")
+    for c, dflt in (("finishing_per_shot", 0.0), ("finishing_shots", 0.0)):
+        if c not in profiles.columns:
+            profiles[c] = dflt
+        profiles[c] = profiles[c].fillna(dflt)
+
+    # Granular position (StatsBomb-era only): most-common raw StatsBomb position
+    # per player -> coarse bucket. Drives which roles are candidates in
+    # player_strength.py. Empty for players with no per-match events (FBref
+    # modern) -> they fall back to ALL roles of their 4-bucket position.
+    GRANULAR_MAP = {
+        "Goalkeeper": "Portero",
+        "Left Center Back": "Central", "Right Center Back": "Central", "Center Back": "Central",
+        "Left Back": "Lateral", "Right Back": "Lateral",
+        "Left Wing Back": "Lateral", "Right Wing Back": "Lateral",
+        "Center Defensive Midfield": "Pivote", "Left Defensive Midfield": "Pivote",
+        "Right Defensive Midfield": "Pivote",
+        "Center Midfield": "Mediocentro", "Left Center Midfield": "Mediocentro",
+        "Right Center Midfield": "Mediocentro", "Left Midfield": "Mediocentro",
+        "Right Midfield": "Mediocentro",
+        "Center Attacking Midfield": "Mediapunta", "Left Attacking Midfield": "Mediapunta",
+        "Right Attacking Midfield": "Mediapunta",
+        "Left Wing": "Extremo", "Right Wing": "Extremo",
+        "Center Forward": "Delantero", "Left Center Forward": "Delantero",
+        "Right Center Forward": "Delantero", "Secondary Striker": "Delantero",
+    }
+    if "position" in pm.columns:
+        gpos = pm[pm["position"] != "Substitute"].groupby("player")["position"].agg(
+            lambda s: s.mode().iloc[0] if not s.mode().empty else None)
+        gmap = gpos.map(GRANULAR_MAP).dropna().to_dict()
+    else:
+        gmap = {}
+    profiles = profiles.drop(columns=[c for c in ("granular_position",) if c in profiles.columns])
+    profiles["granular_position"] = profiles["player"].map(gmap).fillna("")
 
     new_cols = sorted(set(profiles.columns) - before_cols)
     matched = int((profiles["defense_creation_matches"] > 0).sum())

@@ -74,6 +74,29 @@ POSITION_CREATION_WEIGHT = {
     "Goalkeeper": 0.0,      # unused -- goalkeepers get gk_score, see below
     "Unknown":    0.25,
 }
+# NOTE: the three tables above drive team_strength() (squad -> AttackDefenseModel
+# lambda bridge, see squadlab/calibration_constants.py -- already fit against
+# these exact values, R^2=0.681 attack / 0.354 defense) and are intentionally
+# NOT used for the individual "overall" rating below -- that's PRIMARY_AXIS_WEIGHT.
+
+# Individual "overall" rating: how much a player's single BEST axis (position-
+# appropriate for Forward/Defender, whichever of the 3 is highest for
+# Midfielder/Unknown) dominates over the other two axes' average. Added
+# 2026-07-01 (second pass) after the user asked for stars to land ~90-92 --
+# a straight 3-way weighted average structurally caps every specialist's
+# ceiling (Messi maxing off_score still gets dragged down by his merely-
+# average def_score), the same failure mode real card-rating systems (FIFA/
+# FUT) avoid by letting a player's standout attribute dominate their overall.
+# This does NOT reintroduce percentile ranking -- it's still a deterministic
+# function of the player's own absolute anchor-curve scores, just a different
+# aggregation formula (max-weighted, not average-weighted).
+PRIMARY_AXIS_WEIGHT = {
+    "Forward":    0.97,
+    "Defender":   0.97,
+    "Midfielder": 0.93,
+    "Goalkeeper": 0.0,      # unused -- goalkeepers get gk_score
+    "Unknown":    0.75,
+}
 
 # Stats that drive each composite score
 OFFENSIVE_STATS = ["xg_per_match", "goals_per_match",
@@ -95,12 +118,80 @@ OFFENSIVE_STATS = ["xg_per_match", "goals_per_match",
 DEFENSIVE_STATS = ["duel_win_rate", "dribbled_past_per_match", "clearances_per_match",
                     "blocks_per_match", "interceptions_per_match",
                     "fouls_per_match", "yellow_cards_per_match"]
-# New "creation" axis: chance creation through passing, not goals/assists
-# (already captured by OFFENSIVE_STATS) or defending. key_passes_per_match is
-# the primary signal; pass_completion is a secondary quality check so a
-# highly creative-but-careless passer isn't over-rewarded relative to someone
-# equally creative who also protects the ball.
-CREATION_STATS = ["key_passes_per_match", "pass_completion"]
+# def_score's 5 "core" stats (excludes discipline) are blended with a
+# max-weighted structure, not a straight average -- added 2026-07-01 (second
+# pass): no single real defender maxes duel_win_rate AND dribbled_past AND
+# clearances AND blocks AND interceptions simultaneously (they're different
+# defensive facets: physical duels, 1v1 containment, last-ditch clearing,
+# shot-blocking, reading the game), so averaging all 5 structurally caps
+# everyone's def_score well below what any one elite facet alone would
+# suggest. Weighting the player's single BEST facet heavily (matching
+# PRIMARY_AXIS_WEIGHT's logic one level down) lets a genuine specialist in
+# any one facet (Van Dijk's anti-dribbling, Puyol's clearances) read as
+# elite, same as how off_score already lets a pure poacher's goals alone
+# carry them without needing to also be a great passer.
+DEF_CORE_STATS = ["duel_win_rate", "dribbled_past_per_match", "clearances_per_match",
+                   "blocks_per_match", "interceptions_per_match", "aerial_win_rate"]
+# aerial_win_rate (added 2026-07-02) is a 6th defensive facet -- aerial
+# dominance is a core center-back skill the ground-duel/blocks stats missed
+# (Van Dijk 0.75, Piqué 0.74 top; small midfielders ~0.30). In DEF_CORE only
+# (the overall's def_score_primary), NOT in the smooth DEF_WEIGHTS, so the
+# team_strength() defense calibration stays untouched.
+# RECALIBRATED 2026-07-02: the max concentration was lowered from 0.85 to 0.70
+# (secondary-avg 0.08 -> 0.30) after finding the near-max weighting inflated
+# MIDFIELDERS' defense off a SINGLE facet and mis-assigned their primary axis
+# -- e.g. Modrić's honest (smooth) def was 58.6 but the max-weighted value was
+# 81.8, driven entirely by interceptions (positioning for a deep playmaker, not
+# defensive dominance), which then beat his organization (79) and labeled him a
+# "defender". At 0.70 a one-facet outlier no longer dominates (Modrić def -> 74
+# < org, so ORGANIZATION becomes primary), while genuine broad defenders barely
+# move (Piqué 82.8, Van Dijk 80.6 -- their secondary-avg is high too). Discipline
+# was ALSO dropped from this overall path (DEF_DISCIPLINE_WEIGHT now empty): it
+# was docking aggressive elite CBs who foul *because* they defend hard (Ramos,
+# Alves) and is an ambiguous signal (elite-aggressive and clumsy-bad both foul).
+# NOTE: fouls/yellow ARE still in DEF_WEIGHTS (the SMOOTH def_score feeding
+# team_strength()) -- only the overall's def_score_primary drops them here.
+DEF_CORE_PRIMARY_WEIGHT = 0.70
+DEF_CORE_SECONDARY_WEIGHT = 0.30
+DEF_DISCIPLINE_WEIGHT: dict[str, float] = {}
+
+# Module-level weight tables (single source of truth -- fit() and
+# scripts/fit_squad_lambda_calibration_season_scoped.py both import these
+# rather than each keeping their own copy, after a drift bug 2026-07-01 where
+# the calibration script's hand-copied def_weights fell out of sync and
+# silently broke squad calibration, R^2 0.354 -> 0.002).
+OFF_WEIGHTS = {"goals_per_match": 0.32, "assists_per_match": 0.32, "xg_per_match": 0.24,
+                "finishing_per_shot": 0.12}
+# finishing_per_shot (added 2026-07-02) = non-penalty (goals - xG) per shot, the
+# clinical-finishing SKILL beyond raw goal count (Messi +0.056/shot, Ibrahimović
+# +0.069 top; profligate strikers negative). Shrunk by its OWN shot-count
+# credibility (FINISHING_SHRINKAGE_SHOTS) since it's noisy at low shot volume.
+# SMOOTH weighted average, duel_win_rate dominant -- this is defensive_strength
+# / feeds team_strength(). See DEF_CORE_STATS/PRIMARY_AXIS_WEIGHT above for
+# why the individual "overall" display rating uses a DIFFERENT (max-weighted)
+# aggregation of the same underlying stats instead.
+DEF_WEIGHTS = {"duel_win_rate": 0.50, "dribbled_past_per_match": 0.20,
+                "interceptions_per_match": 0.12,
+                "clearances_per_match": 0.08, "blocks_per_match": 0.05,
+                "fouls_per_match": 0.03, "yellow_cards_per_match": 0.02}
+CREATION_WEIGHTS = {"key_passes_per_match": 0.35, "progressive_passes_per_match": 0.20,
+                     "progressive_carries_per_match": 0.13, "pass_completion": 0.12,
+                     "pass_completion_under_pressure": 0.20}
+# pass_completion_under_pressure (added 2026-07-02) = % of PRESSURED passes
+# completed -- composure, the signal that separates elite deep controllers
+# (Modrić 0.87, Xavi 0.91, Kroos 0.88 -- p90-p95) from average passers (Kanté
+# 0.77). This is Modrić's real strength that plain completion/key-passes miss.
+# "Creation"/organization axis: chance creation AND ball progression through
+# passing/carrying, not goals/xG (OFFENSIVE_STATS) or defending. key_passes is
+# the chance-creation signal; progressive_passes/progressive_carries (added
+# 2026-07-02, extracted from raw StatsBomb pass/carry end_location -- see
+# statsbomb.py) capture "plays the team forward", the missing signal that left
+# deep controllers (Modrić/Xavi/Kroos) and ball-playing defenders under-rated;
+# pass_completion is a secondary quality check so a careless passer isn't
+# over-rewarded. Progression is position-general (elite for ball-playing CBs
+# too), not a midfielder-only patch.
+CREATION_STATS = ["key_passes_per_match", "progressive_passes_per_match",
+                   "progressive_carries_per_match", "pass_completion"]
 # These 3 new-stat groups (defense-quality + creation) only exist for players
 # with StatsBomb Big5-league event coverage (~4987/9885 players) -- a
 # narrower, more precise sample than the "matches" column, which can include
@@ -110,6 +201,8 @@ CREATION_STATS = ["key_passes_per_match", "pass_completion"]
 DEFENSE_CREATION_STATS = {
     "duel_win_rate", "dribbled_past_per_match", "clearances_per_match", "blocks_per_match",
     "interceptions_per_match", "key_passes_per_match", "pass_completion",
+    "progressive_passes_per_match", "progressive_carries_per_match",
+    "pass_completion_under_pressure", "aerial_win_rate",
 }
 # duel_win_rate gets its OWN (larger) shrinkage constant: it's a win rate
 # over a few dozen discrete duels per match (not a smooth per-match count
@@ -118,12 +211,30 @@ DEFENSE_CREATION_STATS = {
 # (~0.75-0.76, boosted by small-sample variance) outscored Ramos/Piqué/Puyol
 # (~0.61-0.65 over 86-334 matches) even after the standard 12-match shrinkage.
 DUEL_SHRINKAGE_MATCHES = 60.0
+# finishing_per_shot is a per-shot overperformance rate -- very noisy at low
+# shot volume (a 5-shot hot streak isn't finishing skill), so it's shrunk by
+# SHOT count, not match count, with a large constant.
+FINISHING_SHRINKAGE_SHOTS = 100.0
 # GK rating: save_pct, goals-conceded/match, clean-sheet rate from
 # data/processed/goalkeeper_match_stats.csv (real match data, merged in at
 # fit() time — see _build_gk_scores). Keepers with no rows in that file
 # (rare) fall back to the neutral 50.0 placeholder.
 GK_STATS = ["save_pct", "ga_per_match", "cs_rate"]
 DEFAULT_GK_STATS_PATH = ROOT / "data/processed/goalkeeper_match_stats.csv"
+# Unified cross-era role ratings (role label + role-based BASE overall), built by
+# scripts/build_unified_player_ratings.py. Loaded at fit() time and used as the
+# display overall + role. Optional -- fit() no-ops if the file isn't built yet.
+DEFAULT_ROLE_RATINGS_PATH = ROOT / "data/processed/player_ratings_roles.csv"
+
+
+def _norm_name(n: str) -> str:
+    """Accent-stripped, lowercased, apostrophe/hyphen-normalised name key --
+    must match the `pn` key produced by scripts/build_unified_player_ratings.py."""
+    import unicodedata as _ud
+    s = _ud.normalize("NFKD", str(n))
+    s = "".join(c for c in s if not _ud.combining(c))
+    import re as _re
+    return _re.sub(r"\s+", " ", s.lower().replace("'", "").replace("`", "").replace("-", " ")).strip()
 
 # Players with few matches get their score shrunk toward the 50 (neutral)
 # baseline so a 2-3 game hot streak can't fake an elite anchor score.
@@ -171,42 +282,79 @@ ANCHOR_PRESSURES_PER_MATCH = [
     (14.23, 72), (15.45, 77), (21.5, 90),
 ]
 # Defensive QUALITY anchors (added 2026-07-01, see DEFENSIVE_STATS docstring
-# above). Calibrated from established (20+ Big5 matches) players across all
-# outfield positions plus real reference defenders (Van Dijk, Piqué, Puyol,
-# Ramos) -- see scripts/enrich_player_profiles_with_defense_creation.py for
-# the source columns.
+# above). RECALIBRATED same day (second pass) after the user asked for stars
+# to land ~90-92: the first calibration used ALL players' (20+ Big5 matches)
+# percentiles as the top reference, but the very top of that distribution was
+# dominated by small-sample noise (e.g. a 28-match player's duel_win_rate can
+# swing high by chance) -- established, high-credibility defenders (100+
+# Big5 matches: Piqué, Puyol, Alves, Alba, Mascherano...) never actually
+# reached those percentile extremes. Recalibrated the top control points
+# using ONLY established (100+ Big5 match) players' real ceiling instead --
+# same principle as the goals/assists/xG curves already using peak Messi as
+# the ~95 reference point, just applied to defense for the first time.
 ANCHOR_DUEL_WIN_RATE = [
-    (0.35, 30), (0.45, 40), (0.55, 50), (0.60, 55),
-    (0.65, 62), (0.70, 72), (0.75, 82), (0.85, 92),
+    (0.35, 25), (0.45, 35), (0.50, 42), (0.55, 50), (0.60, 58),
+    (0.633, 66), (0.65, 74), (0.670, 85), (0.75, 92), (0.85, 96),
 ]
-# Fewer times dribbled past = better.
+# Fewer times dribbled past = better. 0.356 = Umtiti, best among 100+-match defenders.
 ANCHOR_DRIBBLED_PAST_PER_MATCH = [
-    (0.0, 88), (0.15, 82), (0.35, 75), (0.7, 62),
-    (1.0, 55), (1.3, 48), (1.8, 38), (2.5, 30),
+    (0.0, 96), (0.2, 90), (0.356, 85), (0.5, 78), (0.794, 65),
+    (1.0, 55), (1.409, 42), (2.0, 32), (3.2, 22),
 ]
+# 5.261 = Puyol, best among 100+-match defenders (real ceiling, not the
+# small-sample 9.0 max seen only in ~30-match players).
 ANCHOR_CLEARANCES_PER_MATCH = [
-    (0.0, 35), (0.5, 45), (1.5, 55), (3.0, 65),
-    (4.5, 75), (6.0, 83), (7.5, 90), (9.0, 95),
+    (0.0, 30), (1.0, 45), (2.0, 55), (3.116, 65), (3.704, 75),
+    (4.5, 83), (5.261, 92), (7.0, 96), (9.0, 98),
 ]
 ANCHOR_BLOCKS_PER_MATCH = [
-    (0.0, 35), (0.5, 45), (1.0, 53), (1.5, 60),
-    (2.0, 68), (2.5, 76), (3.0, 83), (4.0, 90),
+    (0.0, 30), (0.8, 45), (1.494, 65), (1.8, 78),
+    (2.057, 90), (2.5, 94), (3.6, 98),
 ]
 ANCHOR_INTERCEPTIONS_PER_MATCH = [
-    (0.0, 35), (0.3, 46), (0.6, 54), (0.9, 61),
-    (1.3, 69), (1.7, 77), (2.2, 85), (3.0, 92),
+    (0.0, 30), (0.5, 45), (1.006, 65), (1.2, 78),
+    (1.412, 90), (2.0, 94), (3.6, 98),
 ]
 # Creation anchors -- key_passes_per_match is the primary chance-creation
-# signal; calibrated so real elite creators (Xavi 1.93, Modric 1.70, Kroos
-# 1.57, De Bruyne 2.76 key passes/match) land 80-96 while destroyer-type
-# midfielders who don't create (~0.5-1.0) stay mid-range.
+# signal. Recalibrated (second pass) so Xavi's own real max (1.931 key
+# passes/match, an established 264-match sample) is the ~95 reference point
+# directly, rather than a higher theoretical value nobody in the data reaches.
 ANCHOR_KEY_PASSES_PER_MATCH = [
-    (0.0, 35), (0.2, 45), (0.45, 52), (0.65, 58),
-    (0.9, 65), (1.2, 73), (1.6, 82), (2.2, 92), (2.8, 96),
+    (0.0, 35), (0.5, 50), (0.7, 60), (1.303, 78),
+    (1.68, 88), (1.931, 95), (2.8, 97),
 ]
 ANCHOR_PASS_COMPLETION = [
-    (0.55, 35), (0.65, 45), (0.72, 52), (0.78, 58),
-    (0.83, 68), (0.87, 78), (0.90, 85), (0.93, 92),
+    (0.55, 35), (0.72, 50), (0.799, 60), (0.888, 85),
+    (0.909, 95), (0.934, 97),
+]
+# Ball-progression anchors (added 2026-07-02). Calibrated from established
+# (50+ Big5-match) players' per-match distribution plus the real top end:
+# progressive passes median ~8.7, p90 15.2 (deep mids + ball-playing CBs like
+# Piqué 15.2, Kroos 15.8 lead; forwards much lower); progressive carries
+# median ~8.2, p95 13.9 (Messi 16.7 tops via dribble-carries).
+ANCHOR_PROGRESSIVE_PASSES = [
+    (0.0, 35), (4.0, 45), (8.5, 55), (10.5, 68), (12.0, 78),
+    (13.5, 85), (15.8, 93), (18.5, 97),
+]
+ANCHOR_PROGRESSIVE_CARRIES = [
+    (0.0, 35), (4.0, 45), (8.0, 54), (10.5, 70), (12.3, 82),
+    (14.0, 89), (17.4, 95), (20.0, 97),
+]
+# Composure (% pressured passes completed): median 0.77, p90 0.84, p95 0.87,
+# Xavi max 0.91. Aerial win rate: median 0.50, p90 0.64, top CBs ~0.74-0.75.
+ANCHOR_PASS_COMPLETION_UNDER_PRESSURE = [
+    (0.62, 35), (0.69, 45), (0.77, 55), (0.80, 65),
+    (0.84, 80), (0.87, 90), (0.91, 96),
+]
+ANCHOR_AERIAL_WIN_RATE = [
+    (0.25, 30), (0.37, 42), (0.50, 52), (0.58, 63),
+    (0.64, 75), (0.70, 85), (0.75, 92),
+]
+# Finishing (non-penalty goals - xG, per shot): 0 = finishes as expected (~55),
+# elite +0.05/+0.07 (Messi/Ibrahimović), profligate negative.
+ANCHOR_FINISHING_PER_SHOT = [
+    (-0.10, 32), (-0.05, 42), (-0.02, 50), (0.0, 55),
+    (0.03, 70), (0.05, 82), (0.07, 92), (0.10, 97),
 ]
 # Fewer fouls = better.
 ANCHOR_FOULS_PER_MATCH = [
@@ -251,6 +399,11 @@ ANCHOR_CURVES: dict[str, list[tuple[float, float]]] = {
     "interceptions_per_match": ANCHOR_INTERCEPTIONS_PER_MATCH,
     "key_passes_per_match": ANCHOR_KEY_PASSES_PER_MATCH,
     "pass_completion": ANCHOR_PASS_COMPLETION,
+    "progressive_passes_per_match": ANCHOR_PROGRESSIVE_PASSES,
+    "progressive_carries_per_match": ANCHOR_PROGRESSIVE_CARRIES,
+    "pass_completion_under_pressure": ANCHOR_PASS_COMPLETION_UNDER_PRESSURE,
+    "aerial_win_rate": ANCHOR_AERIAL_WIN_RATE,
+    "finishing_per_shot": ANCHOR_FINISHING_PER_SHOT,
 }
 
 # Competitions to exclude entirely from the rating pool. Men's and women's
@@ -322,6 +475,8 @@ class PlayerStrengthProfile:
     creation_strength: float = 0.0
     gk_strength: float = 0.0
     overall: float = 0.0
+    role: str = ""              # unified role label (e.g. "Creador", "Destructor")
+    role_overall: float = 0.0   # role-based BASE overall (from player_ratings_roles.csv)
     xg_per_match: float = 0.0
     goals_per_match: float = 0.0
     assists_per_match: float = 0.0
@@ -385,6 +540,22 @@ class PlayerStrengthModel:
             df["duel_win_rate"] = pd.to_numeric(df["duel_win_rate"], errors="coerce").fillna(0.5)
         if "pass_completion" in df.columns:
             df["pass_completion"] = pd.to_numeric(df["pass_completion"], errors="coerce").fillna(0.75)
+        # New non-"_per_match" rate/skill columns (2026-07-02): explicit
+        # coercion + neutral fallbacks, mirroring duel_win_rate/pass_completion.
+        if "pass_completion_under_pressure" in df.columns:
+            df["pass_completion_under_pressure"] = pd.to_numeric(
+                df["pass_completion_under_pressure"], errors="coerce").fillna(0.75)
+        else:
+            df["pass_completion_under_pressure"] = 0.75
+        if "aerial_win_rate" in df.columns:
+            df["aerial_win_rate"] = pd.to_numeric(df["aerial_win_rate"], errors="coerce").fillna(0.5)
+        else:
+            df["aerial_win_rate"] = 0.5
+        for _c in ("finishing_per_shot", "finishing_shots"):
+            if _c in df.columns:
+                df[_c] = pd.to_numeric(df[_c], errors="coerce").fillna(0.0)
+            else:
+                df[_c] = 0.0
         if "defense_creation_matches" in df.columns:
             df["defense_creation_matches"] = pd.to_numeric(
                 df["defense_creation_matches"], errors="coerce").fillna(0.0)
@@ -398,27 +569,32 @@ class PlayerStrengthModel:
         # together. All weights are positive: each stat's ANCHOR_CURVES entry
         # is already oriented so a higher score is always better (miss rate
         # and discipline stats are pre-inverted).
-        off_weights = {"goals_per_match": 0.30, "assists_per_match": 0.30,
-                        "xg_per_match": 0.25, "big_chance_miss_rate": 0.15}
-        # duel_win_rate carries most of the weight: confirmed (2026-07-01,
-        # 99-team-season regression) it's the ONLY defensive stat here that's
-        # POSITIVELY correlated with real team quality (+0.46 with real
-        # defense_param) -- clearances/blocks are still volume/possession-
-        # confounded (-0.46/-0.56, same flaw as the dropped tackles/pressures,
-        # just measured deeper in the defensive third), so they're kept at a
-        # small weight rather than dropped outright (still a real signal for
-        # last-ditch defending, just a noisier one).
-        def_weights = {"duel_win_rate": 0.50, "dribbled_past_per_match": 0.20,
-                        "interceptions_per_match": 0.12,
-                        "clearances_per_match": 0.08, "blocks_per_match": 0.05,
-                        "fouls_per_match": 0.03, "yellow_cards_per_match": 0.02}
-        creation_weights = {"key_passes_per_match": 0.65, "pass_completion": 0.35}
+        # big_chance_miss_rate dropped from off_score (second pass, 2026-07-01):
+        # it's a deliberately narrow-banded, noisy stat (see its ANCHOR docstring)
+        # that only ever dragged down elite scorers' off_score without adding
+        # real separating signal -- goals/assists/xG alone (evenly weighted)
+        # let genuine scorers approach their real ceiling.
+        # def_score (defensive_strength, feeds team_strength()'s squad->real-team
+        # lambda bridge) stays a SMOOTH weighted average with duel_win_rate
+        # dominant -- confirmed (2026-07-01) this is the version that actually
+        # correlates with real team defense_param (R^2=0.354 in the squad
+        # calibration). A max-weighted version (see def_score_primary below,
+        # used only inside "overall") was tried here first but collapsed team
+        # calibration to R^2=0.002 -- "whichever stat THIS player individually
+        # happens to be best at" is a much noisier team-level signal once
+        # averaged across 11 different players' different best facets, versus
+        # everyone's duel_win_rate specifically (the one stat with real
+        # team-level predictive power). Individual display rating and team
+        # strength genuinely want different aggregations of the same inputs.
+        off_weights = OFF_WEIGHTS
+        def_weights = DEF_WEIGHTS
+        creation_weights = CREATION_WEIGHTS
 
         # Map every stat through its fixed anchor curve (absolute, not
         # ranked against the rest of the pool) via np.interp — vectorised,
         # values outside the anchor range just clamp to the nearest end.
         score_cols: dict[str, str] = {}
-        for stat in list(off_weights) + list(def_weights) + list(creation_weights):
+        for stat in list(off_weights) + list(def_weights) + list(creation_weights) + DEF_CORE_STATS:
             if stat not in df.columns:
                 continue
             anchors = ANCHOR_CURVES[stat]
@@ -440,9 +616,12 @@ class PlayerStrengthModel:
         credibility = df["matches"] / (df["matches"] + SHRINKAGE_MATCHES)
         credibility_dq = df["defense_creation_matches"] / (df["defense_creation_matches"] + SHRINKAGE_MATCHES)
         credibility_duel = df["defense_creation_matches"] / (df["defense_creation_matches"] + DUEL_SHRINKAGE_MATCHES)
+        credibility_fin = df["finishing_shots"] / (df["finishing_shots"] + FINISHING_SHRINKAGE_SHOTS)
         for stat, score_col in score_cols.items():
             if stat == "duel_win_rate":
                 cred = credibility_duel
+            elif stat == "finishing_per_shot":
+                cred = credibility_fin
             elif stat in DEFENSE_CREATION_STATS:
                 cred = credibility_dq
             else:
@@ -461,19 +640,61 @@ class PlayerStrengthModel:
         creation_den = sum(w for s, w in creation_weights.items() if s in score_cols)
         df["creation_score"] = (creation_num / creation_den).clip(0, 100) if creation_den > 0 else 50.0
 
-        # overall = position-weighted blend of the three absolute scores. No
-        # percentile re-rank, no curve — the anchor tables already calibrate
-        # the 0-100 range (median established player ~58-60, genuine legends
-        # ~90-95), so the blend doesn't need further reshaping.
-        atk_w_s = df["position_group"].map(POSITION_ATTACK_WEIGHT).fillna(0.40)
-        def_w_s = df["position_group"].map(POSITION_DEFENSE_WEIGHT).fillna(0.35)
-        cre_w_s = df["position_group"].map(POSITION_CREATION_WEIGHT).fillna(0.25)
-        w_sum_s = atk_w_s + def_w_s + cre_w_s
-        df["overall"] = (
-            (atk_w_s / w_sum_s) * df["off_score"]
-            + (def_w_s / w_sum_s) * df["def_score"]
-            + (cre_w_s / w_sum_s) * df["creation_score"]
+        # def_score_primary: a SEPARATE, max-weighted read of defensive
+        # quality used ONLY for the "overall" display rating below (see
+        # PRIMARY_AXIS_WEIGHT docstring) -- a player's single best defensive
+        # facet (duel win rate, anti-dribbling, clearances, blocks,
+        # interceptions) dominates, same logic as off_score letting a pure
+        # poacher's goals alone carry them. Deliberately NOT stored as
+        # defensive_strength/used by team_strength() -- see def_weights
+        # comment above for why that would break squad-lambda calibration.
+        core_matrix = np.column_stack([df[score_cols[s]].to_numpy() for s in DEF_CORE_STATS])
+        core_primary = core_matrix.max(axis=1)
+        core_secondary = (core_matrix.sum(axis=1) - core_primary) / (len(DEF_CORE_STATS) - 1)
+        discipline_num = sum(df[score_cols[s]] * w for s, w in DEF_DISCIPLINE_WEIGHT.items() if s in score_cols)
+        discipline_den = sum(w for s, w in DEF_DISCIPLINE_WEIGHT.items() if s in score_cols)
+        discipline_score = (discipline_num / discipline_den) if discipline_den > 0 else 50.0
+        core_weight = DEF_CORE_PRIMARY_WEIGHT + DEF_CORE_SECONDARY_WEIGHT
+        def_score_primary = (
+            DEF_CORE_PRIMARY_WEIGHT * core_primary + DEF_CORE_SECONDARY_WEIGHT * core_secondary
+            + (1 - core_weight) * discipline_score
         ).clip(0, 100)
+
+        # overall: the player's position-appropriate PRIMARY axis dominates
+        # (see PRIMARY_AXIS_WEIGHT docstring) rather than a straight 3-way
+        # average, which structurally capped every specialist's ceiling.
+        # Forward/Defender always use off_score/def_score as primary (that's
+        # what defines those positions); Midfielder/Unknown use whichever of
+        # the 3 axes is highest for that specific player, since midfielders
+        # genuinely specialise differently (creator vs destroyer vs box-to-box).
+        primary_w = df["position_group"].map(PRIMARY_AXIS_WEIGHT).fillna(0.75)
+        is_forward = df["position_group"] == "Forward"
+        is_defender = df["position_group"] == "Defender"
+        def_score_primary_arr = np.asarray(def_score_primary)
+        axis_matrix = np.column_stack([df["off_score"].to_numpy(), def_score_primary_arr, df["creation_score"].to_numpy()])
+        best_axis = axis_matrix.max(axis=1)
+        avg_other_two = (axis_matrix.sum(axis=1) - best_axis) / 2
+        primary = np.select(
+            [is_forward.to_numpy(), is_defender.to_numpy()],
+            [df["off_score"].to_numpy(), def_score_primary_arr],
+            default=best_axis,
+        )
+        secondary = np.select(
+            [is_forward.to_numpy(), is_defender.to_numpy()],
+            [(def_score_primary_arr + df["creation_score"].to_numpy()) / 2,
+             (df["off_score"].to_numpy() + df["creation_score"].to_numpy()) / 2],
+            default=avg_other_two,
+        )
+        # Polyvalence bonus (2026-07-02): reward a strong SECOND axis so a
+        # complete midfielder (organizes AND defends) beats a one-axis
+        # specialist -- WITHOUT lowering the specialist (pure specialists have a
+        # weak second axis -> ~0 bonus). Only a second axis above ~68 triggers
+        # it; capped at +3.5. This is what the earlier "weight bands" idea was
+        # meant to achieve, done far more cheaply (bands diluted everyone down).
+        second_best_axis = np.sort(axis_matrix, axis=1)[:, -2]
+        polyvalence_bonus = np.clip(0.20 * (second_best_axis - 68.0), 0.0, 3.5)
+        df["overall"] = (primary_w * primary + (1 - primary_w) * secondary
+                          + polyvalence_bonus).clip(0, 100)
 
         # Goalkeepers are a special case: the tackles/pressures anchor curve
         # is calibrated on outfield defenders, and keepers naturally record
@@ -521,7 +742,29 @@ class PlayerStrengthModel:
                 pressures_per_match=float(row.get("pressures_per_match", 0)),
                 raw_stats={c: float(row.get(c, 0)) for c in stat_cols if c in row.index},
             )
+        self._apply_role_ratings()
         return self
+
+    def _apply_role_ratings(self, path: str | Path | None = None) -> None:
+        """Attach the unified cross-era role label + role-based BASE overall
+        (from player_ratings_roles.csv) to each profile and use it as the
+        display `overall`. team_strength() is unaffected -- it uses the axis
+        scores (offensive/defensive/creation_strength), NOT overall. No-ops
+        silently if the ratings file hasn't been built yet."""
+        rr_path = Path(path) if path else DEFAULT_ROLE_RATINGS_PATH
+        if not rr_path.exists():
+            return
+        rr = pd.read_csv(rr_path)
+        by_pn: dict[str, tuple[str, float]] = {}
+        for _, r in rr.iterrows():
+            pn = str(r.get("pn", ""))
+            if pn and pn not in by_pn and pd.notna(r.get("base_ovr")):
+                by_pn[pn] = (str(r.get("role", "")), float(r["base_ovr"]))
+        for prof in self.profiles_.values():
+            hit = by_pn.get(_norm_name(prof.player))
+            if hit:
+                prof.role, prof.role_overall = hit[0], round(hit[1], 1)
+                prof.overall = prof.role_overall
 
     def search(self, query: str, position: str | None = None,
                competition: str | None = None, top_n: int = 20) -> list[PlayerStrengthProfile]:

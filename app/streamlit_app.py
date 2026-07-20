@@ -412,6 +412,7 @@ st.sidebar.divider()
 page = st.sidebar.radio("", [
     "🗓️  Jornada",
     "🏆  Competición",
+    "📊  Pronóstico de liga",
     "🥇  Premios Individuales",
     "🧪  SquadLab",
 ], label_visibility="collapsed")
@@ -763,6 +764,13 @@ elif page == "🥇  Premios Individuales":
 # ══════════════════════════════════════════════════════════════════════════════
 #  SQUADLAB
 # ══════════════════════════════════════════════════════════════════════════════
+elif page == "📊  Pronóstico de liga":
+    spec = importlib.util.spec_from_file_location(
+        "competition_forecast_page", Path(__file__).parent / "competition_forecast_page.py")
+    cf_page = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cf_page)
+    cf_page.render()
+
 elif page == "🧪  SquadLab":
     spec = importlib.util.spec_from_file_location(
         "squadlab_page", Path(__file__).parent / "squadlab_page.py")

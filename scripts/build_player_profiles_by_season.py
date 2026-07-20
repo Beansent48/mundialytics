@@ -55,6 +55,14 @@ STAT_COLS = [
     "goals", "assists", "passes", "complete_passes", "key_passes", "pressures",
     "tackles", "interceptions",
     "duels", "duels_won", "duels_lost", "dribbled_past", "clearances", "blocks",
+    # Ball-progression + on-ball creation (added 2026-07-02, see statsbomb.py
+    # adapter). Position-general -- captures ball-playing defenders and deep
+    # controllers (Modrić/Xavi/Kroos) that duel/finishing stats miss.
+    "progressive_passes", "passes_into_final_third", "passes_into_box",
+    "through_balls", "carries", "progressive_carries", "dribbles", "successful_dribbles",
+    # Composure + aerial (added 2026-07-02): passing under pressure, aerial duels.
+    "passes_under_pressure", "complete_passes_under_pressure", "aerials_won", "aerials_lost",
+    "crosses", "cut_backs",  # wide play (winger / attacking full-back roles)
 ]
 
 
@@ -154,6 +162,17 @@ def main() -> None:
         grouped["duels_won"] / known_outcome_duels.clip(lower=1)
     ).where(known_outcome_duels > 0, 0.5)
 
+    # Composure: % of pressured passes completed (fallback neutral 0.75).
+    pressured = grouped["passes_under_pressure"]
+    grouped["pass_completion_under_pressure"] = (
+        grouped["complete_passes_under_pressure"] / pressured.clip(lower=1)
+    ).where(pressured > 0, 0.75)
+    # Aerial: win rate (quality) + wins per match (volume, for target men).
+    aerial_total = grouped["aerials_won"] + grouped["aerials_lost"]
+    grouped["aerial_win_rate"] = (
+        grouped["aerials_won"] / aerial_total.clip(lower=1)
+    ).where(aerial_total > 0, 0.5)
+
     grouped["position"] = grouped["player"].map(position_map).fillna("Unknown")
 
     # Rename to match the existing career-file's column naming convention
@@ -173,6 +192,12 @@ def main() -> None:
         "big_chances_missed_per_match", "big_chance_miss_rate",
         "duels_per_match", "duel_win_rate", "dribbled_past_per_match",
         "clearances_per_match", "blocks_per_match",
+        "progressive_passes_per_match", "passes_into_final_third_per_match",
+        "passes_into_box_per_match", "through_balls_per_match",
+        "carries_per_match", "progressive_carries_per_match",
+        "successful_dribbles_per_match",
+        "pass_completion_under_pressure", "aerial_win_rate", "aerials_won_per_match",
+        "crosses_per_match", "cut_backs_per_match",
     ]
     grouped = grouped[keep_cols].sort_values(["player", "season"]).reset_index(drop=True)
 
