@@ -30,6 +30,28 @@ def _player_id(ev: dict) -> str | None:
     return None if pid is None else str(pid)
 
 
+# StatsBomb pitch is 120x80 (yards), opponent goal at (120, 40). Used to
+# derive ball-PROGRESSION metrics (progressive passes/carries, entries into
+# the final third / penalty area) from each event's start/end coordinates.
+# These capture "plays the team forward", which the duel/volume/finishing
+# stats all miss for deep controllers (Modrić, Xavi, Kroos) and ball-playing
+# defenders alike -- position-general, not just a midfielder fix.
+_GOAL_XY = (120.0, 40.0)
+_PROG_PASS_MIN = 10.0   # yards a completed pass must gain toward goal to count
+_PROG_CARRY_MIN = 5.0   # yards a carry must gain toward goal to count (carries are shorter)
+
+
+def _dist_to_goal(loc: Any) -> float | None:
+    if not loc or len(loc) < 2:
+        return None
+    return ((loc[0] - _GOAL_XY[0]) ** 2 + (loc[1] - _GOAL_XY[1]) ** 2) ** 0.5
+
+
+def _in_box(loc: Any) -> bool:
+    """True if a StatsBomb [x, y] location is inside the opponent penalty area."""
+    return bool(loc) and len(loc) >= 2 and loc[0] >= 102.0 and 18.0 <= loc[1] <= 62.0
+
+
 def statsbomb_open_data_match_metadata(data_root: str | Path) -> dict[str, dict]:
     """Scan a StatsBomb Open Data root and return match_id -> metadata.
 
@@ -130,6 +152,18 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
                 "dribbled_past": 0,
                 "clearances": 0,
                 "blocks": 0,
+                "progressive_passes": 0,
+                "passes_into_final_third": 0,
+                "passes_into_box": 0,
+                "through_balls": 0,
+                "carries": 0,
+                "progressive_carries": 0,
+                "passes_under_pressure": 0,
+                "complete_passes_under_pressure": 0,
+                "aerials_won": 0,
+                "aerials_lost": 0,
+                "crosses": 0,
+                "cut_backs": 0,
             }
         return rows[key]
 
@@ -177,12 +211,45 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
         elif typ == "Pass":
             p = ev.get("pass") or {}
             r["passes"] += 1
+            # Passing UNDER PRESSURE -- composure signal (retention when
+            # pressed), a key separator of elite deep controllers that plain
+            # pass completion misses.
+            if ev.get("under_pressure"):
+                r["passes_under_pressure"] += 1
+                if p.get("outcome") is None:
+                    r["complete_passes_under_pressure"] += 1
             if p.get("outcome") is None:
                 r["complete_passes"] += 1
+                # Ball progression from a COMPLETED pass only (an incomplete
+                # forward ball didn't actually advance possession).
+                start, end = ev.get("location"), p.get("end_location")
+                d0, d1 = _dist_to_goal(start), _dist_to_goal(end)
+                if d0 is not None and d1 is not None and d0 - d1 >= _PROG_PASS_MIN:
+                    r["progressive_passes"] += 1
+                if start and end and len(start) >= 2 and len(end) >= 2 and start[0] < 80.0 <= end[0]:
+                    r["passes_into_final_third"] += 1
+                if _in_box(end) and not _in_box(start):
+                    r["passes_into_box"] += 1
+            # Through balls: creative intent, counted regardless of completion.
+            if ((p.get("technique") or {}).get("name")) == "Through Ball":
+                r["through_balls"] += 1
+            # Crosses / cut-backs -- wide-play signals for winger / attacking-
+            # full-back roles (see the archetype system).
+            if p.get("cross") is True:
+                r["crosses"] += 1
+            if p.get("cut_back") is True:
+                r["cut_backs"] += 1
             if p.get("goal_assist") is True:
                 r["assists"] += 1
             if p.get("shot_assist") is True:
                 r["key_passes"] += 1
+        elif typ == "Carry":
+            r["carries"] += 1
+            start, end = ev.get("location"), (ev.get("carry") or {}).get("end_location")
+            d0, d1 = _dist_to_goal(start), _dist_to_goal(end)
+            if (d0 is not None and d1 is not None and d0 - d1 >= _PROG_CARRY_MIN) \
+                    or (_in_box(end) and not _in_box(start)):
+                r["progressive_carries"] += 1
         elif typ == "Pressure":
             r["pressures"] += 1
         elif typ == "Duel":
@@ -190,6 +257,10 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
             duel_type = (((ev.get("duel") or {}).get("type") or {}).get("name") or "").lower()
             if "tackle" in duel_type:
                 r["tackles"] += 1
+            # "Aerial Lost" is the only aerial DUEL sub-type; aerials WON are
+            # flagged on the underlying Pass/Shot/Clearance event instead (below).
+            if "aerial" in duel_type:
+                r["aerials_lost"] += 1
             # Outcome is missing for a large share of duels (untagged
             # sub-type, mostly off-ball challenges) -- those are left out of
             # both won/lost so the win rate isn't diluted by unknowns.
@@ -215,6 +286,14 @@ def statsbomb_events_to_player_events(events_json: str | Path, *, match_id: str 
         elif typ == "Block":
             r["blocks"] += 1
 
+        # Aerial duels WON are flagged (aerial_won=True) on the underlying
+        # action event (Pass/Shot/Clearance/Miscontrol), not as their own event
+        # -- checked outside the elif chain so it catches every carrier type.
+        for _sub in (ev.get("pass"), ev.get("shot"), ev.get("clearance"), ev.get("miscontrol")):
+            if isinstance(_sub, dict) and _sub.get("aerial_won") is True:
+                r["aerials_won"] += 1
+                break
+
     for r in rows.values():
         opponents = [t for t in teams_seen if t != r["team"]]
         r["opponent"] = opponents[0] if opponents else None
@@ -233,6 +312,10 @@ def statsbomb_events_to_team_events(events_json: str | Path, *, match_id: str | 
         "assists", "passes", "complete_passes", "key_passes", "pressures", "duels", "dribbles", "successful_dribbles",
         "tackles", "interceptions", "ball_recoveries",
         "duels_won", "duels_lost", "dribbled_past", "clearances", "blocks",
+        "progressive_passes", "passes_into_final_third", "passes_into_box",
+        "through_balls", "carries", "progressive_carries",
+        "passes_under_pressure", "complete_passes_under_pressure", "aerials_won", "aerials_lost",
+        "crosses", "cut_backs",
     ]
     out = pe.groupby(["match_id", "date", "competition", "team_scope", "team", "opponent"], dropna=False)[agg_cols].sum().reset_index()
     out = out.rename(columns={

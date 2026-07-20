@@ -56,12 +56,38 @@ account, and [[project_player_rating_data]] memory.
 Re-running scripts/fit_squad_lambda_calibration_season_scoped.py against the
 rebuilt formula: attack_idx -> attack_param R^2 = 0.681 (up from 0.643),
 defense_idx -> defense_param R^2 = 0.354 (up from 0.012) — both now precise,
-human-reviewed per-club fits. GOAL_ATTACK_SLOPE/INTERCEPT and
-GOAL_DEFENSE_SLOPE/INTERCEPT below are this fit's coefficients. Defense is
-still a weaker fit than attack (0.354 vs 0.681) — the available data only
-supports a modest defensive-quality signal (duel win rate has real but
-limited separating power vs. goals-per-match for attack), not a data bug to
-chase further without new stats.
+human-reviewed per-club fits. Defense is still a weaker fit than attack
+(0.354 vs 0.681) — the available data only supports a modest defensive-
+quality signal (duel win rate has real but limited separating power vs.
+goals-per-match for attack), not a data bug to chase further without new stats.
+
+THIRD PASS (2026-07-01, same day): the user asked for individual "overall"
+star ratings to land ~90-92 (see [[project_player_rating_data]]). Fixing that
+required two changes that shifted this calibration again:
+  1. A NEW max-weighted "def_score_primary" was added for the individual
+     overall rating ONLY (a player's single best defensive facet dominates,
+     matching how off_score already lets a pure poacher's goals alone carry
+     them) -- but team_strength()/defensive_strength deliberately kept the
+     OLD smooth DEF_WEIGHTS average, since the max-weighted version collapsed
+     this exact calibration's defense R^2 to 0.002 when tried here (11
+     different players' 11 different "best facets" average into a much
+     noisier team signal than everyone's duel_win_rate specifically).
+  2. The defensive-quality ANCHOR_* curves were recalibrated using ONLY
+     established (100+ Big5-match) players' real ceiling as the top
+     reference point, rather than all-players percentiles (which let small-
+     sample noise set an unreachable top end) -- this changed the absolute
+     scores feeding BOTH defensive_strength and def_score_primary, and
+     nudged this calibration's defense R^2 from 0.354 to 0.251 (still far
+     above the original 0.012, just not quite back to the second-pass peak).
+Re-fit result this pass: attack R^2 = 0.676, defense R^2 = 0.251.
+
+Also re-ran against the SEPARATE historical-data-completion work done the
+same session: data/processed/foundation_big5_multi_season.csv was extended
+from 5 seasons (2021-2026, 8907 matches) to 26 seasons (2000/01-2025/26,
+45841 matches, all via football-data.co.uk) -- AttackDefenseModel now fits
+219 teams instead of 130, which is why ATTACK_PARAM_CLIP/DEFENSE_PARAM_CLIP
+shifted slightly below (independent of the player-rating changes above,
+these come purely from the real fitted model's own parameter range).
 
 The range-based fallback logic still exists in the codebase for markets
 where no precise regression was attempted: map the OBSERVED RANGE of
@@ -69,10 +95,8 @@ achievable squad strength (weakest/strongest draftable XI) onto the OBSERVED
 RANGE of real AttackDefenseModel parameters/event rates via a two-point
 linear map — correct ordering and a realistic scale, not per-club precision.
 This still governs EVENT_CALIBRATION (shots/sot/corners/fouls/yellow_cards)
-below, re-run 2026-07-01 to reflect the rebuilt formula's shifted
-attack_index/defense_index achievable range (defense_index in particular
-compressed from ~72 max to ~63 max, since duel-win-rate has less dynamic
-range than raw tackle/pressure volume did).
+below, re-run 2026-07-01 against both the extended 26-season match dataset
+and the recalibrated player-rating formula.
 
 Recomputed by: scripts/fit_squad_lambda_calibration.py (range-based,
 EVENT_CALIBRATION + param clips) and
@@ -84,26 +108,27 @@ from __future__ import annotations
 # regressions from scripts/fit_squad_lambda_calibration_season_scoped.py —
 # attack_idx/defense_idx of a season-reconstructed real roster -> that team's
 # real AttackDefenseModel attack_param/defense_param for that same season, 99
-# matched team-seasons. R^2 = 0.681 (attack) / 0.354 (defense).
-GOAL_ATTACK_SLOPE: float = 0.097868
-GOAL_ATTACK_INTERCEPT: float = -5.347848
-GOAL_DEFENSE_SLOPE: float = 0.159608
-GOAL_DEFENSE_INTERCEPT: float = -8.792863
+# matched team-seasons. R^2 = 0.676 (attack) / 0.251 (defense).
+GOAL_ATTACK_SLOPE: float = 0.082619
+GOAL_ATTACK_INTERCEPT: float = -4.461046
+GOAL_DEFENSE_SLOPE: float = 0.123884
+GOAL_DEFENSE_INTERCEPT: float = -7.034504
 
 # Safety clip: never let an extreme squad extrapolate past the real
-# attack/defense parameter range AttackDefenseModel actually produced
-# across its 130 fitted teams.
-ATTACK_PARAM_CLIP: tuple[float, float] = (-1.1593, 1.3526)
-DEFENSE_PARAM_CLIP: tuple[float, float] = (-0.5581, 0.6256)
+# attack/defense parameter range AttackDefenseModel actually produced —
+# now across 219 teams / 26 seasons (2000/01-2025/26) after the historical
+# data-completion pass, up from 130 teams / 5 seasons.
+ATTACK_PARAM_CLIP: tuple[float, float] = (-1.1565, 1.3858)
+DEFENSE_PARAM_CLIP: tuple[float, float] = (-0.4436, 0.6626)
 
 # Per-market event-rate calibration: (basis_index, slope, intercept, clip_min, clip_max).
 # basis_index is "attack" for attack-driven markets (shots/sot/corners) or
 # "defense" for discipline markets (fouls/yellow_cards — more aggressive
 # defending tends to mean more fouls, not fewer).
 EVENT_CALIBRATION: dict[str, dict[str, float | str]] = {
-    "shots":        {"basis": "attack",  "slope": 0.2372, "intercept": -1.2817, "clip_min": 8.39, "clip_max": 18.98},
-    "sot":          {"basis": "attack",  "slope": 0.0996, "intercept": -1.4226, "clip_min": 2.34, "clip_max": 7.89},
-    "corners":      {"basis": "attack",  "slope": 0.0906, "intercept": -0.5847, "clip_min": 2.97, "clip_max": 7.05},
-    "fouls":        {"basis": "defense", "slope": 0.2759, "intercept": -3.3737, "clip_min": 8.46, "clip_max": 15.71},
-    "yellow_cards": {"basis": "defense", "slope": 0.0694, "intercept": -1.8084, "clip_min": 1.37, "clip_max": 3.16},
+    "shots":        {"basis": "attack",  "slope": 0.2017, "intercept": 0.2651, "clip_min": 8.19, "clip_max": 17.21},
+    "sot":          {"basis": "attack",  "slope": 0.1105, "intercept": -1.8139, "clip_min": 2.68, "clip_max": 7.20},
+    "corners":      {"basis": "attack",  "slope": 0.0777, "intercept": 0.3454, "clip_min": 3.50, "clip_max": 6.58},
+    "fouls":        {"basis": "defense", "slope": 0.4279, "intercept": -9.9959, "clip_min": 9.55, "clip_max": 22.34},
+    "yellow_cards": {"basis": "defense", "slope": 0.0666, "intercept": -1.7220, "clip_min": 1.24, "clip_max": 2.98},
 }

@@ -26,3 +26,6 @@ soccerdata_cache/
 .DS_Store
 Thumbs.db
 *.log
+
+# Claude Code local tooling config (machine-specific)
+.claude/
