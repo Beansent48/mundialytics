@@ -100,7 +100,9 @@ def load_club_engine():
     df = load_clubs_data()
     elo = EloRater(EloConfig(season_reset_fraction=0.40))
     elo_hist = elo.fit(df)
-    engine = PredictionEngine(blend_weight_gl=0.60, ad_rho=-0.07)
+    # blend_weight_gl 0.30 (was 0.60): 8-fold backtest — goals-AttackDefense
+    # deserves ~70%, GL ~30% (0.30 beat 0.60 in 8/8 folds). See project_xg_modeling_findings.
+    engine = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07)
     engine.fit(df, elo_history=pd.DataFrame(elo.history))
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
     return engine, teams, df

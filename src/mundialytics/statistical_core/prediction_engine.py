@@ -128,18 +128,34 @@ class PredictionEngine:
         event_model_type: str = "poisson",
         ad_rho: float = -0.07,
         ad_time_decay: float | None = None,
-        blend_weight_gl: float = 0.60,   # weight for GoalLambdaModel vs AttackDefense
+        blend_weight_gl: float = 0.60,   # weight for GoalLambdaModel
         max_goals: int = 10,
+        use_xg: bool = True,             # feed rolling pre-match xG features to GoalLambdaModel
+        blend_weight_ad_xg: float = 0.0, # weight for the xG-target AttackDefense estimator
+        learn_blend: bool = False,       # learn the GL/AD blend at fit time via internal temporal holdout
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
         self.ad_rho = ad_rho
         self.ad_time_decay = ad_time_decay
-        self.blend_gl = float(np.clip(blend_weight_gl, 0.0, 1.0))
         self.max_goals = max_goals
+        self.use_xg = bool(use_xg)
+        self.learn_blend = bool(learn_blend)
+        self.blend_learned_ = False  # set True once _learn_blend_weight overrides the blend
+
+        # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
+        # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
+        # the legacy 60/40 GL/AD blend exactly (no xG-AD estimator, backward compatible).
+        w_gl = float(np.clip(blend_weight_gl, 0.0, 1.0))
+        w_adx = float(np.clip(blend_weight_ad_xg, 0.0, 1.0))
+        w_ad = max(0.0, 1.0 - w_gl - w_adx)
+        tot = w_gl + w_ad + w_adx
+        self.blend_gl, self.blend_ad, self.blend_ad_xg = (w_gl / tot, w_ad / tot, w_adx / tot)
+        self.use_xg_ad = self.blend_ad_xg > 0.0
 
         self.goal_model_: GoalLambdaModel | None = None
         self.ad_model_: AttackDefenseModel | None = None
+        self.ad_xg_model_: AttackDefenseModel | None = None
         self.event_models_: dict[str, EventLambdaModel] = {}
         self._train_frame: pd.DataFrame | None = None
         # Cache: (team, is_home) → last training row — built once at fit time
@@ -161,12 +177,24 @@ class PredictionEngine:
         team_rows : optional pre-built per-team rows with rolling stats
         elo_history : optional pre-computed ELO history DataFrame
         """
-        # AttackDefenseModel (per-league MLE)
+        # AttackDefenseModel (per-league MLE, goals target)
         self.ad_model_ = AttackDefenseModel(
             dixon_coles_rho=self.ad_rho,
             time_decay_half_life=self.ad_time_decay,
         )
         self.ad_model_.fit(matches)
+
+        # xG-target AttackDefenseModel — strengths from chance quality, not finishing
+        # luck. Only fit when it carries blend weight AND xG is available.
+        self.ad_xg_model_ = None
+        if self.use_xg_ad and {"home_xg", "away_xg"}.issubset(matches.columns):
+            xg_matches = matches.dropna(subset=["home_xg", "away_xg"])
+            if len(xg_matches) >= 200:
+                self.ad_xg_model_ = AttackDefenseModel(
+                    time_decay_half_life=self.ad_time_decay,
+                    target="xg",
+                )
+                self.ad_xg_model_.fit(xg_matches)
 
         # GoalLambdaModel (Poisson GLM with rolling features + ELO)
         if team_rows is not None and not team_rows.empty:
@@ -194,7 +222,97 @@ class PredictionEngine:
             for (team, is_home), grp in sorted_frame.groupby(["team", "is_home"]):
                 self._team_row_cache[(str(team), int(is_home))] = grp.iloc[[-1]].copy()
 
+        # Learn the GL/AD(/xG-AD) blend from an internal temporal holdout. Backtests
+        # showed the fixed 60/40 GL/AD split is miscalibrated in the ELO-free regime
+        # (AD deserves ~70%); learning adapts to the actual data/feature regime.
+        if self.learn_blend and team_rows is None:
+            self._learn_blend_weight(matches, elo_history)
+
         return self
+
+    def _learn_blend_weight(
+        self,
+        matches: pd.DataFrame,
+        elo_history: pd.DataFrame | None,
+        val_frac: float = 0.25,
+        grid_step: float = 0.05,
+    ) -> None:
+        """Pick blend weights minimizing 1X2 RPS on an internal temporal holdout.
+
+        Fits a temporary engine on the earlier (1-val_frac) of the training window,
+        blends its GL/AD/xG-AD lambda components on the held-out tail, and grid-searches
+        the GL-vs-AD split (and xG-AD share, when active) that minimizes RPS. The learned
+        weights are then applied to the already-fitted full-data models. Leakage-safe:
+        weights are chosen only from data inside the training window.
+        """
+        m = matches.dropna(subset=["home_goals", "away_goals"]).copy()
+        m["date"] = pd.to_datetime(m.get("date"), errors="coerce")
+        m = m.dropna(subset=["date"]).sort_values("date")
+        if len(m) < 800:
+            return
+        cut = m["date"].quantile(1.0 - val_frac)
+        inner, val = m[m["date"] < cut], m[m["date"] >= cut]
+        if len(inner) < 500 or len(val) < 200:
+            return
+
+        tmp = PredictionEngine(
+            goal_model_type=self.goal_model_type, event_model_type=self.event_model_type,
+            ad_rho=self.ad_rho, ad_time_decay=self.ad_time_decay, max_goals=self.max_goals,
+            use_xg=self.use_xg, blend_weight_gl=self.blend_gl,
+            blend_weight_ad_xg=self.blend_ad_xg, learn_blend=False,
+        )
+        tmp.fit(inner, elo_history=elo_history)
+
+        gl_h, gl_a, ad_h, ad_a, adx_h, adx_a, outcome = ([] for _ in range(7))
+        for _, r in val.iterrows():
+            h, a = canonical_name(r["home_team"]), canonical_name(r["away_team"])
+            comp = str(r.get("competition", "unknown")); neu = bool(r.get("neutral", 0))
+            lgh, lga = tmp._lambdas_gl(h, a, comp)
+            adh, ada = tmp._lambdas_ad(h, a, comp, neu)
+            if tmp.ad_xg_model_ is not None:
+                axh, axa, _ = tmp.ad_xg_model_.expected_goals(h, a, neutral=int(neu), competition=comp)
+            else:
+                axh, axa = adh, ada
+            gl_h.append(lgh); gl_a.append(lga); ad_h.append(adh); ad_a.append(ada)
+            adx_h.append(axh); adx_a.append(axa)
+            hg, ag = int(r["home_goals"]), int(r["away_goals"])
+            outcome.append("home" if hg > ag else ("away" if ag > hg else "draw"))
+
+        gl_h, gl_a = np.array(gl_h), np.array(gl_a)
+        ad_h, ad_a = np.array(ad_h), np.array(ad_a)
+        adx_h, adx_a = np.array(adx_h), np.array(adx_a)
+        outcome = np.array(outcome)
+        has_xg_ad = tmp.ad_xg_model_ is not None
+
+        best, best_rps = (self.blend_gl, self.blend_ad, self.blend_ad_xg), np.inf
+        grid = np.round(np.arange(0.0, 1.0 + 1e-9, grid_step), 3)
+        adx_grid = grid if has_xg_ad else np.array([0.0])
+        for w_adx in adx_grid:
+            for w_gl in grid:
+                w_ad = 1.0 - w_gl - w_adx
+                if w_ad < -1e-9:
+                    continue
+                lh = w_gl * gl_h + w_ad * ad_h + w_adx * adx_h
+                la = w_gl * gl_a + w_ad * ad_a + w_adx * adx_a
+                r = self._rps_from_lambdas(lh, la, outcome)
+                if r < best_rps:
+                    best_rps, best = r, (float(w_gl), float(max(w_ad, 0.0)), float(w_adx))
+        tot = sum(best) or 1.0
+        self.blend_gl, self.blend_ad, self.blend_ad_xg = (best[0] / tot, best[1] / tot, best[2] / tot)
+        self.use_xg_ad = self.blend_ad_xg > 0.0
+        self.blend_learned_ = True
+
+    def _rps_from_lambdas(self, lh: np.ndarray, la: np.ndarray, outcome: np.ndarray) -> float:
+        """Mean 1X2 Ranked Probability Score for blended lambdas (uses engine DC rho)."""
+        lh = np.clip(lh, 0.05, 6.0); la = np.clip(la, 0.05, 6.0)
+        rps = np.empty(len(lh))
+        for i in range(len(lh)):
+            p = outcome_probabilities(float(lh[i]), float(la[i]), max_goals=self.max_goals, dixon_coles_rho=self.ad_rho)
+            ph, pd_ = p["p_home_win"], p["p_draw"]
+            oh = 1.0 if outcome[i] == "home" else 0.0
+            od = 1.0 if outcome[i] == "draw" else 0.0
+            rps[i] = 0.5 * ((ph - oh) ** 2 + (ph + pd_ - oh - od) ** 2)
+        return float(rps.mean())
 
     def _build_team_rows(
         self, matches: pd.DataFrame, elo_history: pd.DataFrame | None
@@ -211,6 +329,13 @@ class PredictionEngine:
         target_cols = ["goals_for","goals_against","shots_for","shots_against",
                        "sot_for","sot_against","corners_for","corners_against",
                        "fouls_for","fouls_against","yellow_cards_for","yellow_cards_against"]
+        # Rolling pre-match xG features come from these per-team columns. Only wired
+        # when use_xg and the enriched matches carry xG; absent xG leaves them NaN,
+        # and GoalLambdaModel._available_features drops the all-NaN rolling columns.
+        if self.use_xg and {"home_xg", "away_xg"}.issubset(matches.columns):
+            stat_cols["home"] += ["home_xg","away_xg","home_npxg","away_npxg"]
+            stat_cols["away"] += ["away_xg","home_xg","away_npxg","home_npxg"]
+            target_cols += ["xg_for","xg_against","npxg_for","npxg_against"]
         for _, r in matches.iterrows():
             for side, src_cols in [("home", stat_cols["home"]), ("away", stat_cols["away"])]:
                 is_h = 1 if side == "home" else 0
@@ -281,12 +406,18 @@ class PredictionEngine:
         """Full match prediction: 1X2, goals, events."""
         h, a = canonical_name(home_team), canonical_name(away_team)
 
-        # Goal lambdas — blend GoalLambda and AttackDefense
+        # Goal lambdas — three-way blend: GoalLambda + goals-AD + xG-AD.
         lh_ad, la_ad = self._lambdas_ad(h, a, competition, neutral)
         lh_gl, la_gl = self._lambdas_gl(h, a, competition)
-        w = self.blend_gl
-        lh = w * lh_gl + (1 - w) * lh_ad
-        la = w * la_gl + (1 - w) * la_ad
+        w_gl, w_ad, w_adx = self.blend_gl, self.blend_ad, self.blend_ad_xg
+        if self.ad_xg_model_ is not None:
+            lh_adx, la_adx, _ = self.ad_xg_model_.expected_goals(h, a, neutral=int(neutral), competition=competition)
+        else:
+            # xG-AD unavailable (no weight or no data): fold its mass into goals-AD.
+            lh_adx, la_adx = lh_ad, la_ad
+            w_ad, w_adx = w_ad + w_adx, 0.0
+        lh = w_gl * lh_gl + w_ad * lh_ad + w_adx * lh_adx
+        la = w_gl * la_gl + w_ad * la_ad + w_adx * la_adx
         lh = float(np.clip(lh, 0.05, 6.0))
         la = float(np.clip(la, 0.05, 6.0))
 
@@ -315,7 +446,7 @@ class PredictionEngine:
             expected_corners_home=ch, expected_corners_away=ca,
             expected_fouls_home=fh, expected_fouls_away=fa,
             expected_yellows_home=yh, expected_yellows_away=ya,
-            model_source=f"blend_gl{w:.0%}_ad{1-w:.0%}",
+            model_source=f"blend_gl{self.blend_gl:.0%}_ad{self.blend_ad:.0%}_adxg{self.blend_ad_xg:.0%}",
         )
 
     # ── Tournament helpers ────────────────────────────────────────────────────

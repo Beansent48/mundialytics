@@ -19,6 +19,15 @@ class EloConfig:
     # Fraction of the gap to the mean that gets closed at the start of each season.
     # 0.0 = no reset, 0.30 = FiveThirtyEight-style partial regression.
     season_reset_fraction: float = 0.40
+    # xG-ELO: fraction of the match "result" the rating update reads from xG
+    # (chance quality) instead of the goals outcome. 0.0 = classic goals-ELO
+    # (unchanged); 1.0 = pure xG-ELO. A team that dominates xG but doesn't finish
+    # still gains rating — the stable signal, not the noisy scoreline. Requires
+    # home_xg/away_xg on the row; falls back to goals when xG is missing.
+    xg_weight: float = 0.0
+    # Slope mapping an xG margin to an actual-score in [0,1] around 0.5.
+    # 0.25 => a +2.0 xG edge reads as a full "win" (actual=1.0).
+    xg_slope: float = 0.25
     tournament_weights: dict[str, float] = field(default_factory=lambda: {
         "friendly": 0.70,
         "qualifier": 1.00,
@@ -113,9 +122,21 @@ class EloRater:
         expected_home = self.expected_score(adj_ra, rb)
         actual_home = self.actual_score(hg, ag)
 
+        # xG-ELO: blend the goals result with a chance-quality result and use a
+        # blended margin for the K multiplier. Falls back to goals when xG absent.
+        margin = hg - ag
+        w = float(self.config.xg_weight)
+        if w > 0.0:
+            hxg, axg = row.get("home_xg"), row.get("away_xg")
+            if hxg is not None and axg is not None and not (pd.isna(hxg) or pd.isna(axg)):
+                hxg, axg = float(hxg), float(axg)
+                actual_xg = float(np.clip(0.5 + (hxg - axg) * self.config.xg_slope, 0.0, 1.0))
+                actual_home = w * actual_xg + (1.0 - w) * actual_home
+                margin = w * (hxg - axg) + (1.0 - w) * margin
+
         k = self.config.k_base * self.competition_weight(competition)
         if self.config.goal_diff_multiplier:
-            k *= self.goal_multiplier(hg - ag)
+            k *= self.goal_multiplier(margin)
         delta = k * (actual_home - expected_home)
 
         self.ratings[home] = ra + delta

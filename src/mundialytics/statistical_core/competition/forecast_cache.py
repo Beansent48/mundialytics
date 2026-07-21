@@ -158,12 +158,15 @@ def build_bundle(
     timeline_step: int = 5,
     n_sims: int = 10_000,
     existing: dict | None = None,
+    force: bool = False,
 ) -> dict:
     """Compute (or incrementally extend) the full-season snapshot bundle.
 
     Reuses immutable snapshots present in ``existing``; only missing matchdays are
     computed. ``max_matchday`` caps the grid (default: total_rounds - 1, so the
-    last snapshot still has a game left to forecast).
+    last snapshot still has a game left to forecast). ``force`` recomputes every
+    snapshot even when a schema-matching cache exists (use after a model change,
+    e.g. a blend re-weight, that a snapshot's fingerprint does not capture).
     """
     probe = load_league_state_from_foundation(competition, season, foundation=foundation)
     total_rounds = _total_rounds(probe)
@@ -171,7 +174,7 @@ def build_bundle(
     grid = _full_grid(probe, total_rounds, timeline_step, max_matchday)
 
     cached = {int(k): v for k, v in (existing or {}).get("snapshots", {}).items()} if existing else {}
-    reuse_ok = (existing or {}).get("meta", {}).get("schema") == BUNDLE_SCHEMA
+    reuse_ok = (not force) and (existing or {}).get("meta", {}).get("schema") == BUNDLE_SCHEMA
 
     snapshots: dict[str, dict] = {}
     for md in grid:
@@ -235,7 +238,7 @@ def get_or_build(
         if set(want).issubset(have):
             return existing
     bundle = build_bundle(competition, season, foundation, max_matchday=max_matchday,
-                          timeline_step=timeline_step, n_sims=n_sims, existing=existing)
+                          timeline_step=timeline_step, n_sims=n_sims, existing=existing, force=force)
     save_bundle(bundle, cache_dir)
     return bundle
 

@@ -22,6 +22,11 @@ DEFAULT_NUMERIC_FEATURES = [
     "sot_for_last5", "sot_against_last5", "corners_for_last5", "corners_against_last5",
     "fouls_for_last5", "fouls_against_last5", "yellow_cards_for_last5", "yellow_cards_against_last5",
     "goal_diff_last5", "shot_diff_last5",
+    # Rolling pre-match xG form (Understat). Auto-dropped by _available_features
+    # for rows/eras without xG coverage (pre-2014/15, uncovered league-seasons),
+    # so the model degrades gracefully to the goals-only feature set.
+    "xg_for_last5", "xg_against_last5", "xg_diff_last5",
+    "npxg_for_last5", "npxg_against_last5",
 ]
 DEFAULT_CATEGORICAL_FEATURES = ["competition", "stage"]
 
