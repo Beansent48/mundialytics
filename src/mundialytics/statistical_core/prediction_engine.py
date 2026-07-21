@@ -24,6 +24,7 @@ from mundialytics.statistical_core.distributions import (
 )
 from mundialytics.statistical_core.event_model import EventLambdaModel, MARKET_FEATURES
 from mundialytics.models.goal_model import GoalLambdaModel, GoalModelConfig
+from mundialytics.models.xg_rate_model import XGRateModel
 from mundialytics.features.team_features import build_goal_training_frame
 from mundialytics.statistical_core.schemas import canonical_name
 
@@ -133,6 +134,8 @@ class PredictionEngine:
         use_xg: bool = True,             # feed rolling pre-match xG features to GoalLambdaModel
         blend_weight_ad_xg: float = 0.0, # weight for the xG-target AttackDefense estimator
         learn_blend: bool = False,       # learn the GL/AD blend at fit time via internal temporal holdout
+        use_xg_rate: bool = True,        # use the dedicated xG-rate predictor when xG is available
+        xg_rate_weight: float = 0.60,    # its blend weight vs goals-AD when active (backtest-optimal)
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -142,6 +145,13 @@ class PredictionEngine:
         self.use_xg = bool(use_xg)
         self.learn_blend = bool(learn_blend)
         self.blend_learned_ = False  # set True once _learn_blend_weight overrides the blend
+        # xG-rate predictor (first-class lambda source). When it fits (xG present),
+        # the match lambda becomes xg_rate_weight*xG-rate + (1-xg_rate_weight)*goals-AD,
+        # and the GoalLambdaModel drops out — the RPS-optimal club config from the
+        # 5-fold backtest (0.60/0.40). Falls back to the GL/AD blend when xG is absent.
+        self.use_xg_rate = bool(use_xg_rate)
+        self.xg_rate_weight = float(np.clip(xg_rate_weight, 0.0, 1.0))
+        self.xg_rate_model_: XGRateModel | None = None
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -195,6 +205,14 @@ class PredictionEngine:
                     target="xg",
                 )
                 self.ad_xg_model_.fit(xg_matches)
+
+        # xG-rate predictor (first-class lambda source). Fits only when xG is present;
+        # is_ready gates its use at prediction time so no-xG data falls back cleanly.
+        self.xg_rate_model_ = None
+        if self.use_xg_rate and {"home_xg", "away_xg"}.issubset(matches.columns):
+            xr = XGRateModel().fit(matches)
+            if xr.is_ready:
+                self.xg_rate_model_ = xr
 
         # GoalLambdaModel (Poisson GLM with rolling features + ELO)
         if team_rows is not None and not team_rows.empty:
@@ -406,18 +424,29 @@ class PredictionEngine:
         """Full match prediction: 1X2, goals, events."""
         h, a = canonical_name(home_team), canonical_name(away_team)
 
-        # Goal lambdas — three-way blend: GoalLambda + goals-AD + xG-AD.
+        # Goal lambdas. When the dedicated xG-rate predictor is available it takes
+        # over as the primary source (RPS-optimal club config from the backtest:
+        # xg_rate_weight*xG-rate + (1-xg_rate_weight)*goals-AD, GL dropped). Otherwise
+        # the legacy GoalLambda + goals-AD + xG-AD blend is used.
         lh_ad, la_ad = self._lambdas_ad(h, a, competition, neutral)
-        lh_gl, la_gl = self._lambdas_gl(h, a, competition)
-        w_gl, w_ad, w_adx = self.blend_gl, self.blend_ad, self.blend_ad_xg
-        if self.ad_xg_model_ is not None:
-            lh_adx, la_adx, _ = self.ad_xg_model_.expected_goals(h, a, neutral=int(neutral), competition=competition)
+        if self.xg_rate_model_ is not None:
+            xr_h, xr_a = self.xg_rate_model_.predict_lambda(h, a, neutral=neutral)
+            w = self.xg_rate_weight
+            lh = w * xr_h + (1 - w) * lh_ad
+            la = w * xr_a + (1 - w) * la_ad
+            model_src = f"xgrate{w:.0%}_ad{1 - w:.0%}"
         else:
-            # xG-AD unavailable (no weight or no data): fold its mass into goals-AD.
-            lh_adx, la_adx = lh_ad, la_ad
-            w_ad, w_adx = w_ad + w_adx, 0.0
-        lh = w_gl * lh_gl + w_ad * lh_ad + w_adx * lh_adx
-        la = w_gl * la_gl + w_ad * la_ad + w_adx * la_adx
+            lh_gl, la_gl = self._lambdas_gl(h, a, competition)
+            w_gl, w_ad, w_adx = self.blend_gl, self.blend_ad, self.blend_ad_xg
+            if self.ad_xg_model_ is not None:
+                lh_adx, la_adx, _ = self.ad_xg_model_.expected_goals(h, a, neutral=int(neutral), competition=competition)
+            else:
+                # xG-AD unavailable (no weight or no data): fold its mass into goals-AD.
+                lh_adx, la_adx = lh_ad, la_ad
+                w_ad, w_adx = w_ad + w_adx, 0.0
+            lh = w_gl * lh_gl + w_ad * lh_ad + w_adx * lh_adx
+            la = w_gl * la_gl + w_ad * la_ad + w_adx * la_adx
+            model_src = f"blend_gl{self.blend_gl:.0%}_ad{self.blend_ad:.0%}_adxg{self.blend_ad_xg:.0%}"
         lh = float(np.clip(lh, 0.05, 6.0))
         la = float(np.clip(la, 0.05, 6.0))
 
@@ -446,7 +475,7 @@ class PredictionEngine:
             expected_corners_home=ch, expected_corners_away=ca,
             expected_fouls_home=fh, expected_fouls_away=fa,
             expected_yellows_home=yh, expected_yellows_away=ya,
-            model_source=f"blend_gl{self.blend_gl:.0%}_ad{self.blend_ad:.0%}_adxg{self.blend_ad_xg:.0%}",
+            model_source=model_src,
         )
 
     # ── Tournament helpers ────────────────────────────────────────────────────
