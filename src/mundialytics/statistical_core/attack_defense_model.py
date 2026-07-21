@@ -80,7 +80,17 @@ class AttackDefenseModel:
         home_advantage_init: float = 0.10,
         min_matches: int = 5,
         l2_reg: float = 0.01,
+        target: str = "goals",
     ):
+        # target="goals" -> fit attack/defense to actual goals (classic Maher/DC).
+        # target="xg"    -> fit to match-level team xG instead: strengths reflect
+        # chance quality, not finishing luck. The Poisson log-likelihood kernel
+        # (y*log(lam) - lam) is valid for a continuous non-negative target, but the
+        # Dixon-Coles low-score correction is goal-tie-specific, so it is forced off
+        # (rho=0) for xG.
+        self.target = str(target)
+        if self.target == "xg":
+            dixon_coles_rho = 0.0
         self.dixon_coles_rho = float(dixon_coles_rho)
         self.time_decay_half_life = time_decay_half_life
         self.max_goals = int(max_goals)
@@ -208,13 +218,13 @@ class AttackDefenseModel:
             cnt = ((df["home_team"] == team) | (df["away_team"] == team)).sum()
             self.match_counts_[team] = int(cnt)
 
-        self.global_goal_mean_ = float((df["home_goals"].mean() + df["away_goals"].mean()) / 2)
+        self.global_goal_mean_ = float((df["_th"].mean() + df["_ta"].mean()) / 2)
 
         hi = df["home_team"].map(self.team_index_).values.astype(int)
         ai = df["away_team"].map(self.team_index_).values.astype(int)
         li = np.zeros(len(df), dtype=int)   # single league → index 0
-        hg = df["home_goals"].values.astype(float)
-        ag = df["away_goals"].values.astype(float)
+        hg = df["_th"].values.astype(float)
+        ag = df["_ta"].values.astype(float)
 
         if self.time_decay_half_life and "date" in df.columns:
             w = recency_weights(df["date"], half_life_days=float(self.time_decay_half_life))
@@ -251,11 +261,19 @@ class AttackDefenseModel:
         Produces a unified team_index_ and parameter arrays where parameters from
         each league are placed without interference.
         """
-        df = matches.dropna(subset=["home_goals", "away_goals"]).copy()
+        th_col = "home_xg" if self.target == "xg" else "home_goals"
+        ta_col = "away_xg" if self.target == "xg" else "away_goals"
+        df = matches.dropna(subset=[th_col, ta_col]).copy()
         df["home_team"] = df["home_team"].map(canonical_name)
         df["away_team"] = df["away_team"].map(canonical_name)
-        df["home_goals"] = pd.to_numeric(df["home_goals"], errors="coerce").fillna(0).astype(int)
-        df["away_goals"] = pd.to_numeric(df["away_goals"], errors="coerce").fillna(0).astype(int)
+        # Internal target columns (_th/_ta) decouple the fit from goals-vs-xG.
+        # Goals stay integer (Poisson counts); xG stays continuous non-negative.
+        if self.target == "xg":
+            df["_th"] = pd.to_numeric(df[th_col], errors="coerce").fillna(0.0).clip(lower=0.0)
+            df["_ta"] = pd.to_numeric(df[ta_col], errors="coerce").fillna(0.0).clip(lower=0.0)
+        else:
+            df["_th"] = pd.to_numeric(df[th_col], errors="coerce").fillna(0).astype(int)
+            df["_ta"] = pd.to_numeric(df[ta_col], errors="coerce").fillna(0).astype(int)
         df["date"] = pd.to_datetime(df.get("date"), errors="coerce")
         if "competition" not in df.columns:
             df["competition"] = "unknown"

@@ -29,7 +29,7 @@ def train_engine_before_cutoff(
     foundation: pd.DataFrame,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     same_competition_only: bool = True,
-    blend_weight_gl: float = 0.60,
+    blend_weight_gl: float = 0.30,
 ) -> PredictionEngine:
     """Fit a PredictionEngine on matches before ``state.cutoff_date``.
 
@@ -71,6 +71,10 @@ def train_engine_before_cutoff(
             f"before {cutoff.date() if hasattr(cutoff, 'date') else cutoff}."
         )
 
+    # blend_weight_gl default 0.30 (was 0.60): an 8-fold temporal backtest of the
+    # ELO-free engine (scripts/backtest_elo.py) found the goals-AttackDefense
+    # estimator deserves ~70% and GL ~30% — 0.30 beat 0.60 in 8/8 folds
+    # (pooled RPS -0.0022). See [[project_xg_modeling_findings]].
     engine = PredictionEngine(blend_weight_gl=blend_weight_gl)
     engine.fit(train)
     return engine
