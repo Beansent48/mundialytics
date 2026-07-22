@@ -1,6 +1,6 @@
 """
 Mundialytics — Prediction Engine · Block 2 + SquadLab
-Menu: 🗓️ Jornada | 🏆 Competición | 🥇 Premios | 🧪 SquadLab
+Menu: 🗓️ Jornada | 🏆 Competición | 📊 Pronóstico de liga | 🎯 Props | 🥇 Premios | 🧪 SquadLab
 """
 from __future__ import annotations
 import sys
@@ -520,6 +520,7 @@ page = st.sidebar.radio("", [
     "🗓️  Jornada",
     "🏆  Competición",
     "📊  Pronóstico de liga",
+    "🎯  Props",
     "🥇  Premios Individuales",
     "🧪  SquadLab",
 ], label_visibility="collapsed")
@@ -877,6 +878,185 @@ elif page == "📊  Pronóstico de liga":
     cf_page = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cf_page)
     cf_page.render()
+
+elif page == "🎯  Props":
+    st.title("🎯  Props")
+    st.caption("Análisis completo de mercados de eventos: córners, tarjetas, faltas, tiros, "
+               "booking points y props de jugadores. Modelos validados walk-forward "
+               "(NB + supremacía λ + Platt).")
+
+    tp_m, pp_m = load_props_models()
+    if tp_m is None:
+        st.warning("Modelos de props no disponibles (faltan datos).")
+        st.stop()
+
+    colp1, colp2, colp3 = st.columns([2, 2, 2])
+    with colp1:
+        comp_p = st.selectbox("Competición", LEAGUE_COMPETITIONS, key="p_comp")
+    with colp2:
+        comp_id_p = COMP_CONFIG[comp_p]["comp_id"]
+        seasons_p = sorted(df_clubs.loc[df_clubs["competition"] == comp_id_p, "season"].unique(), reverse=True)
+        season_p = st.selectbox("Temporada", seasons_p, key="p_season")
+    df_round_p, total_rounds_p = get_round_fixtures(comp_p, season_p, 1, df_clubs)
+    if total_rounds_p == 0:
+        st.warning("Sin datos para esta competición/temporada.")
+        st.stop()
+    with colp3:
+        jornada_p = st.slider("Jornada", 1, total_rounds_p, total_rounds_p, key="p_round")
+    df_round_p, _ = get_round_fixtures(comp_p, season_p, jornada_p, df_clubs)
+    if df_round_p.empty:
+        st.info("Sin partidos en esta jornada.")
+        st.stop()
+
+    fixture_labels = [f"{r.home_team.title()} vs {r.away_team.title()}" for r in df_round_p.itertuples()]
+    pick = st.selectbox("Partido", fixture_labels, key="p_fixture")
+    row_p = df_round_p.iloc[fixture_labels.index(pick)]
+    home_p, away_p = row_p["home_team"], row_p["away_team"]
+
+    referee_p = None
+    if tp_m.known_referees and tp_m.is_epl_fixture(home_p, away_p):
+        referee_p = st.selectbox("Árbitro (opcional — mejora tarjetas y faltas)",
+                                 ["—"] + tp_m.known_referees, key="p_ref")
+        referee_p = None if referee_p == "—" else referee_p
+
+    pred_p = predict_safe(engine_clubs, home_p, away_p, comp_p, False)
+    lamh = pred_p.lambda_home if pred_p else None
+    lama = pred_p.lambda_away if pred_p else None
+    fx_p = tp_m.predict_fixture(home_p, away_p, referee=referee_p, lam_home=lamh, lam_away=lama)
+    if not fx_p:
+        st.warning("Sin histórico suficiente para estos equipos.")
+        st.stop()
+
+    prof_h, prof_a = tp_m.team_profile(home_p), tp_m.team_profile(away_p)
+    if lamh:
+        st.markdown(f"**xGoals del motor:** {home_p.title()} {lamh:.2f} – {lama:.2f} {away_p.title()}"
+                    + (f" · Árbitro: {referee_p}" if referee_p else ""))
+
+    def ladder_html(over: dict, prefix: str = "O") -> str:
+        html = ""
+        for ln, p in over.items():
+            color = "#16a34a" if p >= 0.55 else ("#dc2626" if p <= 0.45 else "#3b82f6")
+            html += (f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
+                     f'<span style="width:52px;font-weight:600;font-size:.85rem">{prefix} {ln}</span>'
+                     f'<div style="flex:1;background:#e5e7eb33;border-radius:4px;height:14px">'
+                     f'<div style="width:{p*100:.0f}%;background:{color};border-radius:4px;height:14px"></div></div>'
+                     f'<span style="width:44px;text-align:right;font-size:.85rem;font-weight:600">{p:.0%}</span>'
+                     f'</div>')
+        return html
+
+    st.markdown("### Mercados del partido (totales)")
+    m_cols = st.columns(2)
+    for i, (mk, d) in enumerate([(k, v) for k, v in fx_p.items() if k != "booking_pts"]):
+        with m_cols[i % 2]:
+            ref_tag = " 🧑‍⚖️" if d.get("referee_used") else ""
+            st.markdown(f"**{MARKET_ES.get(mk, mk)}{ref_tag}** — λ {d['lambda_home']} + "
+                        f"{d['lambda_away']} = **{d['lambda_total']}**")
+            ph = prof_h.get(mk)
+            pa = prof_a.get(mk)
+            if ph and pa and ph.get("league_avg_side"):
+                st.caption(f"Forma (últ. 10): {home_p.title()} {ph['for_r10']} a favor / "
+                           f"{ph['against_r10']} en contra · {away_p.title()} {pa['for_r10']} / "
+                           f"{pa['against_r10']} · media liga {ph['league_avg_side']}/equipo")
+            st.markdown(ladder_html(d["over"]), unsafe_allow_html=True)
+            st.markdown("")
+
+    if "booking_pts" in fx_p:
+        bp = fx_p["booking_pts"]
+        st.markdown(f"**{MARKET_ES['booking_pts']}** — λ amarillas {bp['lambda_yellows']} · "
+                    f"λ rojas {bp['lambda_reds']} (media liga)")
+        st.markdown(ladder_html(bp["over"]), unsafe_allow_html=True)
+
+    side_any = any("over_home" in d for d in fx_p.values())
+    if side_any:
+        st.markdown("### Líneas por equipo")
+        st.caption("Más señal que los totales: la identidad del equipo pesa más por lado. Calibradas (Platt).")
+        sc1, sc2 = st.columns(2)
+        for col, side_key, tname in [(sc1, "over_home", home_p.title()), (sc2, "over_away", away_p.title())]:
+            with col:
+                st.markdown(f"**{tname}**")
+                for mk, d in fx_p.items():
+                    if side_key in d:
+                        st.markdown(f"*{MARKET_ES.get(mk, mk)}*")
+                        st.markdown(ladder_html(d[side_key]), unsafe_allow_html=True)
+
+    with st.expander("📈 Distribución de un mercado a fondo"):
+        mk_deep = st.selectbox("Mercado", [k for k in fx_p if k != "booking_pts"],
+                               format_func=lambda k: MARKET_ES.get(k, k), key="p_deep")
+        d = fx_p[mk_deep]
+        from scipy.stats import nbinom as _nb
+        lam_t, disp_t = d["lambda_total"], max(d["dispersion"], 1.05)
+        r_nb = lam_t / (disp_t - 1.0)
+        ks = list(range(0, int(lam_t * 2.4) + 2))
+        pmf = [float(_nb.pmf(k, r_nb, 1.0 / disp_t)) for k in ks]
+        figd = go.Figure(go.Bar(x=ks, y=pmf, marker_color="#3b82f6"))
+        for ln in d["over"]:
+            figd.add_vline(x=ln, line_dash="dot", line_color="#9ca3af")
+        figd.update_layout(height=260, margin=dict(l=0, r=0, t=10, b=0),
+                           xaxis_title=f"{MARKET_ES.get(mk_deep, mk_deep)} totales",
+                           yaxis_title="P", paper_bgcolor="rgba(0,0,0,0)",
+                           plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+        st.plotly_chart(figd, use_container_width=True)
+        st.caption(f"Binomial negativa: λ {lam_t}, dispersión {disp_t} (medida en datos). "
+                   "Líneas punteadas = líneas de apuesta.")
+
+    if pp_m is not None:
+        st.markdown("### Props de jugadores")
+        try:
+            players_p = pp_m.predict_fixture(home_p, away_p, lam_home=lamh, lam_away=lama)
+        except Exception:
+            players_p = pd.DataFrame()
+        if not players_p.empty:
+            vw = players_p[players_p["exp_min"] >= 30].copy()
+            vw["Equipo"] = np.where(vw["side"] == "home", home_p.title(), away_p.title())
+            colsmap = {"player": "Jugador", "Equipo": "Equipo", "exp_min": "Min esp.",
+                       "p_anytime_scorer": "Gol", "p_2plus_goals": "2+ goles",
+                       "p_shots_over_1_5": "+1.5 tiros", "p_shots_over_2_5": "+2.5 tiros",
+                       "p_assist": "Asistencia", "p_yellow": "Amarilla"}
+            tbl_p = vw[list(colsmap)].rename(columns=colsmap)
+            pct_cols = ["Gol", "2+ goles", "+1.5 tiros", "+2.5 tiros", "Asistencia", "Amarilla"]
+            for c in pct_cols:
+                tbl_p[c] = (tbl_p[c] * 100).round(1)
+            st.dataframe(tbl_p, hide_index=True, use_container_width=True, height=380,
+                         column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                        for c in pct_cols})
+
+    st.markdown("---")
+    st.markdown("### 🔍 Escáner de la jornada")
+    st.caption("Los props más extremos de todos los partidos de la jornada (distancia a 50%).")
+    scan_key = f"scan_{comp_p}_{season_p}_{jornada_p}"
+    if st.button("Escanear jornada", key="p_scan_btn"):
+        rows_s = []
+        prog = st.progress(0.0)
+        for k, r in enumerate(df_round_p.itertuples()):
+            pr = predict_safe(engine_clubs, r.home_team, r.away_team, comp_p, False)
+            fx_s = tp_m.predict_fixture(r.home_team, r.away_team,
+                                        lam_home=pr.lambda_home if pr else None,
+                                        lam_away=pr.lambda_away if pr else None)
+            label = f"{r.home_team.title()} vs {r.away_team.title()}"
+            for mk, d in fx_s.items():
+                for ln, p in d.get("over", {}).items():
+                    rows_s.append({"Partido": label, "Mercado": MARKET_ES.get(mk, mk),
+                                   "Ámbito": "Total", "Línea": ln, "P(Over)": p})
+                for skey, amb in [("over_home", r.home_team.title()), ("over_away", r.away_team.title())]:
+                    for ln, p in d.get(skey, {}).items():
+                        rows_s.append({"Partido": label, "Mercado": MARKET_ES.get(mk, mk),
+                                       "Ámbito": amb, "Línea": ln, "P(Over)": p})
+            prog.progress((k + 1) / len(df_round_p))
+        prog.empty()
+        st.session_state[scan_key] = pd.DataFrame(rows_s)
+    if scan_key in st.session_state:
+        sc = st.session_state[scan_key].copy()
+        mks = st.multiselect("Mercados", sorted(sc["Mercado"].unique()),
+                             default=sorted(sc["Mercado"].unique()), key="p_scan_mks")
+        sc = sc[sc["Mercado"].isin(mks)]
+        sc["Señal"] = (sc["P(Over)"] - 0.5).abs()
+        sc["Lado"] = np.where(sc["P(Over)"] >= 0.5, "OVER", "UNDER")
+        sc["Confianza"] = np.where(sc["Lado"] == "OVER", sc["P(Over)"], 1 - sc["P(Over)"])
+        top = sc.sort_values("Señal", ascending=False).head(30)
+        top = top[["Partido", "Mercado", "Ámbito", "Línea", "Lado", "Confianza"]]
+        top["Confianza"] = (top["Confianza"] * 100).round(1)
+        st.dataframe(top, hide_index=True, use_container_width=True, height=500,
+                     column_config={"Confianza": st.column_config.NumberColumn(format="%.1f%%")})
 
 elif page == "🧪  SquadLab":
     spec = importlib.util.spec_from_file_location(
