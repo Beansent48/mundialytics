@@ -128,6 +128,26 @@ engine_intl,  INTL_TEAMS,  df_intl  = load_intl_engine()
 ALL_TEAMS_COMBINED = sorted(set(CLUB_TEAMS) | set(INTL_TEAMS))
 
 
+@st.cache_resource(show_spinner="🎯  Cargando modelos de props...")
+def load_props_models():
+    """Team-event + player-prop models (clubs only). Fails soft: (None, None)."""
+    try:
+        from mundialytics.props import PlayerPropsModel, TeamPropsModel
+        tp = TeamPropsModel().fit(df_clubs)
+    except Exception:
+        return None, None
+    try:
+        pmp = ROOT / "data/external/advanced/understat/understat_player_match.csv"
+        tmx = (pd.read_csv(ROOT / "data/processed/understat_team_match_xg.csv")
+               [["provider_match_id", "date"]]
+               .rename(columns={"provider_match_id": "game_id"}).drop_duplicates("game_id"))
+        pm = pd.read_csv(pmp).merge(tmx, on="game_id", how="left")
+        pp = PlayerPropsModel().fit(pm)
+    except Exception:
+        pp = None
+    return tp, pp
+
+
 # ── Helper functions ───────────────────────────────────────────────────────────
 def pick_engine(competition: str) -> tuple[PredictionEngine, list[str], pd.DataFrame]:
     cfg = COMP_CONFIG.get(competition)
@@ -239,6 +259,60 @@ def render_stat_grid(events: list[tuple[str, float, float]]) -> None:
             unsafe_allow_html=True)
 
 
+MARKET_ES = {"corners": "Córners", "yellows": "Amarillas", "fouls": "Faltas",
+             "shots": "Disparos", "sot": "A puerta"}
+
+
+def render_props_section(home: str, away: str, pred) -> None:
+    """O/U team-event markets + per-player props (validated walk-forward models)."""
+    tp, pp = load_props_models()
+    if tp is None:
+        return
+    fx = tp.predict_fixture(home, away)
+    players = pd.DataFrame()
+    if pp is not None:
+        try:
+            players = pp.predict_fixture(home, away, lam_home=pred.lambda_home,
+                                         lam_away=pred.lambda_away)
+        except Exception:
+            players = pd.DataFrame()
+    if not fx and players.empty:
+        return
+
+    st.markdown("### 🎯 Props del partido")
+    if fx:
+        rows = []
+        for mk, d in fx.items():
+            r = {"Mercado": MARKET_ES.get(mk, mk), "λ Local": d["lambda_home"],
+                 "λ Visitante": d["lambda_away"], "λ Total": d["lambda_total"]}
+            for ln, p in d["over"].items():
+                r[f"Over {ln}"] = f"{p:.0%}"
+            rows.append(r)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.caption("Prob. de superar cada línea en el TOTAL del partido "
+                   "(binomial negativa con sobre-dispersión medida por mercado).")
+
+    if not players.empty:
+        st.markdown("#### Props de jugadores")
+        view = players[players["exp_min"] >= 30].copy()
+        view["Equipo"] = np.where(view["side"] == "home", home.title(), away.title())
+        cols = {"player": "Jugador", "Equipo": "Equipo", "exp_min": "Min esp.",
+                "p_anytime_scorer": "Gol (anytime)", "p_2plus_goals": "2+ goles",
+                "p_shots_over_1_5": "+1.5 tiros", "p_shots_over_2_5": "+2.5 tiros",
+                "p_assist": "Asistencia", "p_yellow": "Amarilla"}
+        tbl = view[list(cols)].rename(columns=cols)
+        for c in ["Gol (anytime)", "2+ goles", "+1.5 tiros", "+2.5 tiros", "Asistencia", "Amarilla"]:
+            tbl[c] = (tbl[c] * 100).round(1)
+        st.dataframe(
+            tbl, hide_index=True, use_container_width=True, height=420,
+            column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                           for c in ["Gol (anytime)", "2+ goles", "+1.5 tiros",
+                                     "+2.5 tiros", "Asistencia", "Amarilla"]})
+        st.caption("Probabilidades condicionadas a que el jugador juegue (convención "
+                   "bookmaker). Min esp. = minutos esperados si juega; ratios de "
+                   "carrera + forma reciente, ajustados al contexto del partido.")
+
+
 def render_real_match_stats(row: dict, home: str, away: str) -> None:
     """Actual historical stats for an already-played match — no model involved."""
     st.markdown(f"## ⚽ {home.title()} {int(row['home_goals'])} – {int(row['away_goals'])} {away.title()}")
@@ -343,6 +417,9 @@ def render_partido_detail(home: str, away: str, competition: str, neutral: bool,
         ("Faltas",    pred.expected_fouls_home,   pred.expected_fouls_away),
         ("Amarillas", pred.expected_yellows_home, pred.expected_yellows_away),
     ])
+
+    if eng is engine_clubs:
+        render_props_section(home, away, pred)
 
     st.markdown("---")
     col_h2h, col_form = st.columns(2)
