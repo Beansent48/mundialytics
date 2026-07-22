@@ -137,6 +137,7 @@ class PredictionEngine:
         use_xg_rate: bool = True,        # use the dedicated xG-rate predictor when xG is available
         xg_rate_weight: float = 0.60,    # its blend weight vs goals-AD when active (backtest-optimal)
         sharpen_gamma_1x2: float = 1.0,  # 1X2 sharpening exponent (1.0 = off; 1.2 = LOFO-validated)
+        outcome_rho: float | None = None,  # DC rho for the OUTCOME matrix (None = ad_rho). LOFO-optimal -0.17 with gamma 1.3
         rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
     ):
         self.goal_model_type = goal_model_type
@@ -162,6 +163,11 @@ class PredictionEngine:
         # trio; the scoreline matrix / O-U / BTTS and the competition-layer Monte
         # Carlo (which samples from lambdas and was already calibrated) are untouched.
         self.sharpen_gamma_1x2 = float(np.clip(sharpen_gamma_1x2, 0.5, 2.0))
+        # outcome_rho decouples the probability-matrix Dixon-Coles rho from the AD fit
+        # rho: a joint gamma/rho LOFO scan (all 6 folds picking gamma=1.3, rho=-0.17,
+        # interior optimum, -0.00025 RPS) showed the matrix wants a stronger low-score
+        # correction than the fit. None = legacy behavior (use ad_rho everywhere).
+        self.outcome_rho = float(outcome_rho) if outcome_rho is not None else None
         # Understat xG runs hot vs actual goals and the gap is DRIFTING (goals/xG
         # ratio ~0.99 in 2021 -> ~0.92 in 2025/26), so the xG-rate lambda over-states
         # goal expectation (+~4% total) — hurting O/U and BTTS while leaving 1X2
@@ -481,7 +487,8 @@ class PredictionEngine:
         la = float(np.clip(la, 0.05, 6.0))
 
         # Probabilities from score matrix
-        probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=self.ad_rho)
+        rho_m = self.outcome_rho if self.outcome_rho is not None else self.ad_rho
+        probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=rho_m)
         # Post-hoc 1X2 sharpening (see __init__): trio only, renormalized. Other
         # markets and the scoreline matrix stay raw.
         if abs(self.sharpen_gamma_1x2 - 1.0) > 1e-9:
@@ -489,7 +496,7 @@ class PredictionEngine:
             trio = trio ** self.sharpen_gamma_1x2
             trio = trio / trio.sum()
             probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
-        dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True, dixon_coles_rho=self.ad_rho)
+        dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True, dixon_coles_rho=rho_m)
 
         # Event lambdas
         sh, sa = self._event_lambda("shots_for", h, a, competition)
