@@ -139,6 +139,7 @@ class PredictionEngine:
         sharpen_gamma_1x2: float = 1.0,  # 1X2 sharpening exponent (1.0 = off; 1.2 = LOFO-validated)
         outcome_rho: float | None = None,  # DC rho for the OUTCOME matrix (None = ad_rho). LOFO-optimal -0.17 with gamma 1.3
         rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
+        xg_rate_kwargs: dict | None = None,     # passthrough to XGRateModel (e.g. {"use_ewma": True})
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -177,6 +178,7 @@ class PredictionEngine:
         # folds: O/U log-loss -0.0013, BTTS -0.0010 pooled, strongest in recent folds.
         self.rescale_lambda_to_goals = bool(rescale_lambda_to_goals)
         self.lambda_scale_: float = 1.0
+        self.xg_rate_kwargs = dict(xg_rate_kwargs or {})
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -236,7 +238,7 @@ class PredictionEngine:
         self.xg_rate_model_ = None
         self.lambda_scale_ = 1.0
         if self.use_xg_rate and {"home_xg", "away_xg"}.issubset(matches.columns):
-            xr = XGRateModel().fit(matches)
+            xr = XGRateModel(**self.xg_rate_kwargs).fit(matches)
             if xr.is_ready:
                 self.xg_rate_model_ = xr
                 if self.rescale_lambda_to_goals:

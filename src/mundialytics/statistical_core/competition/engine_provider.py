@@ -80,7 +80,8 @@ def train_engine_before_cutoff(
     # scripts/fit_calibration.py + project_xg_modeling_findings). Only the 1X2
     # trio is affected — the resume-MC samples from lambdas and stays untouched.
     engine = PredictionEngine(blend_weight_gl=blend_weight_gl, sharpen_gamma_1x2=1.3,
-                              rescale_lambda_to_goals=True, outcome_rho=-0.17)
+                              rescale_lambda_to_goals=True, outcome_rho=-0.17,
+                              xg_rate_kwargs={"use_ewma": True})
     engine.fit(train)
     return engine
 

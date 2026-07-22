@@ -44,6 +44,10 @@ class XGRateModel:
     # to re-enable; the op/sp data plumbing (foundation columns, shots aggregation)
     # remains in place.
     use_setpiece: bool = False
+    # EWMA form (halflife 5 matches) alongside the flat windows: batch-tested at
+    # -0.0006 RPS, better in 5/5 folds. Gated off until the end-to-end engine
+    # validation passes the deploy bar (the SETPIECE lesson).
+    use_ewma: bool = False
     _model: PoissonRegressor | None = field(default=None, init=False)
     _feats: list[str] = field(default_factory=list, init=False)
     _has_sp: bool = field(default=False, init=False)
@@ -55,6 +59,8 @@ class XGRateModel:
     _hist_op: dict[str, list[float]] = field(default_factory=dict, init=False)
     _hist_sp: dict[str, list[float]] = field(default_factory=dict, init=False)
     _global: dict[str, float] = field(default_factory=dict, init=False)
+    _ewm_for: dict[str, float] = field(default_factory=dict, init=False)
+    _ewm_against: dict[str, float] = field(default_factory=dict, init=False)
 
     # ── feature engineering ────────────────────────────────────────────────────
 
@@ -86,9 +92,15 @@ class XGRateModel:
             for w in wins:
                 lr[f"{col}_r{w}"] = (lr.groupby("team", group_keys=False)[col]
                                      .apply(lambda s: s.shift(1).rolling(w, min_periods=3).mean()))
+        if self.use_ewma:
+            for col in ["xg_for", "xg_against"]:
+                lr[f"{col}_ewm"] = (lr.groupby("team", group_keys=False)[col]
+                                    .apply(lambda s: s.shift(1).ewm(halflife=5, min_periods=3).mean()))
         opp_src = [f"xg_against_r{w}" for w in self.windows]
         if self._has_sp:
             opp_src += [f"xg_op_r{SP_WINDOW}", f"xg_sp_r{SP_WINDOW}"]
+        if self.use_ewma:
+            opp_src += ["xg_against_ewm"]
         opp = lr[["match_id", "team"] + opp_src].rename(
             columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
         return lr.merge(opp, on=["match_id", "opp"], how="left")
@@ -97,9 +109,13 @@ class XGRateModel:
         feats = [f"xg_for_r{w}" for w in self.windows]
         if self._has_sp:
             feats += [f"xg_op_r{SP_WINDOW}", f"xg_sp_r{SP_WINDOW}"]
+        if self.use_ewma:
+            feats += ["xg_for_ewm"]
         feats += [f"opp_xg_against_r{w}" for w in self.windows]
         if self._has_sp:
             feats += [f"opp_xg_op_r{SP_WINDOW}", f"opp_xg_sp_r{SP_WINDOW}"]
+        if self.use_ewma:
+            feats += ["opp_xg_against_ewm"]
         return feats + ["is_home"]
 
     # ── fit / predict ──────────────────────────────────────────────────────────
@@ -133,6 +149,12 @@ class XGRateModel:
             if self._has_sp:
                 self._hist_op[t] = pd.to_numeric(g["xg_op"], errors="coerce").dropna().tolist()[-cap:]
                 self._hist_sp[t] = pd.to_numeric(g["xg_sp"], errors="coerce").dropna().tolist()[-cap:]
+            if self.use_ewma:
+                # unshifted final EWM = correct pre-match value for the team's NEXT match
+                ef = pd.to_numeric(g["xg_for"], errors="coerce").ewm(halflife=5, min_periods=1).mean()
+                ea = pd.to_numeric(g["xg_against"], errors="coerce").ewm(halflife=5, min_periods=1).mean()
+                if len(ef):
+                    self._ewm_for[t] = float(ef.iloc[-1]); self._ewm_against[t] = float(ea.iloc[-1])
         return self
 
     @property
@@ -152,6 +174,10 @@ class XGRateModel:
             self._hist_against.setdefault(team, []).append(float(xa))
             self._hist_for[team] = self._hist_for[team][-cap:]
             self._hist_against[team] = self._hist_against[team][-cap:]
+            if self.use_ewma:
+                a = 1.0 - 0.5 ** (1.0 / 5.0)
+                self._ewm_for[team] = a * float(xf) + (1 - a) * self._ewm_for.get(team, float(xf))
+                self._ewm_against[team] = a * float(xa) + (1 - a) * self._ewm_against.get(team, float(xa))
             if self._has_sp and xo is not None and xs is not None:
                 self._hist_op.setdefault(team, []).append(float(xo))
                 self._hist_sp.setdefault(team, []).append(float(xs))
@@ -173,10 +199,14 @@ class XGRateModel:
             if self._has_sp:
                 row += [self._rate(self._hist_op.get(own, []), SP_WINDOW, self._global["xg_op"]),
                         self._rate(self._hist_sp.get(own, []), SP_WINDOW, self._global["xg_sp"])]
+            if self.use_ewma:
+                row += [self._ewm_for.get(own, self._global["xg_for"])]
             row += [self._rate(self._hist_against.get(opp, []), w, self._global["xg_against"]) for w in self.windows]
             if self._has_sp:
                 row += [self._rate(self._hist_op.get(opp, []), SP_WINDOW, self._global["xg_op"]),
                         self._rate(self._hist_sp.get(opp, []), SP_WINDOW, self._global["xg_sp"])]
+            if self.use_ewma:
+                row += [self._ewm_against.get(opp, self._global["xg_against"])]
             return row + [home_flag]
 
         X = np.array([feat_row(h, a, is_home), feat_row(a, h, 0)], dtype=float)
