@@ -164,16 +164,37 @@ class TeamPropsModel:
     _team_comp: dict = field(default_factory=dict, init=False, repr=False)
     _red_lam: dict = field(default_factory=dict, init=False, repr=False)
     _red_glob: float = field(default=0.4, init=False, repr=False)
+    _use_lam: bool = field(default=False, init=False, repr=False)
 
     # ── fitting ────────────────────────────────────────────────────────────────
     def fit(self, matches: pd.DataFrame, referee_data: pd.DataFrame | None = None,
-            root: str | Path | None = None) -> "TeamPropsModel":
+            root: str | Path | None = None,
+            lambdas: pd.DataFrame | None = None) -> "TeamPropsModel":
         """`matches`: foundation rows (date/season/teams + event + goal columns).
         `referee_data`: optional output of load_referee_rates (auto-loaded if
-        `root` given)."""
+        `root` given). `lambdas`: walk-forward engine lambdas per match_id
+        (lh/la) — auto-loaded from the caches when `root` is given; powers the
+        delta_lam supremacy features (validated better than goals-delta on all
+        5 markets, decisive same-eval A/B 2026-07-23)."""
         df = matches.copy()
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df = df[df["season"] >= self.seasons_from]
+        if lambdas is None and root is not None:
+            parts = []
+            for rel in ["data/processed/enriched/understat_xg/walkforward_preds.csv",
+                        "data/processed/enriched/understat_xg/walkforward_preds_hist.csv"]:
+                p = Path(root) / rel
+                if p.exists():
+                    parts.append(pd.read_csv(p)[["match_id", "lh", "la"]])
+            if parts:
+                lambdas = pd.concat(parts, ignore_index=True).drop_duplicates("match_id")
+        if lambdas is not None:
+            df = df.merge(lambdas[["match_id", "lh", "la"]], on="match_id", how="left")
+        else:
+            df["lh"] = np.nan
+            df["la"] = np.nan
+        # delta_lam features only when lambda coverage is real (else goals-delta recipe)
+        self._use_lam = bool(df["lh"].notna().mean() > 0.3)
         if referee_data is None and root is not None:
             referee_data = load_referee_rates(root)
         if root is not None:
@@ -275,15 +296,21 @@ class TeamPropsModel:
     @staticmethod
     def _long_rows(m: pd.DataFrame, hc: str, ac: str,
                    extra: dict[str, str] | None = None) -> pd.DataFrame:
+        has_lam = "lh" in m.columns
         rows = []
         for r in m.itertuples(index=False):
             ex = {k: getattr(r, col) for k, col in (extra or {}).items()}
+            if has_lam:
+                ex_h = {**ex, "lam_t": r.lh, "lam_o": r.la}
+                ex_a = {**ex, "lam_t": r.la, "lam_o": r.lh}
+            else:
+                ex_h = ex_a = ex
             rows.append(dict(match_id=r.match_id, date=r.date, team=r.home_team, opp=r.away_team,
                              is_home=1, ev_for=getattr(r, hc), ev_against=getattr(r, ac),
-                             gf=r.home_goals, ga=r.away_goals, **ex))
+                             gf=r.home_goals, ga=r.away_goals, **ex_h))
             rows.append(dict(match_id=r.match_id, date=r.date, team=r.away_team, opp=r.home_team,
                              is_home=0, ev_for=getattr(r, ac), ev_against=getattr(r, hc),
-                             gf=r.away_goals, ga=r.home_goals, **ex))
+                             gf=r.away_goals, ga=r.home_goals, **ex_a))
         lr = pd.DataFrame(rows).sort_values(["team", "date", "match_id"])
         for col in ["ev_for", "ev_against", "gf", "ga"]:
             for w in WINDOWS:
@@ -297,13 +324,18 @@ class TeamPropsModel:
         lr = lr.merge(opp, on=["match_id", "opp"], how="left")
         lr["delta"] = (lr["gf_ewm"] + lr["opp_ga_ewm"]) / 2 - (lr["opp_gf_ewm"] + lr["ga_ewm"]) / 2
         lr["abs_delta"] = lr["delta"].abs()
+        if has_lam:
+            lr["delta_lam"] = lr["lam_t"] - lr["lam_o"]
+            lr["abs_delta_lam"] = lr["delta_lam"].abs()
         return lr
 
-    @staticmethod
-    def _feature_names() -> list[str]:
-        return ([f"ev_for_r{w}" for w in WINDOWS] + ["ev_for_ewm"]
+    def _feature_names(self) -> list[str]:
+        base = ([f"ev_for_r{w}" for w in WINDOWS] + ["ev_for_ewm"]
                 + [f"opp_ev_against_r{w}" for w in WINDOWS] + ["opp_ev_against_ewm"]
                 + ["is_home", "delta", "abs_delta"])
+        if self._use_lam:
+            base += ["delta_lam", "abs_delta_lam"]
+        return base
 
     @staticmethod
     def _latest_team_state(lr: pd.DataFrame) -> dict:
@@ -325,7 +357,8 @@ class TeamPropsModel:
 
     # ── prediction ─────────────────────────────────────────────────────────────
     def _side_lambda(self, market: str, team: str, opp: str, is_home: int,
-                     ref_rate: float | None = None) -> float | None:
+                     ref_rate: float | None = None,
+                     lam_t: float | None = None, lam_o: float | None = None) -> float | None:
         mf = self._team_feats.get(market, {})
         st_t = mf.get(team) or mf.get(team.lower())      # foundation team names are lowercase
         st_o = mf.get(opp) or mf.get(opp.lower())
@@ -335,6 +368,10 @@ class TeamPropsModel:
         row = ([st_t[f"for_r{w}"] for w in WINDOWS] + [st_t["for_ewm"]]
                + [st_o[f"against_r{w}"] for w in WINDOWS] + [st_o["against_ewm"]]
                + [float(is_home), delta, abs(delta)])
+        if self._use_lam:
+            # engine lambdas from the caller; goals-delta as proxy when absent
+            dl = (lam_t - lam_o) if (lam_t is not None and lam_o is not None) else delta
+            row = row + [dl, abs(dl)]
         cols = self._feature_names()
         model = self._models[market]
         if ref_rate is not None and market in self._models_ref:
@@ -355,10 +392,14 @@ class TeamPropsModel:
         return float(1.0 / (1.0 + np.exp(-z)))
 
     def predict_fixture(self, home_team: str, away_team: str,
-                        referee: str | None = None) -> dict:
+                        referee: str | None = None,
+                        lam_home: float | None = None,
+                        lam_away: float | None = None) -> dict:
         """{market: {"lambda_home", "lambda_away", "lambda_total", "dispersion",
         "over": {line: p}}}. `referee` (optional, EPL): uses the ref-augmented
-        cards/fouls models when the referee is known to the model."""
+        cards/fouls models when the referee is known to the model. `lam_home`/
+        `lam_away`: the engine's goal lambdas for THIS fixture — power the
+        delta_lam supremacy features (goals-delta proxy used when absent)."""
         out: dict = {}
         ref_vals = (self._ref_rates.get(referee)
                     if referee and self.is_epl_fixture(home_team, away_team) else None)
@@ -368,8 +409,8 @@ class TeamPropsModel:
             rr = None
             if ref_vals is not None and market in REF_MARKETS:
                 rr = ref_vals[0] if market == "yellows" else ref_vals[1]
-            lh = self._side_lambda(market, home_team, away_team, 1, rr)
-            la = self._side_lambda(market, away_team, home_team, 0, rr)
+            lh = self._side_lambda(market, home_team, away_team, 1, rr, lam_home, lam_away)
+            la = self._side_lambda(market, away_team, home_team, 0, rr, lam_away, lam_home)
             if lh is None or la is None:
                 continue
             disp = self._disp[market]
