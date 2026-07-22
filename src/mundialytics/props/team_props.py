@@ -41,9 +41,16 @@ MARKETS: dict[str, tuple[str, str, list[float]]] = {
     "shots":   ("home_shots", "away_shots", [20.5, 22.5, 24.5, 26.5]),
     "sot":     ("home_sot", "away_sot", [6.5, 7.5, 8.5, 9.5]),
 }
+# TEAM-side lines (validated 2026-07-22: bigger edge than match totals —
+# team shots -0.057/-0.070, team corners -0.030/-0.034, team yellows -0.014, all 5/5)
+SIDE_LINES = {"corners": [3.5, 4.5, 5.5], "yellows": [1.5, 2.5], "shots": [9.5, 11.5, 13.5]}
+# booking points (10/yellow + 25/red): -0.016..-0.021 vs league base 5/5 folds;
+# reds at LEAGUE mean (team red tendency measured = noise)
+BOOKING_LINES = [30.5, 40.5, 50.5]
 WINDOWS = (5, 10, 19)
 REF_MARKETS = {"yellows": "ref_yc", "fouls": "ref_foul"}
 NO_PLATT = {"yellows"}          # already calibrated; Platt hurt it
+LEAGUE_DISP = {"fouls"}         # per-league NB dispersion (validated for fouls only, 5/5)
 PLATT_FROM_SEASON = "2016-2017"
 
 
@@ -60,6 +67,46 @@ def _prob_over(total_lam: float | np.ndarray, line: float, disp: float) -> np.nd
 def _logit(p):
     p = np.clip(p, 1e-6, 1 - 1e-6)
     return np.log(p / (1 - p))
+
+
+def load_red_cards(root: str | Path) -> pd.DataFrame | None:
+    """Per-match red cards from raw football-data (HR/AR are 100% present in
+    all big-5 files; the foundation CSV never kept them)."""
+    rows = []
+    for p in glob.glob(str(Path(root) / "data/raw/football_data/**/*.csv"), recursive=True):
+        if not re.search(r"\d{4}_(E0|SP1|D1|I1|F1)\.csv$", p):
+            continue
+        try:
+            df = pd.read_csv(p, encoding="latin-1", on_bad_lines="skip",
+                             usecols=lambda c: c in {"Date", "HomeTeam", "AwayTeam", "HR", "AR"})
+        except Exception:
+            continue
+        if "HR" not in df.columns:
+            continue
+        df["date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce", format="mixed")
+        rows.append(df)
+    if not rows:
+        return None
+    r = pd.concat(rows, ignore_index=True).dropna(subset=["date"])
+    r = r.drop_duplicates(subset=["date", "HomeTeam", "AwayTeam"])
+    r["home_team"] = r["HomeTeam"].astype(str).str.lower().str.strip()
+    r["away_team"] = r["AwayTeam"].astype(str).str.lower().str.strip()
+    r["reds"] = pd.to_numeric(r["HR"], errors="coerce") + pd.to_numeric(r["AR"], errors="coerce")
+    return r.dropna(subset=["reds"])[["date", "home_team", "away_team", "reds"]]
+
+
+def _p_booking_over(lam_y: np.ndarray, disp_y: float, lam_r: np.ndarray, line: float) -> np.ndarray:
+    """P(10Y + 25R > line), Y ~ NB, R ~ Poisson, independent grid convolution."""
+    lam_y = np.clip(np.asarray(lam_y, float), 0.2, 25)
+    lam_r = np.clip(np.asarray(lam_r, float), 0.01, 3)
+    ry = lam_y / (disp_y - 1.0)
+    out = np.zeros(np.shape(lam_y))
+    for r_cnt in range(0, 7):
+        pr = poisson.pmf(r_cnt, lam_r)
+        thr = np.floor((line - 25 * r_cnt) / 10.0)
+        py_over = np.where(thr < 0, 1.0, 1.0 - nbinom.cdf(thr, ry, 1.0 / disp_y))
+        out = out + pr * py_over
+    return np.clip(out, 0, 1)
 
 
 def load_referee_rates(root: str | Path) -> pd.DataFrame | None:
@@ -112,6 +159,11 @@ class TeamPropsModel:
     _platt: dict = field(default_factory=dict, init=False, repr=False)
     _ref_rates: dict = field(default_factory=dict, init=False, repr=False)
     _epl_teams: set = field(default_factory=set, init=False, repr=False)
+    _disp_side: dict = field(default_factory=dict, init=False, repr=False)
+    _disp_lg: dict = field(default_factory=dict, init=False, repr=False)
+    _team_comp: dict = field(default_factory=dict, init=False, repr=False)
+    _red_lam: dict = field(default_factory=dict, init=False, repr=False)
+    _red_glob: float = field(default=0.4, init=False, repr=False)
 
     # ── fitting ────────────────────────────────────────────────────────────────
     def fit(self, matches: pd.DataFrame, referee_data: pd.DataFrame | None = None,
@@ -124,6 +176,14 @@ class TeamPropsModel:
         df = df[df["season"] >= self.seasons_from]
         if referee_data is None and root is not None:
             referee_data = load_referee_rates(root)
+        if root is not None:
+            reds = load_red_cards(root)
+            if reds is not None and "competition" in df.columns:
+                rj = df.merge(reds, on=["date", "home_team", "away_team"], how="inner")
+                rj = rj.drop_duplicates(subset=["match_id"])
+                if len(rj) > 3000:
+                    self._red_lam = rj.groupby("competition")["reds"].mean().to_dict()
+                    self._red_glob = float(rj["reds"].mean())
         if referee_data is not None:
             latest = referee_data.sort_values("date").groupby("ref").tail(1)
             self._ref_rates = {r.ref: (float(r.ref_yc), float(r.ref_foul))
@@ -143,8 +203,17 @@ class TeamPropsModel:
             self._models[market] = reg
             tt = (m[hc] + m[ac]).astype(float)
             self._disp[market] = float(np.clip(tt.var() / max(tt.mean(), 1e-9), 0.8, 3.0))
+            sv = lr["ev_for"].dropna().astype(float)
+            self._disp_side[market] = float(np.clip(sv.var() / max(sv.mean(), 1e-9), 0.9, 3.0))
             if "competition" in m.columns:
                 self._league_lam[market] = m.assign(tot=tt).groupby("competition")["tot"].mean().to_dict()
+                if market in LEAGUE_DISP:
+                    self._disp_lg[market] = (m.assign(tot=tt).groupby("competition")["tot"]
+                                             .apply(lambda s2: float(np.clip(s2.var() / max(s2.mean(), 1e-9),
+                                                                             1.02, 3.0)))).to_dict()
+                if not self._team_comp:
+                    last = m.sort_values("date").groupby("home_team")["competition"].last()
+                    self._team_comp = {str(t).lower(): c for t, c in last.items()}
             self._team_feats[market] = self._latest_team_state(lr)
             if self.calibrate and market not in NO_PLATT:
                 self._fit_platt(market, m, lr, feats, hc, ac, lines)
@@ -304,14 +373,37 @@ class TeamPropsModel:
             if lh is None or la is None:
                 continue
             disp = self._disp[market]
+            if market in self._disp_lg:   # per-league dispersion (fouls, validated 5/5)
+                comp = self._team_comp.get(home_team.lower())
+                disp = self._disp_lg[market].get(comp, disp)
             lines = MARKETS[market][2]
             over = {ln: self._apply_platt(market, ln, float(_prob_over(lh + la, ln, disp)))
                     for ln in lines}
-            out[market] = {
+            entry = {
                 "lambda_home": round(lh, 2), "lambda_away": round(la, 2),
                 "lambda_total": round(lh + la, 2), "dispersion": round(disp, 2),
                 "referee_used": bool(rr is not None and market in self._models_ref),
                 "over": {ln: round(p, 4) for ln, p in over.items()},
+            }
+            if market in SIDE_LINES:      # team-side lines (validated: more edge than totals)
+                ds = self._disp_side[market]
+                entry["over_home"] = {ln: round(float(_prob_over(lh, ln, ds)), 4)
+                                      for ln in SIDE_LINES[market]}
+                entry["over_away"] = {ln: round(float(_prob_over(la, ln, ds)), 4)
+                                      for ln in SIDE_LINES[market]}
+            out[market] = entry
+
+        # booking points: yellows model + league-mean reds (team red tendency = noise)
+        if "yellows" in out and self._red_lam:
+            comp = self._team_comp.get(home_team.lower())
+            lam_r = self._red_lam.get(comp, self._red_glob)
+            lam_y = out["yellows"]["lambda_total"]
+            disp_y = max(self._disp["yellows"], 1.05)
+            out["booking_pts"] = {
+                "lambda_yellows": lam_y, "lambda_reds": round(lam_r, 2),
+                "over": {ln: round(float(_p_booking_over(np.array([lam_y]), disp_y,
+                                                         np.array([lam_r]), ln)[0]), 4)
+                         for ln in BOOKING_LINES},
             }
         return out
 

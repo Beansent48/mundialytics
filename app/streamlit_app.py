@@ -260,7 +260,7 @@ def render_stat_grid(events: list[tuple[str, float, float]]) -> None:
 
 
 MARKET_ES = {"corners": "Córners", "yellows": "Amarillas", "fouls": "Faltas",
-             "shots": "Disparos", "sot": "A puerta"}
+             "shots": "Disparos", "sot": "A puerta", "booking_pts": "Booking pts (10A/25R)"}
 
 
 def render_props_section(home: str, away: str, pred) -> None:
@@ -289,14 +289,32 @@ def render_props_section(home: str, away: str, pred) -> None:
     if fx:
         rows = []
         for mk, d in fx.items():
-            r = {"Mercado": MARKET_ES.get(mk, mk), "λ Local": d["lambda_home"],
-                 "λ Visitante": d["lambda_away"], "λ Total": d["lambda_total"]}
+            r = {"Mercado": MARKET_ES.get(mk, mk),
+                 "λ Local": d.get("lambda_home", d.get("lambda_yellows", "")),
+                 "λ Visitante": d.get("lambda_away", d.get("lambda_reds", "")),
+                 "λ Total": d.get("lambda_total", "")}
             for ln, p in d["over"].items():
                 r[f"Over {ln}"] = f"{p:.0%}"
             rows.append(r)
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows).fillna(""), hide_index=True, use_container_width=True)
         st.caption("Prob. de superar cada línea en el TOTAL del partido "
-                   "(binomial negativa con sobre-dispersión medida por mercado).")
+                   "(binomial negativa con sobre-dispersión medida por mercado; "
+                   "booking pts = 10·amarilla + 25·roja, rojas a media de liga).")
+
+        side_rows = []
+        for mk, d in fx.items():
+            if "over_home" not in d:
+                continue
+            for key, team_name in [("over_home", home.title()), ("over_away", away.title())]:
+                r = {"Mercado": MARKET_ES.get(mk, mk), "Equipo": team_name}
+                for ln, p in d[key].items():
+                    r[f"O{ln}"] = f"{p:.0%}"
+                side_rows.append(r)
+        if side_rows:
+            st.markdown("**Líneas por equipo** (más señal que los totales: la identidad "
+                        "del equipo pesa más por lado)")
+            st.dataframe(pd.DataFrame(side_rows).fillna(""), hide_index=True,
+                         use_container_width=True)
 
     if not players.empty:
         st.markdown("#### Props de jugadores")
