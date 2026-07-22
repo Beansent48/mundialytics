@@ -137,6 +137,7 @@ class PredictionEngine:
         use_xg_rate: bool = True,        # use the dedicated xG-rate predictor when xG is available
         xg_rate_weight: float = 0.60,    # its blend weight vs goals-AD when active (backtest-optimal)
         sharpen_gamma_1x2: float = 1.0,  # 1X2 sharpening exponent (1.0 = off; 1.2 = LOFO-validated)
+        rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -161,6 +162,15 @@ class PredictionEngine:
         # trio; the scoreline matrix / O-U / BTTS and the competition-layer Monte
         # Carlo (which samples from lambdas and was already calibrated) are untouched.
         self.sharpen_gamma_1x2 = float(np.clip(sharpen_gamma_1x2, 0.5, 2.0))
+        # Understat xG runs hot vs actual goals and the gap is DRIFTING (goals/xG
+        # ratio ~0.99 in 2021 -> ~0.92 in 2025/26), so the xG-rate lambda over-states
+        # goal expectation (+~4% total) — hurting O/U and BTTS while leaving 1X2
+        # untouched (both lambdas scale together). When enabled, a goals/xG ratio is
+        # fit on the LAST ~2 SEASONS of training data (tracks the drift) and applied
+        # to the blended lambda on the xG-rate path. Validated on 6 walk-forward
+        # folds: O/U log-loss -0.0013, BTTS -0.0010 pooled, strongest in recent folds.
+        self.rescale_lambda_to_goals = bool(rescale_lambda_to_goals)
+        self.lambda_scale_: float = 1.0
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -218,10 +228,21 @@ class PredictionEngine:
         # xG-rate predictor (first-class lambda source). Fits only when xG is present;
         # is_ready gates its use at prediction time so no-xG data falls back cleanly.
         self.xg_rate_model_ = None
+        self.lambda_scale_ = 1.0
         if self.use_xg_rate and {"home_xg", "away_xg"}.issubset(matches.columns):
             xr = XGRateModel().fit(matches)
             if xr.is_ready:
                 self.xg_rate_model_ = xr
+                if self.rescale_lambda_to_goals:
+                    m = matches.dropna(subset=["home_xg", "away_xg", "home_goals", "away_goals"]).copy()
+                    m["date"] = pd.to_datetime(m.get("date"), errors="coerce")
+                    m = m.dropna(subset=["date"])
+                    recent = m[m["date"] >= m["date"].max() - pd.Timedelta(days=730)]
+                    if len(recent) >= 300:
+                        goals = pd.to_numeric(recent["home_goals"], errors="coerce") + pd.to_numeric(recent["away_goals"], errors="coerce")
+                        xg = pd.to_numeric(recent["home_xg"], errors="coerce") + pd.to_numeric(recent["away_xg"], errors="coerce")
+                        if xg.mean() > 0:
+                            self.lambda_scale_ = float(np.clip(goals.mean() / xg.mean(), 0.85, 1.10))
 
         # GoalLambdaModel (Poisson GLM with rolling features + ELO)
         if team_rows is not None and not team_rows.empty:
@@ -441,9 +462,9 @@ class PredictionEngine:
         if self.xg_rate_model_ is not None:
             xr_h, xr_a = self.xg_rate_model_.predict_lambda(h, a, neutral=neutral)
             w = self.xg_rate_weight
-            lh = w * xr_h + (1 - w) * lh_ad
-            la = w * xr_a + (1 - w) * la_ad
-            model_src = f"xgrate{w:.0%}_ad{1 - w:.0%}"
+            lh = (w * xr_h + (1 - w) * lh_ad) * self.lambda_scale_
+            la = (w * xr_a + (1 - w) * la_ad) * self.lambda_scale_
+            model_src = f"xgrate{w:.0%}_ad{1 - w:.0%}" + (f"_ls{self.lambda_scale_:.3f}" if self.lambda_scale_ != 1.0 else "")
         else:
             lh_gl, la_gl = self._lambdas_gl(h, a, competition)
             w_gl, w_ad, w_adx = self.blend_gl, self.blend_ad, self.blend_ad_xg

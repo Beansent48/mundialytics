@@ -79,7 +79,8 @@ def train_engine_before_cutoff(
     # LOFO-validated sharpening improves RPS/log-loss/ECE together (see
     # scripts/fit_calibration.py + project_xg_modeling_findings). Only the 1X2
     # trio is affected — the resume-MC samples from lambdas and stays untouched.
-    engine = PredictionEngine(blend_weight_gl=blend_weight_gl, sharpen_gamma_1x2=1.2)
+    engine = PredictionEngine(blend_weight_gl=blend_weight_gl, sharpen_gamma_1x2=1.2,
+                              rescale_lambda_to_goals=True)
     engine.fit(train)
     return engine
 

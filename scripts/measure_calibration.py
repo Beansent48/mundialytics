@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.statistical_core.prediction_engine import PredictionEngine  # noqa: E402
 
-TEST_SEASONS = ["2020-2021", "2021-2022", "2022-2023", "2023-2024", "2024-2025"]
+TEST_SEASONS = ["2020-2021", "2021-2022", "2022-2023", "2023-2024", "2024-2025", "2025-2026"]
 COVERED = ["2014-2015","2015-2016","2016-2017","2017-2018","2018-2019","2019-2020",
            "2020-2021","2021-2022","2022-2023","2023-2024","2024-2025","2025-2026"]
 CACHE = ROOT / "data/processed/enriched/understat_xg/walkforward_preds.csv"
@@ -60,7 +60,8 @@ def main() -> None:
                 p = eng.predict_match(str(r.home_team), str(r.away_team), competition=str(r.competition), neutral=bool(r.get("neutral", 0)))
                 rows.append({"season": s, "match_id": r.match_id, "hg": int(r.home_goals), "ag": int(r.away_goals),
                              "ph": p.p_home_win, "pd": p.p_draw, "pa": p.p_away_win,
-                             "po25": p.p_over_25, "pbtts": p.p_btts})
+                             "po25": p.p_over_25, "pbtts": p.p_btts,
+                             "lh": p.lambda_home, "la": p.lambda_away})
                 if eng.xg_rate_model_ is not None:
                     eng.xg_rate_model_.update_form(r.home_team, r.away_team, r.home_xg, r.away_xg)
             print(f"  {s}: {len(test)} matches ({time.time()-t0:.0f}s)", flush=True)

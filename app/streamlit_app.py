@@ -103,7 +103,8 @@ def load_club_engine():
     # blend_weight_gl 0.30 (was 0.60): 8-fold backtest — goals-AttackDefense
     # deserves ~70%, GL ~30% (0.30 beat 0.60 in 8/8 folds). See project_xg_modeling_findings.
     # sharpen_gamma_1x2=1.2: LOFO-validated 1X2 calibration (RPS/LL/ECE all improve).
-    engine = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.2)
+    engine = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.2,
+                              rescale_lambda_to_goals=True)
     engine.fit(df, elo_history=pd.DataFrame(elo.history))
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
     return engine, teams, df
