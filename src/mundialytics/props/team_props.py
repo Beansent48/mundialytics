@@ -479,3 +479,21 @@ class TeamPropsModel:
     @property
     def known_referees(self) -> list[str]:
         return sorted(self._ref_rates)
+
+    def team_profile(self, team: str) -> dict:
+        """Per-market recent event form for one team: {market: {"for_r10",
+        "against_r10", "league_avg_side"}} — feeds the web analysis view."""
+        out: dict = {}
+        comp = self._team_comp.get(team.lower())
+        for market in MARKETS:
+            mf = self._team_feats.get(market, {})
+            st = mf.get(team) or mf.get(team.lower())
+            if st is None:
+                continue
+            lg_tot = self._league_lam.get(market, {}).get(comp)
+            out[market] = {
+                "for_r10": round(st["for_r10"], 2),
+                "against_r10": round(st["against_r10"], 2),
+                "league_avg_side": round(lg_tot / 2, 2) if lg_tot else None,
+            }
+        return out
