@@ -75,7 +75,11 @@ def train_engine_before_cutoff(
     # ELO-free engine (scripts/backtest_elo.py) found the goals-AttackDefense
     # estimator deserves ~70% and GL ~30% — 0.30 beat 0.60 in 8/8 folds
     # (pooled RPS -0.0022). See [[project_xg_modeling_findings]].
-    engine = PredictionEngine(blend_weight_gl=blend_weight_gl)
+    # sharpen_gamma_1x2=1.2: the raw 1X2 trio is systematically under-confident;
+    # LOFO-validated sharpening improves RPS/log-loss/ECE together (see
+    # scripts/fit_calibration.py + project_xg_modeling_findings). Only the 1X2
+    # trio is affected — the resume-MC samples from lambdas and stays untouched.
+    engine = PredictionEngine(blend_weight_gl=blend_weight_gl, sharpen_gamma_1x2=1.2)
     engine.fit(train)
     return engine
 

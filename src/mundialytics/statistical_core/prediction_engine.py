@@ -136,6 +136,7 @@ class PredictionEngine:
         learn_blend: bool = False,       # learn the GL/AD blend at fit time via internal temporal holdout
         use_xg_rate: bool = True,        # use the dedicated xG-rate predictor when xG is available
         xg_rate_weight: float = 0.60,    # its blend weight vs goals-AD when active (backtest-optimal)
+        sharpen_gamma_1x2: float = 1.0,  # 1X2 sharpening exponent (1.0 = off; 1.2 = LOFO-validated)
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -152,6 +153,14 @@ class PredictionEngine:
         self.use_xg_rate = bool(use_xg_rate)
         self.xg_rate_weight = float(np.clip(xg_rate_weight, 0.0, 1.0))
         self.xg_rate_model_: XGRateModel | None = None
+        # Post-hoc 1X2 calibration: the raw model is systematically UNDER-confident
+        # (says 64% when reality is 71% — reliability curve compressed toward the
+        # middle by regularization + blend averaging). p_i^gamma renormalized with
+        # gamma=1.2 (stable across 5 LOFO folds) improves RPS -0.0012, log-loss
+        # -0.0031 AND ECE 0.0212->0.0124 simultaneously. Applies ONLY to the 1X2
+        # trio; the scoreline matrix / O-U / BTTS and the competition-layer Monte
+        # Carlo (which samples from lambdas and was already calibrated) are untouched.
+        self.sharpen_gamma_1x2 = float(np.clip(sharpen_gamma_1x2, 0.5, 2.0))
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -452,6 +461,13 @@ class PredictionEngine:
 
         # Probabilities from score matrix
         probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=self.ad_rho)
+        # Post-hoc 1X2 sharpening (see __init__): trio only, renormalized. Other
+        # markets and the scoreline matrix stay raw.
+        if abs(self.sharpen_gamma_1x2 - 1.0) > 1e-9:
+            trio = np.clip(np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]], dtype=float), 1e-9, 1.0)
+            trio = trio ** self.sharpen_gamma_1x2
+            trio = trio / trio.sum()
+            probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
         dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True, dixon_coles_rho=self.ad_rho)
 
         # Event lambdas
