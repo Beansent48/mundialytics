@@ -20,6 +20,7 @@ Teams are addressed by FOUNDATION names (Understat names mapped internally).
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,10 +31,12 @@ from mundialytics.enrichment.understat_team_aliases import to_foundation_name
 K_MIN = 900.0
 K_RECENT = 450.0
 SHOTS_DISP = 1.3
-STATS = ["xg", "goals", "shots", "xa", "assists", "yellow_cards"]
+PEN_CONV = 0.78  # measured penalty conversion in our shots data
+STATS = ["xg", "goals", "shots", "xa", "assists", "yellow_cards", "npxg", "npgoals"]
 # per-stat recency blend (A/B tested): last-15-appearance form helps shots/goals,
 # hurts cards (noisy small-sample) and is neutral for assists -> career-only there
-RECENT_W = {"xg": 0.5, "goals": 0.5, "shots": 0.5, "xa": 0.0, "assists": 0.0, "yellow_cards": 0.0}
+RECENT_W = {"xg": 0.5, "goals": 0.5, "shots": 0.5, "xa": 0.0, "assists": 0.0, "yellow_cards": 0.0,
+            "npxg": 0.5, "npgoals": 0.5}
 
 
 def _pos_group(p: str) -> str:
@@ -69,14 +72,37 @@ class PlayerPropsModel:
     _glob: dict = field(default_factory=dict, init=False, repr=False)
     _pos_min: dict = field(default_factory=dict, init=False, repr=False)
 
-    def fit(self, pm: pd.DataFrame) -> "PlayerPropsModel":
+    def fit(self, pm: pd.DataFrame, shots: pd.DataFrame | None = None,
+            shots_path: "str | Path | None" = None) -> "PlayerPropsModel":
         """`pm`: understat player-match rows (player_id, player, team, game_id, date,
-        position, minutes + STATS). All history is training; state = as of last game."""
+        position, minutes + base stats). All history is training; state = as of
+        last game. `shots`/`shots_path`: understat shot events — penalties carry
+        situation=NaN (soccerdata quirk) and power the pen-taker split of the
+        goal mu (anytime 5/5 folds). Without them the model falls back exactly
+        to the xG-based mu."""
         pm = pm.copy()
         pm["date"] = pd.to_datetime(pm["date"], errors="coerce")
         pm = pm.dropna(subset=["date"])
-        for c in ["minutes"] + STATS:
+        for c in ["minutes", "xg", "goals", "shots", "xa", "assists", "yellow_cards"]:
             pm[c] = pd.to_numeric(pm[c], errors="coerce").fillna(0.0)
+
+        # penalties per (game, player) -> npxg/npgoals + taker-share ingredients
+        if shots is None and shots_path is not None and Path(shots_path).exists():
+            shots = pd.read_csv(shots_path, usecols=["game_id", "player_id", "situation", "result"])
+        if shots is not None:
+            pen = shots[shots["situation"].isna()].copy()
+            pen["pen_goal"] = (pen["result"] == "Goal").astype(float)
+            pg = pen.groupby(["game_id", "player_id"]).agg(
+                pen_att=("result", "size"), pen_goal=("pen_goal", "sum")).reset_index()
+            pm = pm.merge(pg, on=["game_id", "player_id"], how="left")
+        for c in ["pen_att", "pen_goal"]:
+            if c not in pm.columns:
+                pm[c] = 0.0
+        pm[["pen_att", "pen_goal"]] = pm[["pen_att", "pen_goal"]].fillna(0.0)
+        pm["npxg"] = (pm["xg"] - 0.76 * pm["pen_att"]).clip(lower=0)
+        pm["npgoals"] = (pm["goals"] - pm["pen_goal"]).clip(lower=0)
+        tp = pm.groupby(["team", "game_id"])["pen_att"].sum().rename("team_pen_att").reset_index()
+        pm = pm.merge(tp, on=["team", "game_id"], how="left")
 
         mode_pos = (pm[pm["position"] != "Sub"].groupby("player_id")["position"]
                     .agg(lambda s: s.mode().iloc[0] if len(s.mode()) else "MC"))
@@ -98,6 +124,15 @@ class PlayerPropsModel:
         tail15 = (pm.groupby("player_id").tail(15).groupby("player_id")
                   .agg(rmin15=("minutes", "sum"), **{f"rr_{c}": (c, "sum") for c in STATS}))
         agg = agg.join(tail15)
+        # pen-taker state: player vs team pens over the player's last 60 squad rows
+        tail60 = (pm.groupby("player_id").tail(60).groupby("player_id")
+                  .agg(p_pen60=("pen_att", "sum"), t_pen60=("team_pen_att", "sum")))
+        agg = agg.join(tail60)
+        # team attacking-pen rate per game (last 38 team games)
+        tg = (tp.merge(pm[["team", "game_id", "date"]].drop_duplicates(), on=["team", "game_id"])
+              .sort_values(["team", "date"]))
+        self._team_pen_rate = tg.groupby("team")["team_pen_att"].apply(
+            lambda s: float(s.tail(38).mean())).to_dict()
         mp = pm[pm["minutes"] > 0].groupby("player_id")["minutes"]
         agg["avg_minp10"] = mp.apply(lambda s: s.tail(10).mean())
         agg["nplayed10"] = mp.apply(lambda s: min(len(s), 10))
@@ -161,7 +196,13 @@ class PlayerPropsModel:
         emins = P["exp_min"] / 90.0
         af = float(np.clip(atk_factor, 0.4, 2.5)) ** 0.7
 
-        mu_goal = (0.7 * P["r_xg"] + 0.3 * P["r_goals"]) * emins * af
+        # goal mu = non-pen component + pen-taker component (5/5 folds; falls
+        # back to the xG mu exactly when pen data was absent at fit)
+        t_pen = P["t_pen60"].fillna(0.0)
+        taker_share = (t_pen / (t_pen + 4.0)) * (P["p_pen60"].fillna(0.0) / t_pen.clip(lower=1e-9))
+        pen_rate = getattr(self, "_team_pen_rate", {}).get(us_team, 0.22)
+        mu_pen = taker_share * pen_rate * PEN_CONV * emins * af
+        mu_goal = (0.7 * P["r_npxg"] + 0.3 * P["r_npgoals"]) * emins * af + mu_pen
         mu_shots = P["r_shots"] * emins * af
         mu_ass = (0.7 * P["r_xa"] + 0.3 * P["r_assists"]) * emins * af
         mu_yc = P["r_yellow_cards"] * emins ** 0.7

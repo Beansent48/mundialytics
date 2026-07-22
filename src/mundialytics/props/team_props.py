@@ -236,8 +236,11 @@ class TeamPropsModel:
                     last = m.sort_values("date").groupby("home_team")["competition"].last()
                     self._team_comp = {str(t).lower(): c for t, c in last.items()}
             self._team_feats[market] = self._latest_team_state(lr)
-            if self.calibrate and market not in NO_PLATT:
-                self._fit_platt(market, m, lr, feats, hc, ac, lines)
+            if self.calibrate:
+                # NO_PLATT only gates TOTAL lines (yellows totals already calibrated);
+                # side-line Platt validated positive for every side market incl. yellows
+                self._fit_platt(market, m, lr, feats, hc, ac,
+                                lines if market not in NO_PLATT else [])
             # referee-augmented model (EPL subset)
             if market in REF_MARKETS and referee_data is not None and "competition" in m.columns:
                 epl = m[m["competition"].str.contains("Premier", case=False, na=False)]
@@ -263,6 +266,8 @@ class TeamPropsModel:
         """Walk-forward OOF predictions over past seasons -> per-line Platt (a, b)."""
         seasons = sorted(s for s in m["season"].unique() if s >= PLATT_FROM_SEASON)
         collected: dict[float, list] = {ln: [] for ln in lines}
+        side_lines = SIDE_LINES.get(market, [])
+        collected_side: dict[float, list] = {ln: [] for ln in side_lines}
         for s in seasons:
             te_m = m[m.season == s]
             s_start = te_m.date.min()
@@ -283,15 +288,31 @@ class TeamPropsModel:
             for ln in lines:
                 p = _prob_over(tot.to_numpy(), ln, disp)
                 collected[ln].append((p, (act > ln).astype(int).to_numpy()))
-        for ln in lines:
-            if not collected[ln]:
-                continue
-            x = _logit(np.concatenate([p for p, _ in collected[ln]]))
-            y = np.concatenate([y for _, y in collected[ln]])
+            if side_lines:
+                trs = lr[lr.date < s_start]["ev_for"].dropna().astype(float)
+                disp_s = float(np.clip(trs.var() / max(trs.mean(), 1e-9), 0.9, 3.0))
+                for ln in side_lines:
+                    ps = _prob_over(te["pred"].to_numpy(), ln, disp_s)
+                    collected_side[ln].append((ps, (te["ev_for"].astype(float) > ln).astype(int).to_numpy()))
+
+        def _fit_pairs(pairs):
+            x = _logit(np.concatenate([p for p, _ in pairs]))
+            y = np.concatenate([y for _, y in pairs])
             if y.min() == y.max():
-                continue
+                return None
             pl = LogisticRegression(C=1e6, max_iter=1000).fit(x.reshape(-1, 1), y)
-            self._platt[(market, ln)] = (float(pl.coef_[0][0]), float(pl.intercept_[0]))
+            return (float(pl.coef_[0][0]), float(pl.intercept_[0]))
+
+        for ln in lines:
+            if collected[ln]:
+                ab = _fit_pairs(collected[ln])
+                if ab:
+                    self._platt[(market, ln)] = ab
+        for ln in side_lines:
+            if collected_side[ln]:
+                ab = _fit_pairs(collected_side[ln])
+                if ab:
+                    self._platt[("side", market, ln)] = ab
 
     @staticmethod
     def _long_rows(m: pd.DataFrame, hc: str, ac: str,
@@ -428,10 +449,17 @@ class TeamPropsModel:
             }
             if market in SIDE_LINES:      # team-side lines (validated: more edge than totals)
                 ds = self._disp_side[market]
-                entry["over_home"] = {ln: round(float(_prob_over(lh, ln, ds)), 4)
-                                      for ln in SIDE_LINES[market]}
-                entry["over_away"] = {ln: round(float(_prob_over(la, ln, ds)), 4)
-                                      for ln in SIDE_LINES[market]}
+
+                def _p_side(lam_s: float, ln: float) -> float:
+                    p = float(_prob_over(lam_s, ln, ds))
+                    ab = self._platt.get(("side", market, ln))
+                    if ab is None:
+                        return p
+                    a, b = ab
+                    return float(1.0 / (1.0 + np.exp(-(a * _logit(p) + b))))
+
+                entry["over_home"] = {ln: round(_p_side(lh, ln), 4) for ln in SIDE_LINES[market]}
+                entry["over_away"] = {ln: round(_p_side(la, ln), 4) for ln in SIDE_LINES[market]}
             out[market] = entry
 
         # booking points: yellows model + league-mean reds (team red tendency = noise)
