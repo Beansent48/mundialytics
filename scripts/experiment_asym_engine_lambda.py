@@ -47,13 +47,47 @@ def bll(y, p):
     return float(-(y * np.log(p) + (1 - y) * np.log(1 - p)).mean())
 
 
+def build_lr(m: pd.DataFrame, hc: str, ac: str, with_lam: bool) -> pd.DataFrame:
+    rows = []
+    for r in m.itertuples(index=False):
+        h = dict(match_id=r.match_id, date=r.date, season=r.season, team=r.home_team,
+                 opp=r.away_team, is_home=1, ev_for=getattr(r, hc), ev_against=getattr(r, ac),
+                 gf=r.home_goals, ga=r.away_goals)
+        a = dict(match_id=r.match_id, date=r.date, season=r.season, team=r.away_team,
+                 opp=r.home_team, is_home=0, ev_for=getattr(r, ac), ev_against=getattr(r, hc),
+                 gf=r.away_goals, ga=r.home_goals)
+        if with_lam:
+            h["lam_t"], h["lam_o"] = r.lh, r.la
+            a["lam_t"], a["lam_o"] = r.la, r.lh
+        rows.append(h)
+        rows.append(a)
+    lr = pd.DataFrame(rows).sort_values(["team", "date", "match_id"])
+    for col in ["ev_for", "ev_against", "gf", "ga"]:
+        for w in W:
+            lr[f"{col}_r{w}"] = (lr.groupby("team", group_keys=False)[col]
+                                 .apply(lambda s: s.shift(1).rolling(w, min_periods=3).mean()))
+        lr[f"{col}_ewm"] = (lr.groupby("team", group_keys=False)[col]
+                            .apply(lambda s: s.shift(1).ewm(halflife=5, min_periods=3).mean()))
+    opp_src = [f"ev_against_r{w}" for w in W] + ["ev_against_ewm", "gf_ewm", "ga_ewm"]
+    opp = lr[["match_id", "team"] + opp_src].rename(
+        columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
+    lr = lr.merge(opp, on=["match_id", "opp"], how="left")
+    lr["delta"] = (lr["gf_ewm"] + lr["opp_ga_ewm"]) / 2 - (lr["opp_gf_ewm"] + lr["ga_ewm"]) / 2
+    lr["abs_delta"] = lr["delta"].abs()
+    if with_lam:
+        lr["delta_lam"] = lr["lam_t"] - lr["lam_o"]
+        lr["abs_delta_lam"] = lr["delta_lam"].abs()
+    return lr
+
+
 def main() -> None:
     lam = pd.concat([pd.read_csv(PREDS)[["match_id", "lh", "la"]],
                      pd.read_csv(PREDS_H)[["match_id", "lh", "la"]]], ignore_index=True)
     lam = lam.drop_duplicates("match_id")
-    df = pd.read_csv(FOUND, low_memory=False)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.merge(lam, on="match_id", how="inner")
+    full = pd.read_csv(FOUND, low_memory=False)
+    full["date"] = pd.to_datetime(full["date"], errors="coerce")
+    full = full[full["season"] >= "2014-2015"]
+    df = full.merge(lam, on="match_id", how="inner")
     print(f"matches with walk-forward lambdas: {len(df)} ({df.season.min()}..{df.season.max()})")
 
     for market, (hc, ac, lines) in MARKETS.items():
@@ -62,53 +96,35 @@ def main() -> None:
         for c in [hc, ac, "home_goals", "away_goals"]:
             m[c] = pd.to_numeric(m[c], errors="coerce")
         m = m.dropna(subset=[hc, ac, "home_goals", "away_goals"])
-        rows = []
-        for r in m.itertuples(index=False):
-            rows.append(dict(match_id=r.match_id, date=r.date, season=r.season, comp=r.competition,
-                             team=r.home_team, opp=r.away_team, is_home=1,
-                             ev_for=getattr(r, hc), ev_against=getattr(r, ac),
-                             gf=r.home_goals, ga=r.away_goals, lam_t=r.lh, lam_o=r.la))
-            rows.append(dict(match_id=r.match_id, date=r.date, season=r.season, comp=r.comp
-                             if hasattr(r, "comp") else r.competition,
-                             team=r.away_team, opp=r.home_team, is_home=0,
-                             ev_for=getattr(r, ac), ev_against=getattr(r, hc),
-                             gf=r.away_goals, ga=r.home_goals, lam_t=r.la, lam_o=r.lh))
-        lr = pd.DataFrame(rows).sort_values(["team", "date", "match_id"])
-        for col in ["ev_for", "ev_against", "gf", "ga"]:
-            for w in W:
-                lr[f"{col}_r{w}"] = (lr.groupby("team", group_keys=False)[col]
-                                     .apply(lambda s: s.shift(1).rolling(w, min_periods=3).mean()))
-            lr[f"{col}_ewm"] = (lr.groupby("team", group_keys=False)[col]
-                                .apply(lambda s: s.shift(1).ewm(halflife=5, min_periods=3).mean()))
-        opp_src = [f"ev_against_r{w}" for w in W] + ["ev_against_ewm", "gf_ewm", "ga_ewm"]
-        opp = lr[["match_id", "team"] + opp_src].rename(
-            columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
-        lr = lr.merge(opp, on=["match_id", "opp"], how="left")
-        lr["delta"] = (lr["gf_ewm"] + lr["opp_ga_ewm"]) / 2 - (lr["opp_gf_ewm"] + lr["ga_ewm"]) / 2
-        lr["abs_delta"] = lr["delta"].abs()
-        lr["delta_lam"] = lr["lam_t"] - lr["lam_o"]
-        lr["abs_delta_lam"] = lr["delta_lam"].abs()
+        mf = full.dropna(subset=[hc, ac, "home_goals", "away_goals", "date"]).copy()
+        for c in [hc, ac, "home_goals", "away_goals"]:
+            mf[c] = pd.to_numeric(mf[c], errors="coerce")
+        mf = mf.dropna(subset=[hc, ac, "home_goals", "away_goals"])
+
+        lr = build_lr(m, hc, ac, with_lam=True)
+        lr_f = build_lr(mf, hc, ac, with_lam=False)
 
         base = ([f"ev_for_r{w}" for w in W] + ["ev_for_ewm"]
                 + [f"opp_ev_against_r{w}" for w in W] + ["opp_ev_against_ewm"] + ["is_home"])
         variants = {
-            "A-goals": base + ["delta", "abs_delta"],
-            "B-lambda": base + ["delta_lam", "abs_delta_lam"],
-            "C-both": base + ["delta", "abs_delta", "delta_lam", "abs_delta_lam"],
+            "A-goals": (lr, base + ["delta", "abs_delta"]),
+            "B-lambda": (lr, base + ["delta_lam", "abs_delta_lam"]),
+            "C-both": (lr, base + ["delta", "abs_delta", "delta_lam", "abs_delta_lam"]),
+            "D-goals-FULLTRAIN": (lr_f, base + ["delta", "abs_delta"]),
         }
         print(f"\n===== {market.upper()} ({time.time()-t0:.0f}s prep) =====")
-        for tag, feats in variants.items():
+        for tag, (frame, feats) in variants.items():
             res = {ln: {"m": [], "b": []} for ln in lines}
             for s in TEST_SEASONS:
-                te_m = m[m.season == s]
+                te_m = m[m.season == s]          # eval ALWAYS the lambda-covered matches
                 if len(te_m) == 0:
                     continue
                 s_start = te_m.date.min()
-                tr = lr[lr.date < s_start].dropna(subset=feats + ["ev_for"])
+                tr = frame[frame.date < s_start].dropna(subset=feats + ["ev_for"])
                 if len(tr) < 2000:
                     continue
                 reg = PoissonRegressor(alpha=0.1, max_iter=1000).fit(tr[feats], tr["ev_for"].clip(lower=0))
-                te = lr[lr.match_id.isin(set(te_m.match_id))].dropna(subset=feats).copy()
+                te = frame[frame.match_id.isin(set(te_m.match_id))].dropna(subset=feats).copy()
                 te["pred"] = np.clip(reg.predict(te[feats]), 0.1, 25)
                 pv = te.pivot_table(index="match_id", columns="is_home", values="pred").dropna()
                 tot = pv[1] + pv[0]
@@ -127,7 +143,7 @@ def main() -> None:
             deltas = " | ".join(f"O{ln} {pool(res[ln]['m'])-pool(res[ln]['b']):+.4f}" for ln in lines)
             folds5 = " ".join(f"{s_[2][-2:]}{'+' if s_[0] < b_[0] else '-'}"
                               for s_, b_ in zip(res[lines[0]]["m"], res[lines[0]]["b"]))
-            print(f"  {tag:9s}: {deltas}   [{folds5} @O{lines[0]}]", flush=True)
+            print(f"  {tag:18s}: {deltas}   [{folds5} @O{lines[0]}]", flush=True)
 
 
 if __name__ == "__main__":

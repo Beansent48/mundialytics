@@ -274,7 +274,8 @@ def render_props_section(home: str, away: str, pred) -> None:
             "Árbitro (opcional — mejora tarjetas y faltas)",
             ["—"] + tp.known_referees, key=f"ref_{home}_{away}")
         referee = None if referee == "—" else referee
-    fx = tp.predict_fixture(home, away, referee=referee)
+    fx = tp.predict_fixture(home, away, referee=referee,
+                            lam_home=pred.lambda_home, lam_away=pred.lambda_away)
     players = pd.DataFrame()
     if pp is not None:
         try:
