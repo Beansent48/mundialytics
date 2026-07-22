@@ -96,6 +96,13 @@ def build_panel() -> pd.DataFrame:
     pm["avg_minp10"] = g2["min_played"].apply(lambda s: s.shift(1).rolling(10, min_periods=1).mean())
     pm["nplayed10"] = g2["min_played"].apply(lambda s: s.shift(1).rolling(10, min_periods=1).count())
     pm["start_rate10"] = g2["started"].apply(lambda s: s.shift(1).rolling(10, min_periods=1).mean())
+    # v6 bimodal minutes: split by starter/sub appearances
+    pm["min_start"] = pm["minutes"].where((pm["started"] == 1) & (pm["minutes"] > 0))
+    pm["min_sub"] = pm["minutes"].where((pm["started"] == 0) & (pm["minutes"] > 0))
+    pm["avg_min_start10"] = g2["min_start"].apply(lambda s: s.shift(1).rolling(10, min_periods=1).mean())
+    pm["avg_min_sub10"] = g2["min_sub"].apply(lambda s: s.shift(1).rolling(10, min_periods=1).mean())
+    pm["started_played"] = pm["started"].where(pm["minutes"] > 0)
+    pm["start_share10"] = g2["started_played"].apply(lambda s: s.shift(1).rolling(10, min_periods=1).mean())
     return pm
 
 
@@ -167,7 +174,19 @@ def main() -> None:
     pos_min = train.groupby("pgroup")["minutes"].mean()
     prior_min = pm["pgroup"].map(pos_min).fillna(float(train["minutes"].mean()))
     cred_m = pm["nplayed10"].fillna(0) / (pm["nplayed10"].fillna(0) + 3.0)
-    pm["exp_min"] = cred_m * pm["avg_minp10"].fillna(prior_min) + (1 - cred_m) * prior_min
+    if "--bimodal" in sys.argv:
+        # v6: E[min|plays] = P(start|plays)*E[min|start] + (1-P)*E[min|sub]
+        pos_start = train[train.started == 1].groupby("pgroup")["minutes"].mean()
+        pos_sub = train[(train.started == 0) & (train.minutes > 0)].groupby("pgroup")["minutes"].mean()
+        pr_s = pm["pgroup"].map(pos_start).fillna(83.0)
+        pr_b = pm["pgroup"].map(pos_sub).fillna(24.0)
+        p_start = pm["start_share10"].fillna(pm["pgroup"].map(
+            train[train.minutes > 0].groupby("pgroup")["started"].mean()).fillna(0.7))
+        bimodal = p_start * pm["avg_min_start10"].fillna(pr_s) + (1 - p_start) * pm["avg_min_sub10"].fillna(pr_b)
+        pm["exp_min"] = cred_m * bimodal + (1 - cred_m) * prior_min
+        print("minutes mode: BIMODAL (v6)", flush=True)
+    else:
+        pm["exp_min"] = cred_m * pm["avg_minp10"].fillna(prior_min) + (1 - cred_m) * prior_min
     emins_all = pm["exp_min"].clip(20, 95) / 90.0         # model's pre-match expectation
     af_all = pm["atk_factor"].fillna(1.0) ** 0.7          # team uplift doesn't transfer 1:1 to each player
 
