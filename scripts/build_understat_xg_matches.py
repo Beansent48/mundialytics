@@ -86,6 +86,10 @@ def build_understat_xg_matches(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
     df["is_penalty"] = situation.isin(PENALTY_SITUATIONS)
     df["is_goal"] = result.isin(GOAL_RESULTS)
     df["npxg"] = df["xg"].where(~df["is_penalty"], 0.0)
+    # Open-play vs set-piece decomposition (set-piece skill is a distinct, more
+    # persistent signal — feeds the SETPIECE features of the xG-rate model).
+    df["xg_op"] = df["xg"].where(situation.eq("open play"), 0.0)
+    df["xg_sp"] = df["xg"].where(situation.isin({"from corner", "set piece", "direct freekick"}), 0.0)
 
     # Per (game_id, team) aggregation.
     grouped = df.groupby(["game_id", "team"], sort=False)
@@ -96,6 +100,8 @@ def build_understat_xg_matches(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
         date=("date10", "first"),
         team_xg=("xg", "sum"),
         team_npxg=("npxg", "sum"),
+        team_xg_op=("xg_op", "sum"),
+        team_xg_sp=("xg_sp", "sum"),
         team_shots=("shot_id", "count"),
         team_goals=("is_goal", "sum"),
     ).reset_index()
@@ -128,6 +134,10 @@ def build_understat_xg_matches(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
             "away_xg": round(float(a["team_xg"]), 4),
             "home_npxg": round(float(h["team_npxg"]), 4),
             "away_npxg": round(float(a["team_npxg"]), 4),
+            "home_xg_op": round(float(h["team_xg_op"]), 4),
+            "away_xg_op": round(float(a["team_xg_op"]), 4),
+            "home_xg_sp": round(float(h["team_xg_sp"]), 4),
+            "away_xg_sp": round(float(a["team_xg_sp"]), 4),
             "home_shots": int(h["team_shots"]),
             "away_shots": int(a["team_shots"]),
             "home_goals": int(h["team_goals"]),
