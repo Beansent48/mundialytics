@@ -133,7 +133,7 @@ def load_props_models():
     """Team-event + player-prop models (clubs only). Fails soft: (None, None)."""
     try:
         from mundialytics.props import PlayerPropsModel, TeamPropsModel
-        tp = TeamPropsModel().fit(df_clubs)
+        tp = TeamPropsModel().fit(df_clubs, root=ROOT)
     except Exception:
         return None, None
     try:
@@ -268,7 +268,13 @@ def render_props_section(home: str, away: str, pred) -> None:
     tp, pp = load_props_models()
     if tp is None:
         return
-    fx = tp.predict_fixture(home, away)
+    referee = None
+    if tp.known_referees and tp.is_epl_fixture(home, away):
+        referee = st.selectbox(
+            "Árbitro (opcional — mejora tarjetas y faltas)",
+            ["—"] + tp.known_referees, key=f"ref_{home}_{away}")
+        referee = None if referee == "—" else referee
+    fx = tp.predict_fixture(home, away, referee=referee)
     players = pd.DataFrame()
     if pp is not None:
         try:
