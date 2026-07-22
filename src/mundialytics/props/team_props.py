@@ -34,6 +34,8 @@ import pandas as pd
 from scipy.stats import nbinom, poisson
 from sklearn.linear_model import LogisticRegression, PoissonRegressor
 
+from mundialytics.statistical_core.attack_defense_model import AttackDefenseModel
+
 MARKETS: dict[str, tuple[str, str, list[float]]] = {
     "corners": ("home_corners", "away_corners", [7.5, 8.5, 9.5, 10.5, 11.5]),
     "yellows": ("home_yellow_cards", "away_yellow_cards", [2.5, 3.5, 4.5, 5.5, 6.5]),
@@ -52,6 +54,13 @@ REF_MARKETS = {"yellows": "ref_yc", "fouls": "ref_foul"}
 NO_PLATT = {"yellows"}          # already calibrated; Platt hurt it
 LEAGUE_DISP = {"fouls"}         # per-league NB dispersion (validated for fouls only, 5/5)
 PLATT_FROM_SEASON = "2016-2017"
+# round-5 upgrades (joint-validated per market, 5/5 folds vs previous config):
+EWM_HL = {"corners": 12}        # corners want LONG memory (12 > 8 > 5 > 3); others 5
+STAKES_MARKETS = {"yellows", "fouls"}   # walk-forward standings features
+# MLE strengths prior: corners/yellows only — for shots/sot the tiny totals gain
+# (+0.0003) was offset by a side-lines loss (-0.0005); fouls was a wash
+ADM_W = {"corners": 0.3, "yellows": 0.3}
+ADM_CAPS = {"corners": 20.0, "yellows": 12.0, "fouls": 35.0, "shots": 40.0, "sot": 20.0}
 
 
 def _prob_over(total_lam: float | np.ndarray, line: float, disp: float) -> np.ndarray:
@@ -165,6 +174,33 @@ class TeamPropsModel:
     _red_lam: dict = field(default_factory=dict, init=False, repr=False)
     _red_glob: float = field(default=0.4, init=False, repr=False)
     _use_lam: bool = field(default=False, init=False, repr=False)
+    _adm: dict = field(default_factory=dict, init=False, repr=False)
+    _team_pos: dict = field(default_factory=dict, init=False, repr=False)
+
+    @staticmethod
+    def _add_positions(full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+        """Walk-forward league position + games played BEFORE each match, plus the
+        latest (position, played) per team for predict-time stakes features."""
+        full = full.sort_values("date").copy()
+        rows, latest = [], {}
+        for (_, _), g in full.groupby(["competition", "season"], sort=False):
+            pts: dict = {}
+            played: dict = {}
+            for r in g.itertuples(index=False):
+                def rank(t):
+                    p = pts.get(t, 0)
+                    return 1 + sum(1 for v in pts.values() if v > p)
+                rh, ra = rank(r.home_team), rank(r.away_team)
+                rows.append((r.match_id, rh, ra, played.get(r.home_team, 0)))
+                hgo, ago = r.home_goals, r.away_goals
+                pts[r.home_team] = pts.get(r.home_team, 0) + (3 if hgo > ago else (1 if hgo == ago else 0))
+                pts[r.away_team] = pts.get(r.away_team, 0) + (3 if ago > hgo else (1 if hgo == ago else 0))
+                played[r.home_team] = played.get(r.home_team, 0) + 1
+                played[r.away_team] = played.get(r.away_team, 0) + 1
+                latest[str(r.home_team).lower()] = (rank(r.home_team), played[r.home_team])
+                latest[str(r.away_team).lower()] = (rank(r.away_team), played[r.away_team])
+        pos = pd.DataFrame(rows, columns=["match_id", "pos_home", "pos_away", "played_home"])
+        return full.merge(pos, on="match_id", how="left"), latest
 
     # ── fitting ────────────────────────────────────────────────────────────────
     def fit(self, matches: pd.DataFrame, referee_data: pd.DataFrame | None = None,
@@ -195,6 +231,9 @@ class TeamPropsModel:
             df["la"] = np.nan
         # delta_lam features only when lambda coverage is real (else goals-delta recipe)
         self._use_lam = bool(df["lh"].notna().mean() > 0.3)
+        # walk-forward standings (stakes features for cards/fouls) + predict-time state
+        df = df.dropna(subset=["home_goals", "away_goals"])
+        df, self._team_pos = self._add_positions(df)
         if referee_data is None and root is not None:
             referee_data = load_referee_rates(root)
         if root is not None:
@@ -217,11 +256,19 @@ class TeamPropsModel:
             m = m.dropna(subset=[hc, ac, "home_goals", "away_goals"])
             if len(m) < 3000:
                 continue
-            lr = self._long_rows(m, hc, ac)
-            feats = self._feature_names()
+            lr = self._long_rows(m, hc, ac, hl=EWM_HL.get(market, 5))
+            feats = self._feature_names(market)
             tr = lr.dropna(subset=feats + ["ev_for"])
             reg = PoissonRegressor(alpha=0.1, max_iter=1000).fit(tr[feats], tr["ev_for"].clip(lower=0))
             self._models[market] = reg
+            # MLE attack/defense strengths as a stabilizing prior (blend at predict)
+            if ADM_W.get(market, 0) > 0:
+                adm_tr = (m.rename(columns={hc: "hg2", ac: "ag2"})
+                          .drop(columns=["home_goals", "away_goals"])
+                          .rename(columns={"hg2": "home_goals", "ag2": "away_goals"}))
+                adm = AttackDefenseModel(dixon_coles_rho=0.0, time_decay_half_life=365.0,
+                                         goal_cap=ADM_CAPS.get(market, 30.0), max_goals=5)
+                self._adm[market] = adm.fit(adm_tr)
             tt = (m[hc] + m[ac]).astype(float)
             self._disp[market] = float(np.clip(tt.var() / max(tt.mean(), 1e-9), 0.8, 3.0))
             sv = lr["ev_for"].dropna().astype(float)
@@ -235,10 +282,13 @@ class TeamPropsModel:
                 if not self._team_comp:
                     last = m.sort_values("date").groupby("home_team")["competition"].last()
                     self._team_comp = {str(t).lower(): c for t, c in last.items()}
-            self._team_feats[market] = self._latest_team_state(lr)
+            self._team_feats[market] = self._latest_team_state(lr, hl=EWM_HL.get(market, 5))
             if self.calibrate:
                 # NO_PLATT only gates TOTAL lines (yellows totals already calibrated);
-                # side-line Platt validated positive for every side market incl. yellows
+                # side-line Platt validated positive for every side market incl. yellows.
+                # NOTE: Platt is collected on rate-only walk-forward preds; predict applies
+                # it to the ADM-blended probs (w=0.3) — approximation, distortion shape is
+                # dominated by the shared rate component.
                 self._fit_platt(market, m, lr, feats, hc, ac,
                                 lines if market not in NO_PLATT else [])
             # referee-augmented model (EPL subset)
@@ -248,7 +298,8 @@ class TeamPropsModel:
                                 on=["date", "home_team", "away_team"], how="left")
                 epl = epl.drop_duplicates(subset=["match_id"]).dropna(subset=[REF_MARKETS[market]])
                 if len(epl) > 2000:
-                    lr_e = self._long_rows(epl, hc, ac, extra={"ref_rate": REF_MARKETS[market]})
+                    lr_e = self._long_rows(epl, hc, ac, extra={"ref_rate": REF_MARKETS[market]},
+                                           hl=EWM_HL.get(market, 5))
                     fr = feats + ["ref_rate"]
                     tre = lr_e.dropna(subset=fr + ["ev_for"])
                     self._models_ref[market] = PoissonRegressor(alpha=0.1, max_iter=1000).fit(
@@ -316,16 +367,19 @@ class TeamPropsModel:
 
     @staticmethod
     def _long_rows(m: pd.DataFrame, hc: str, ac: str,
-                   extra: dict[str, str] | None = None) -> pd.DataFrame:
+                   extra: dict[str, str] | None = None, hl: int = 5) -> pd.DataFrame:
         has_lam = "lh" in m.columns
+        has_pos = "pos_home" in m.columns
         rows = []
         for r in m.itertuples(index=False):
             ex = {k: getattr(r, col) for k, col in (extra or {}).items()}
+            ex_h, ex_a = dict(ex), dict(ex)
             if has_lam:
-                ex_h = {**ex, "lam_t": r.lh, "lam_o": r.la}
-                ex_a = {**ex, "lam_t": r.la, "lam_o": r.lh}
-            else:
-                ex_h = ex_a = ex
+                ex_h.update(lam_t=r.lh, lam_o=r.la)
+                ex_a.update(lam_t=r.la, lam_o=r.lh)
+            if has_pos:
+                ex_h.update(pos_t=r.pos_home, pos_o=r.pos_away, played=r.played_home)
+                ex_a.update(pos_t=r.pos_away, pos_o=r.pos_home, played=r.played_home)
             rows.append(dict(match_id=r.match_id, date=r.date, team=r.home_team, opp=r.away_team,
                              is_home=1, ev_for=getattr(r, hc), ev_against=getattr(r, ac),
                              gf=r.home_goals, ga=r.away_goals, **ex_h))
@@ -337,8 +391,9 @@ class TeamPropsModel:
             for w in WINDOWS:
                 lr[f"{col}_r{w}"] = (lr.groupby("team", group_keys=False)[col]
                                      .apply(lambda s: s.shift(1).rolling(w, min_periods=3).mean()))
+            use_hl = hl if col in ("ev_for", "ev_against") else 5  # goals delta stays hl5
             lr[f"{col}_ewm"] = (lr.groupby("team", group_keys=False)[col]
-                                .apply(lambda s: s.shift(1).ewm(halflife=5, min_periods=3).mean()))
+                                .apply(lambda s: s.shift(1).ewm(halflife=use_hl, min_periods=3).mean()))
         opp_src = [f"ev_against_r{w}" for w in WINDOWS] + ["ev_against_ewm", "gf_ewm", "ga_ewm"]
         opp = lr[["match_id", "team"] + opp_src].rename(
             columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
@@ -348,18 +403,25 @@ class TeamPropsModel:
         if has_lam:
             lr["delta_lam"] = lr["lam_t"] - lr["lam_o"]
             lr["abs_delta_lam"] = lr["delta_lam"].abs()
+        if has_pos:
+            lr["round_frac"] = (lr["played"] / 38.0).clip(0, 1)
+            lr["pos_diff_abs"] = (lr["pos_t"] - lr["pos_o"]).abs()
+            lr["releg_battle"] = (((lr["pos_t"] >= 15) | (lr["pos_o"] >= 15))
+                                  & (lr["round_frac"] > 0.6)).astype(float)
         return lr
 
-    def _feature_names(self) -> list[str]:
+    def _feature_names(self, market: str | None = None) -> list[str]:
         base = ([f"ev_for_r{w}" for w in WINDOWS] + ["ev_for_ewm"]
                 + [f"opp_ev_against_r{w}" for w in WINDOWS] + ["opp_ev_against_ewm"]
                 + ["is_home", "delta", "abs_delta"])
         if self._use_lam:
             base += ["delta_lam", "abs_delta_lam"]
+        if market in STAKES_MARKETS:
+            base += ["pos_diff_abs", "releg_battle", "round_frac"]
         return base
 
     @staticmethod
-    def _latest_team_state(lr: pd.DataFrame) -> dict:
+    def _latest_team_state(lr: pd.DataFrame, hl: int = 5) -> dict:
         """Per team: rolling stats INCLUDING its last played game (for the next fixture)."""
         out: dict = {}
         for team, g in lr.groupby("team"):
@@ -369,9 +431,9 @@ class TeamPropsModel:
             for w in WINDOWS:
                 st[f"for_r{w}"] = float(g["ev_for"].tail(w).mean())
                 st[f"against_r{w}"] = float(g["ev_against"].tail(w).mean())
-            st["for_ewm"] = float(g["ev_for"].ewm(halflife=5).mean().iloc[-1])
-            st["against_ewm"] = float(g["ev_against"].ewm(halflife=5).mean().iloc[-1])
-            st["gf_ewm"] = float(g["gf"].ewm(halflife=5).mean().iloc[-1])
+            st["for_ewm"] = float(g["ev_for"].ewm(halflife=hl).mean().iloc[-1])
+            st["against_ewm"] = float(g["ev_against"].ewm(halflife=hl).mean().iloc[-1])
+            st["gf_ewm"] = float(g["gf"].ewm(halflife=5).mean().iloc[-1])   # goals delta stays hl5
             st["ga_ewm"] = float(g["ga"].ewm(halflife=5).mean().iloc[-1])
             out[team] = st
         return out
@@ -393,7 +455,13 @@ class TeamPropsModel:
             # engine lambdas from the caller; goals-delta as proxy when absent
             dl = (lam_t - lam_o) if (lam_t is not None and lam_o is not None) else delta
             row = row + [dl, abs(dl)]
-        cols = self._feature_names()
+        if market in STAKES_MARKETS:
+            pos_t, played_t = self._team_pos.get(team.lower(), (10, 19))
+            pos_o, _ = self._team_pos.get(opp.lower(), (10, 19))
+            round_frac = min(played_t / 38.0, 1.0)
+            releg = float((pos_t >= 15 or pos_o >= 15) and round_frac > 0.6)
+            row = row + [abs(pos_t - pos_o), releg, round_frac]
+        cols = self._feature_names(market)
         model = self._models[market]
         if ref_rate is not None and market in self._models_ref:
             row = row + [ref_rate]
@@ -434,6 +502,13 @@ class TeamPropsModel:
             la = self._side_lambda(market, away_team, home_team, 0, rr, lam_away, lam_home)
             if lh is None or la is None:
                 continue
+            # MLE strengths prior blend (round-5, joint-validated incl. side lines)
+            if market in self._adm:
+                wb = ADM_W[market]
+                comp_a = self._team_comp.get(home_team.lower())
+                ah, aa, _ = self._adm[market].expected_goals(home_team, away_team, 0, comp_a)
+                lh = wb * ah + (1 - wb) * lh
+                la = wb * aa + (1 - wb) * la
             disp = self._disp[market]
             if market in self._disp_lg:   # per-league dispersion (fouls, validated 5/5)
                 comp = self._team_comp.get(home_team.lower())

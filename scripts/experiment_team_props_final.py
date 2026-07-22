@@ -36,18 +36,24 @@ MARKETS = {
     "shots":   ("home_shots", "away_shots", [22.5, 24.5], 40.0),
     "sot":     ("home_sot", "away_sot", [7.5, 8.5], 20.0),
 }
+SIDE_LINES = {"corners": [3.5, 4.5, 5.5], "yellows": [1.5, 2.5], "shots": [9.5, 11.5, 13.5]}
 FINAL = {
     "corners": dict(hl=12, stakes=False, adm_w=0.3),
     "yellows": dict(hl=5, stakes=True, adm_w=0.3),
     "fouls":   dict(hl=5, stakes=True, adm_w=0.0),
-    "shots":   dict(hl=5, stakes=False, adm_w=0.3),
-    "sot":     dict(hl=5, stakes=False, adm_w=0.3),
+    "shots":   dict(hl=5, stakes=False, adm_w=0.0),   # ADM dropped: side loss offset tiny total gain
+    "sot":     dict(hl=5, stakes=False, adm_w=0.0),
 }
+if "--yellows-only" in sys.argv:
+    MARKETS = {"yellows": MARKETS["yellows"]}
 
 
 def prob_over(lam, line, disp):
+    from scipy.stats import poisson as _poi
     k = int(np.floor(line))
     lam = np.clip(lam, 0.2, 60.0)
+    if disp <= 1.05:               # side yellows disperse ~0.94 -> Poisson
+        return 1.0 - _poi.cdf(k, lam)
     r = lam / (disp - 1.0)
     return 1.0 - nbinom.cdf(k, r, 1.0 / disp)
 
@@ -139,13 +145,14 @@ def main() -> None:
         if cfg["stakes"]:
             fin_feats += ["pos_diff_abs", "releg_battle", "round_frac"]
 
+        s_lines = SIDE_LINES.get(market, [])
         res = {tag: {ln: {"m": [], "b": []} for ln in lines} for tag in ["DEPLOYED", "FINAL"]}
+        res_s = {tag: {ln: {"m": [], "b": []} for ln in s_lines} for tag in ["DEPLOYED", "FINAL"]}
         for s in TEST_SEASONS:
             te_m = m[m.season == s]
             if len(te_m) == 0:
                 continue
             s_start = te_m.date.min()
-            adm_lam = None
             if cfg["adm_w"] > 0:
                 adm_tr = (mf[mf.date < s_start]
                           .rename(columns={hc: "hg2", ac: "ag2"})
@@ -160,12 +167,15 @@ def main() -> None:
                 te = lr[lr.match_id.isin(set(te_m.match_id))].dropna(subset=feats).copy()
                 te["pred"] = np.clip(reg.predict(te[feats]), 0.1, 40)
                 pv = te.pivot_table(index="match_id", columns="is_home", values="pred").dropna()
-                tot = (pv[1] + pv[0]).to_numpy()
+                lh_v, la_v = pv[1].to_numpy(), pv[0].to_numpy()
                 tei = te_m.set_index("match_id").loc[pv.index]
                 if tag == "FINAL" and cfg["adm_w"] > 0:
                     a_l = np.array([adm.expected_goals(r.home_team, r.away_team, 0, r.competition)[:2]
                                     for r in tei.itertuples(index=False)])
-                    tot = cfg["adm_w"] * (a_l[:, 0] + a_l[:, 1]) + (1 - cfg["adm_w"]) * tot
+                    wb = cfg["adm_w"]
+                    lh_v = wb * a_l[:, 0] + (1 - wb) * lh_v
+                    la_v = wb * a_l[:, 1] + (1 - wb) * la_v
+                tot = lh_v + la_v
                 tr_tot = m[m.date < s_start]
                 tt = (tr_tot[hc] + tr_tot[ac]).astype(float)
                 disp = float(np.clip(tt.var() / max(tt.mean(), 1e-9), 1.11, 3.0))
@@ -176,6 +186,20 @@ def main() -> None:
                     y = (act > ln).astype(float).to_numpy()
                     res[tag][ln]["m"].append((bll(y, prob_over(tot, ln, disp)), len(y), s))
                     res[tag][ln]["b"].append((bll(y, prob_over(base_v, ln, disp)), len(y), s))
+                if s_lines:
+                    trs_lr = lr[lr.date < s_start]
+                    sv = trs_lr["ev_for"].dropna().astype(float)
+                    disp_s = float(np.clip(sv.var() / max(sv.mean(), 1e-9), 0.9, 3.0))
+                    side_mean_h = tr_tot[hc].mean()
+                    side_mean_a = tr_tot[ac].mean()
+                    lam_sides = np.concatenate([lh_v, la_v])
+                    act_sides = np.concatenate([tei[hc].to_numpy(float), tei[ac].to_numpy(float)])
+                    base_sides = np.concatenate([np.full(len(lh_v), side_mean_h),
+                                                 np.full(len(la_v), side_mean_a)])
+                    for ln in s_lines:
+                        ys = (act_sides > ln).astype(float)
+                        res_s[tag][ln]["m"].append((bll(ys, prob_over(lam_sides, ln, disp_s)), len(ys), s))
+                        res_s[tag][ln]["b"].append((bll(ys, prob_over(base_sides, ln, disp_s)), len(ys), s))
         pool = lambda a: sum(x * n for x, n, _ in a) / max(sum(n for _, n, _ in a), 1)
         cfg_s = f"hl={cfg['hl']}, stakes={cfg['stakes']}, adm_w={cfg['adm_w']}"
         print(f"\n===== {market.upper()} ({time.time()-t0:.0f}s)  FINAL=({cfg_s}) =====", flush=True)
@@ -184,6 +208,11 @@ def main() -> None:
             f0 = " ".join(f"{s_[2][-2:]}{'+' if s_[0] < b_[0] else '-'}"
                           for s_, b_ in zip(res[tag][lines[0]]["m"], res[tag][lines[0]]["b"]))
             print(f"  {tag:9s}: {deltas}   [{f0} @O{lines[0]}]", flush=True)
+        if s_lines:
+            for tag in ["DEPLOYED", "FINAL"]:
+                deltas = " | ".join(f"O{ln} {pool(res_s[tag][ln]['m'])-pool(res_s[tag][ln]['b']):+.4f}"
+                                    for ln in s_lines)
+                print(f"  SIDE {tag:9s}: {deltas}", flush=True)
 
 
 if __name__ == "__main__":
