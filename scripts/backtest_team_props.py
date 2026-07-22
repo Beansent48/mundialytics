@@ -116,6 +116,7 @@ def main() -> None:
                 pbase = prob_over(base_lam_v, ln, disp)
                 fold_res[ln]["model"].append((bll(y, pmod), len(y), s))
                 fold_res[ln]["base"].append((bll(y, pbase), len(y), s))
+                fold_res[ln].setdefault("yp", []).append((y, pmod))
         pool = lambda a: sum(x * n for x, n, _ in a) / max(sum(n for _, n, _ in a), 1)
         print(f"\n===== {market.upper()}  (disp={disp_used:.2f} {'NB' if disp_used and disp_used>1.1 else 'Poisson'}, {time.time()-t0:.0f}s) =====")
         for ln in lines:
@@ -123,7 +124,15 @@ def main() -> None:
             n = sum(nn for _, nn, _ in fold_res[ln]["model"])
             folds = " ".join(f"{s[-2:]}{'+' if a[0] < b[0] else '-'}"
                              for a, b, s in [(x, yy, x[2]) for x, yy in zip(fold_res[ln]["model"], fold_res[ln]["base"])])
-            print(f"  O/U {ln:>4}: model LL {mm:.4f} | lg-base {bb:.4f} | delta {mm-bb:+.4f}  (n={n})  folds[{folds}]", flush=True)
+            yy_all = np.concatenate([y for y, _ in fold_res[ln]["yp"]])
+            pp_all = np.concatenate([p for _, p in fold_res[ln]["yp"]])
+            q = pd.qcut(pp_all, 8, duplicates="drop")
+            cal = pd.DataFrame({"p": pp_all, "y": yy_all}).groupby(q, observed=True).agg(
+                n=("y", "size"), pred=("p", "mean"), emp=("y", "mean"))
+            ece = float((cal.n / cal.n.sum() * (cal.pred - cal.emp).abs()).sum())
+            spread = f"{pp_all.min():.2f}-{pp_all.max():.2f}"
+            print(f"  O/U {ln:>4}: model LL {mm:.4f} | lg-base {bb:.4f} | delta {mm-bb:+.4f} | "
+                  f"ECE {ece:.4f} | rango p {spread}  (n={n})  folds[{folds}]", flush=True)
 
 
 if __name__ == "__main__":
