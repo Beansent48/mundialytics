@@ -37,6 +37,12 @@ ROUND_LABELS = ["top24", "top8", "playoff", "r16", "qf", "sf", "final", "champio
 
 
 def load_calibration(root: str | Path) -> dict:
+    """European constants preferred (validated on 1,000 real UCL/UEL/UECL
+    matches — European home advantage measured HIGHER than domestic, hfa 0.28
+    vs 0.21, and slightly higher scoring); big-5 domestic fit as fallback."""
+    euro = Path(root) / "data/processed/elo_lambda_calibration_euro.json"
+    if euro.exists():
+        return json.loads(euro.read_text())
     p = Path(root) / "data/processed/elo_lambda_calibration.json"
     return json.loads(p.read_text())
 
