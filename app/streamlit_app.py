@@ -148,13 +148,41 @@ LEAGUE_COMPETITIONS = [c for c, cfg in COMP_CONFIG.items() if cfg["type"] == "li
 TOURNAMENT_COMPETITIONS = [c for c, cfg in COMP_CONFIG.items() if cfg["type"] == "torneo"]
 
 
+# ── Model cache keys ────────────────────────────────────────────────────────────
+def _code_fingerprint(*rel_paths: str) -> str:
+    """8-char hash of the given source files' bytes. Folded into cache keys so a
+    fitted model self-invalidates when its code changes — no manual version bump
+    (the old PROPS/ENGINE_CACHE_VERSION footgun: forget to bump -> stale models
+    served silently)."""
+    import hashlib
+    h = hashlib.sha256()
+    for rel in sorted(rel_paths):
+        p = ROOT / rel
+        try:
+            h.update(p.read_bytes())
+        except OSError:
+            h.update(b"missing")
+    return h.hexdigest()[:8]
+
+
+_ENGINE_FP = _code_fingerprint(
+    "src/mundialytics/statistical_core/prediction_engine.py",
+    "src/mundialytics/statistical_core/attack_defense_model.py",
+    "src/mundialytics/statistical_core/distributions.py",
+    "src/mundialytics/models/goal_model.py",
+    "src/mundialytics/models/xg_rate_model.py",
+    "src/mundialytics/ratings/elo.py",
+)
+_PROPS_FP = _code_fingerprint(
+    "src/mundialytics/props/team_props.py",
+    "src/mundialytics/props/player_props.py",
+)
+
+
 # ── Engine loading ─────────────────────────────────────────────────────────────
-ENGINE_CACHE_VERSION = 1   # bump whenever engine code/config changes
-
-
 def _engine_cache_path(tag: str, df: pd.DataFrame) -> Path:
     cache_dir = ROOT / "data/processed/cache"
-    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_v{ENGINE_CACHE_VERSION}"
+    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{_ENGINE_FP}"
     return cache_dir / f"engine_{key}.joblib"
 
 
@@ -222,17 +250,14 @@ engine_intl,  INTL_TEAMS,  df_intl  = load_intl_engine()
 ALL_TEAMS_COMBINED = sorted(set(CLUB_TEAMS) | set(INTL_TEAMS))
 
 
-PROPS_CACHE_VERSION = 1  # bump whenever src/mundialytics/props logic changes
-
-
 @st.cache_resource(show_spinner="🎯  Cargando modelos de props...")
 def load_props_models():
     """Team-event + player-prop models (clubs only). Fails soft: (None, None).
     Fitted objects are disk-cached (fit costs ~45s: 2 AD-MLE fits + Platt
-    walk-forward); the cache key changes with the data or a version bump."""
+    walk-forward); the key auto-invalidates on data OR props-code change."""
     import joblib
     cache_dir = ROOT / "data/processed/cache"
-    key = f"{len(df_clubs)}_{str(df_clubs['date'].max())[:10]}_v{PROPS_CACHE_VERSION}"
+    key = f"{len(df_clubs)}_{str(df_clubs['date'].max())[:10]}_{_PROPS_FP}"
     cache_f = cache_dir / f"props_models_{key}.joblib"
     if cache_f.exists():
         try:
