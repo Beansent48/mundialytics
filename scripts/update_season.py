@@ -49,6 +49,43 @@ def season_codes(today: date) -> tuple[str, str]:
     return f"{(y - 1) % 100:02d}{y:02d}", f"{(y - 2) % 100:02d}{(y - 1) % 100:02d}"
 
 
+class IntegrityError(RuntimeError):
+    pass
+
+
+def check_foundation_integrity(prev_rows: int | None) -> None:
+    """Abort before caches/models are touched if the rebuilt foundation looks
+    corrupt — a bad download must never silently poison the deployed models."""
+    df = pd.read_csv(FOUND, low_memory=False)
+    problems = []
+    n = len(df)
+    if n < 40000:                                   # we carry 26 seasons (~45k)
+        problems.append(f"only {n} rows (expected 40k+)")
+    if prev_rows is not None and n < prev_rows - 5:  # rebuild should never LOSE matches
+        problems.append(f"row count dropped {prev_rows} -> {n}")
+    for col in ["home_goals", "away_goals", "home_team", "away_team", "date", "competition"]:
+        if col not in df.columns:
+            problems.append(f"missing column {col}")
+        elif df[col].isna().mean() > 0.02:
+            problems.append(f"{col} has {df[col].isna().mean():.0%} NaN")
+    d = pd.to_datetime(df.get("date"), errors="coerce")
+    if d.notna().mean() < 0.98:
+        problems.append("dates unparseable")
+    elif d.max() < pd.Timestamp("2024-01-01"):
+        problems.append(f"newest match {d.max():%Y-%m-%d} — data looks stale")
+    for gc in ["home_goals", "away_goals"]:
+        if gc in df.columns:
+            g = pd.to_numeric(df[gc], errors="coerce")
+            if g.max() > 20 or g.min() < 0:
+                problems.append(f"{gc} out of range [{g.min()}, {g.max()}]")
+    if df.duplicated(subset=["match_id"]).any():
+        problems.append("duplicate match_id")
+    if problems:
+        raise IntegrityError("; ".join(problems))
+    print(f"    integrity OK: {n} rows, dates to {d.max():%Y-%m-%d}, "
+          f"xG cov {df.get('home_xg', pd.Series(dtype=float)).notna().mean():.0%}", flush=True)
+
+
 def run_step(name: str, cmd: list[str]) -> bool:
     print(f"\n=== {name} ===", flush=True)
     t0 = time.time()
@@ -125,10 +162,27 @@ def main() -> None:
         print("\n=== 2/8 Understat SKIPPED ===", flush=True)
 
     run_step("3/8 Understat xG aggregation", [PY, "scripts/build_understat_xg_matches.py"])
+
+    prev_rows = len(pd.read_csv(FOUND, low_memory=False)) if FOUND.exists() else None
+    backup_found = FOUND.with_suffix(".csv.prev")
+    if FOUND.exists():
+        backup_found.write_bytes(FOUND.read_bytes())   # rollback safety net
     run_step("4/8 foundation rebuild", [PY, "scripts/build_foundation_big5_historical.py"])
 
     print("\n=== 5/8 foundation xG augment ===", flush=True)
     augment_foundation_with_xg()
+
+    print("\n=== 5b/8 foundation integrity check ===", flush=True)
+    try:
+        check_foundation_integrity(prev_rows)
+    except IntegrityError as exc:
+        print(f"    ABORT: foundation failed integrity check -> {exc}", flush=True)
+        if backup_found.exists():
+            FOUND.write_bytes(backup_found.read_bytes())
+            print("    rolled back to the previous foundation; models untouched.", flush=True)
+        raise SystemExit(1)
+    finally:
+        backup_found.unlink(missing_ok=True)
 
     run_step("6/8 canonical_matches_with_xg",
              [PY, "scripts/enrich_matches_with_xg.py",

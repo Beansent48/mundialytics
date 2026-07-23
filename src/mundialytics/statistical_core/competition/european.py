@@ -95,15 +95,25 @@ def fetch_current_elo(root: str | Path, date_str: str | None = None) -> dict[str
     import requests
 
     d = date_str or datetime.date.today().isoformat()
-    cache = Path(root) / f"data/external/clubelo/daily/{d}.csv"
+    daily_dir = Path(root) / "data/external/clubelo/daily"
+    cache = daily_dir / f"{d}.csv"
+    df = None
     if cache.exists() and cache.stat().st_size > 5000:
         df = pd.read_csv(cache)
     else:
-        r = requests.get(f"http://api.clubelo.com/{d}", timeout=30)
-        r.raise_for_status()
-        df = pd.read_csv(StringIO(r.text))
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(cache, index=False)
+        try:
+            r = requests.get(f"http://api.clubelo.com/{d}", timeout=30)
+            r.raise_for_status()
+            df = pd.read_csv(StringIO(r.text))
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(cache, index=False)
+        except Exception:
+            # network down / API hiccup -> fall back to the most recent cached
+            # snapshot so the whole European layer still works offline
+            snaps = sorted(daily_dir.glob("*.csv")) if daily_dir.exists() else []
+            if not snaps:
+                raise
+            df = pd.read_csv(snaps[-1])
     df = df.dropna(subset=["Club", "Elo"])
     return dict(zip(df["Club"].astype(str), df["Elo"].astype(float)))
 
