@@ -78,28 +78,47 @@ def _logit(p):
     return np.log(p / (1 - p))
 
 
-def load_red_cards(root: str | Path) -> pd.DataFrame | None:
-    """Per-match red cards from raw football-data (HR/AR are 100% present in
-    all big-5 files; the foundation CSV never kept them)."""
+_RAW_SCAN_CACHE: dict = {}
+
+
+def _scan_raw_footballdata(root: str | Path) -> pd.DataFrame | None:
+    """ONE pass over the raw football-data files with the union of columns the
+    referee and red-card loaders need (they used to scan the ~240 CSVs twice)."""
+    key = str(Path(root).resolve())
+    if key in _RAW_SCAN_CACHE:
+        return _RAW_SCAN_CACHE[key]
+    want = {"Date", "HomeTeam", "AwayTeam", "Referee", "HY", "AY", "HF", "AF", "HR", "AR"}
     rows = []
     for p in glob.glob(str(Path(root) / "data/raw/football_data/**/*.csv"), recursive=True):
-        if not re.search(r"\d{4}_(E0|SP1|D1|I1|F1)\.csv$", p):
+        mdiv = re.search(r"\d{4}_(E0|SP1|D1|I1|F1)\.csv$", p)
+        if not mdiv:
             continue
         try:
             df = pd.read_csv(p, encoding="latin-1", on_bad_lines="skip",
-                             usecols=lambda c: c in {"Date", "HomeTeam", "AwayTeam", "HR", "AR"})
+                             usecols=lambda c: c in want)
         except Exception:
             continue
-        if "HR" not in df.columns:
-            continue
         df["date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce", format="mixed")
+        df["div"] = mdiv.group(1)
         rows.append(df)
     if not rows:
+        _RAW_SCAN_CACHE[key] = None
         return None
     r = pd.concat(rows, ignore_index=True).dropna(subset=["date"])
     r = r.drop_duplicates(subset=["date", "HomeTeam", "AwayTeam"])
     r["home_team"] = r["HomeTeam"].astype(str).str.lower().str.strip()
     r["away_team"] = r["AwayTeam"].astype(str).str.lower().str.strip()
+    _RAW_SCAN_CACHE[key] = r
+    return r
+
+
+def load_red_cards(root: str | Path) -> pd.DataFrame | None:
+    """Per-match red cards from raw football-data (HR/AR are 100% present in
+    all big-5 files; the foundation CSV never kept them)."""
+    r = _scan_raw_footballdata(root)
+    if r is None or "HR" not in r.columns:
+        return None
+    r = r.copy()
     r["reds"] = pd.to_numeric(r["HR"], errors="coerce") + pd.to_numeric(r["AR"], errors="coerce")
     return r.dropna(subset=["reds"])[["date", "home_team", "away_team", "reds"]]
 
@@ -119,27 +138,16 @@ def _p_booking_over(lam_y: np.ndarray, disp_y: float, lam_r: np.ndarray, line: f
 
 
 def load_referee_rates(root: str | Path) -> pd.DataFrame | None:
-    """Walk-forward referee card/foul tendencies from raw football-data E0 files."""
-    rows = []
-    for p in glob.glob(str(Path(root) / "data/raw/football_data/**/*E0.csv"), recursive=True):
-        if not re.search(r"\d{4}_E0\.csv$", p):
-            continue
-        try:
-            df = pd.read_csv(p, encoding="latin-1", on_bad_lines="skip",
-                             usecols=lambda c: c in {"Date", "HomeTeam", "AwayTeam", "Referee",
-                                                     "HY", "AY", "HF", "AF"})
-        except Exception:
-            continue
-        if "Referee" not in df.columns:
-            continue
-        df["date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
-        rows.append(df)
-    if not rows:
+    """Walk-forward referee card/foul tendencies from raw football-data (only
+    EPL files carry Referee; other rows drop out on the notna filter)."""
+    r = _scan_raw_footballdata(root)
+    if r is None or "Referee" not in r.columns:
         return None
-    r = pd.concat(rows, ignore_index=True).dropna(subset=["date", "Referee"])
-    r = r.drop_duplicates(subset=["date", "HomeTeam", "AwayTeam"])
-    r["home_team"] = r["HomeTeam"].astype(str).str.lower().str.strip()
-    r["away_team"] = r["AwayTeam"].astype(str).str.lower().str.strip()
+    # E0 only — matches the validated experiment population exactly (other
+    # leagues have sporadic Referee data that would shift the shrinkage mean)
+    r = r[r["div"] == "E0"].dropna(subset=["Referee"]).copy()
+    if r.empty:
+        return None
     r["ref"] = r["Referee"].astype(str).str.strip()
     r["tot_yc"] = pd.to_numeric(r["HY"], errors="coerce") + pd.to_numeric(r["AY"], errors="coerce")
     r["tot_f"] = pd.to_numeric(r["HF"], errors="coerce") + pd.to_numeric(r["AF"], errors="coerce")
@@ -370,30 +378,34 @@ class TeamPropsModel:
                    extra: dict[str, str] | None = None, hl: int = 5) -> pd.DataFrame:
         has_lam = "lh" in m.columns
         has_pos = "pos_home" in m.columns
-        rows = []
-        for r in m.itertuples(index=False):
-            ex = {k: getattr(r, col) for k, col in (extra or {}).items()}
-            ex_h, ex_a = dict(ex), dict(ex)
-            if has_lam:
-                ex_h.update(lam_t=r.lh, lam_o=r.la)
-                ex_a.update(lam_t=r.la, lam_o=r.lh)
-            if has_pos:
-                ex_h.update(pos_t=r.pos_home, pos_o=r.pos_away, played=r.played_home)
-                ex_a.update(pos_t=r.pos_away, pos_o=r.pos_home, played=r.played_home)
-            rows.append(dict(match_id=r.match_id, date=r.date, team=r.home_team, opp=r.away_team,
-                             is_home=1, ev_for=getattr(r, hc), ev_against=getattr(r, ac),
-                             gf=r.home_goals, ga=r.away_goals, **ex_h))
-            rows.append(dict(match_id=r.match_id, date=r.date, team=r.away_team, opp=r.home_team,
-                             is_home=0, ev_for=getattr(r, ac), ev_against=getattr(r, hc),
-                             gf=r.away_goals, ga=r.home_goals, **ex_a))
-        lr = pd.DataFrame(rows).sort_values(["team", "date", "match_id"])
+        # vectorized two-sided view (home perspective + away perspective)
+        base = ["match_id", "date"]
+        h_map = {"home_team": "team", "away_team": "opp", hc: "ev_for", ac: "ev_against",
+                 "home_goals": "gf", "away_goals": "ga"}
+        a_map = {"away_team": "team", "home_team": "opp", ac: "ev_for", hc: "ev_against",
+                 "away_goals": "gf", "home_goals": "ga"}
+        if has_lam:
+            h_map.update({"lh": "lam_t", "la": "lam_o"})
+            a_map.update({"la": "lam_t", "lh": "lam_o"})
+        if has_pos:
+            h_map.update({"pos_home": "pos_t", "pos_away": "pos_o", "played_home": "played"})
+            a_map.update({"pos_away": "pos_t", "pos_home": "pos_o", "played_home": "played"})
+        for k, col in (extra or {}).items():
+            h_map[col] = k
+            a_map[col] = k
+        h = m[base + list(h_map)].rename(columns=h_map).assign(is_home=1)
+        a = m[base + list(a_map)].rename(columns=a_map).assign(is_home=0)
+        lr = pd.concat([h, a], ignore_index=True).sort_values(["team", "date", "match_id"])
+        # cython grouped rolling/ewm on the shifted series (same semantics as the
+        # old per-group apply, ~4x faster)
+        tkey = lr["team"]
         for col in ["ev_for", "ev_against", "gf", "ga"]:
+            shifted = lr.groupby("team", sort=False)[col].shift(1)
+            g = shifted.groupby(tkey, sort=False)
             for w in WINDOWS:
-                lr[f"{col}_r{w}"] = (lr.groupby("team", group_keys=False)[col]
-                                     .apply(lambda s: s.shift(1).rolling(w, min_periods=3).mean()))
+                lr[f"{col}_r{w}"] = g.rolling(w, min_periods=3).mean().reset_index(level=0, drop=True)
             use_hl = hl if col in ("ev_for", "ev_against") else 5  # goals delta stays hl5
-            lr[f"{col}_ewm"] = (lr.groupby("team", group_keys=False)[col]
-                                .apply(lambda s: s.shift(1).ewm(halflife=use_hl, min_periods=3).mean()))
+            lr[f"{col}_ewm"] = g.ewm(halflife=use_hl, min_periods=3).mean().reset_index(level=0, drop=True)
         opp_src = [f"ev_against_r{w}" for w in WINDOWS] + ["ev_against_ewm", "gf_ewm", "ga_ewm"]
         opp = lr[["match_id", "team"] + opp_src].rename(
             columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
