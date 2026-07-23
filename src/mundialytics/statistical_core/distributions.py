@@ -156,17 +156,31 @@ def scoreline_distribution(
     max_goals: int = 10,
     normalize: bool = True,
     dixon_coles_rho: float = 0.0,
+    temper: float = 1.0,
 ) -> ScoreDistribution:
     """Poisson scoreline distribution with optional Dixon-Coles low-score correction.
 
     With ``dixon_coles_rho=0`` this is the original independent Poisson model.
     Non-zero rho only changes the 0-0, 1-0, 0-1 and 1-1 cells, then the finite
     matrix is re-normalized for auditable probabilities.
+
+    ``temper`` > 1 concentrates each side's marginal pmf (p_k ∝ pois_k^temper,
+    renormalized) — a one-parameter fix for the measured UNDER-dispersion of
+    real goal counts vs Poisson (Pearson ~0.91; cf. Boshnakov et al. 2017's
+    Weibull count motivation). Default 1.0 = classic behavior, untouched.
     """
     lh = clip_expected(lambda_home, floor=0.01, cap=8.0)
     la = clip_expected(lambda_away, floor=0.01, cap=8.0)
     goals = np.arange(max_goals + 1)
-    values = np.outer(poisson.pmf(goals, lh), poisson.pmf(goals, la))
+    ph = poisson.pmf(goals, lh)
+    pa = poisson.pmf(goals, la)
+    t = float(temper or 1.0)
+    if abs(t - 1.0) > 1e-9:
+        ph = ph ** t
+        ph = ph / ph.sum()
+        pa = pa ** t
+        pa = pa / pa.sum()
+    values = np.outer(ph, pa)
     rho = float(dixon_coles_rho or 0.0)
     if abs(rho) > 1e-12:
         for i, h in enumerate(goals[:2]):
@@ -180,8 +194,10 @@ def scoreline_distribution(
     return ScoreDistribution(lambda_home=lh, lambda_away=la, matrix=matrix)
 
 
-def outcome_probabilities(lambda_home: float, lambda_away: float, max_goals: int = 10, dixon_coles_rho: float = 0.0) -> dict[str, float | str]:
-    dist = scoreline_distribution(lambda_home, lambda_away, max_goals=max_goals, normalize=True, dixon_coles_rho=dixon_coles_rho)
+def outcome_probabilities(lambda_home: float, lambda_away: float, max_goals: int = 10,
+                          dixon_coles_rho: float = 0.0, temper: float = 1.0) -> dict[str, float | str]:
+    dist = scoreline_distribution(lambda_home, lambda_away, max_goals=max_goals, normalize=True,
+                                  dixon_coles_rho=dixon_coles_rho, temper=temper)
     top = dist.top_scorelines(1)[0]
     return {
         "p_home_win": dist.p_home_win,
