@@ -46,3 +46,33 @@ CLUB_ALIASES: dict[str, str] = {
     "m. haifa": "MaccabiHaifa", "raków": "Rakow", "sk rapid": "RapidWien",
     "omonoia": "Omonia", "qarabag": "Qarabag", "ludogorets": "Ludogorets",
 }
+
+
+# ClubElo name -> foundation (football-data lowercase) name, for the big-5 clubs
+# that our domestic engine / props / player models know. Used to upgrade European
+# match analysis to the full domestic models when both sides are covered.
+CLUBELO_TO_FD: dict[str, str] = {
+    "Arsenal": "arsenal", "ManCity": "man city", "Man City": "man city",
+    "ManUnited": "man united", "Man United": "man united", "Liverpool": "liverpool",
+    "Chelsea": "chelsea", "Tottenham": "tottenham", "Newcastle": "newcastle",
+    "AstonVilla": "aston villa", "Aston Villa": "aston villa", "WestHam": "west ham",
+    "West Ham": "west ham", "Brighton": "brighton", "Bournemouth": "bournemouth",
+    "Everton": "everton", "Forest": "nott'm forest", "CrystalPalace": "crystal palace",
+    "Crystal Palace": "crystal palace", "Fulham": "fulham", "Brentford": "brentford",
+    "Wolves": "wolves", "Real Madrid": "real madrid", "RealMadrid": "real madrid",
+    "Barcelona": "barcelona", "Atletico": "ath madrid", "Sevilla": "sevilla",
+    "Villarreal": "villarreal", "Sociedad": "sociedad", "Betis": "betis",
+    "Bilbao": "ath bilbao", "Girona": "girona", "Valencia": "valencia",
+    "Osasuna": "osasuna", "Celta": "celta", "Getafe": "getafe", "Mallorca": "mallorca",
+    "Bayern": "bayern munich", "Dortmund": "dortmund", "Leverkusen": "leverkusen",
+    "RBLeipzig": "rb leipzig", "RB Leipzig": "rb leipzig", "Frankfurt": "ein frankfurt",
+    "Stuttgart": "stuttgart", "UnionBerlin": "union berlin", "Union Berlin": "union berlin",
+    "Freiburg": "freiburg", "Hoffenheim": "hoffenheim", "Gladbach": "m'gladbach",
+    "Werder": "werder bremen", "Wolfsburg": "wolfsburg", "Mainz": "mainz",
+    "Inter": "inter", "Milan": "milan", "Juventus": "juventus", "Napoli": "napoli",
+    "Roma": "roma", "Lazio": "lazio", "Atalanta": "atalanta", "Fiorentina": "fiorentina",
+    "Bologna": "bologna", "Torino": "torino", "ParisSG": "paris sg", "Paris SG": "paris sg",
+    "Marseille": "marseille", "Monaco": "monaco", "Lille": "lille", "Lyon": "lyon",
+    "Nice": "nice", "Lens": "lens", "Brest": "brest", "Rennes": "rennes",
+    "Strasbourg": "strasbourg", "Toulouse": "toulouse", "Nantes": "nantes",
+}

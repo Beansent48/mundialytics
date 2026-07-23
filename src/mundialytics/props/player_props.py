@@ -235,6 +235,11 @@ class PlayerPropsModel:
             return (lam / self.LEAGUE_MEAN_LAMBDA) / (xg_base / self._glob_xg)
         return lam / base
 
+    def team_players_for_lambda(self, team: str, lam: float | None) -> pd.DataFrame:
+        """One team's player props given only that side's match lambda (e.g. a
+        European tie where the opponent isn't Understat-covered)."""
+        return self.predict_team_players(team, self._atk_factor(team, lam, None))
+
     def predict_fixture(self, home_team: str, away_team: str,
                         lam_home: float | None = None, lam_away: float | None = None,
                         base_home: float | None = None, base_away: float | None = None) -> pd.DataFrame:
