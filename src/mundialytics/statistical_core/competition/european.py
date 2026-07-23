@@ -459,6 +459,66 @@ class EuropeanTournament:
             out[f"p_{k}"] = counts[k] / n_sims
         return out.sort_values("p_champion", ascending=False).reset_index(drop=True)
 
+    def _two_leg_scored(self, i: int, j: int) -> dict:
+        """Two-legged tie returning the actual legs + winner (for playthroughs).
+        Leg 1 at j, leg 2 at i (same convention as _two_leg)."""
+        g1a, g1b = int(self._sim_goals(self.lam_h[j, i])), int(self._sim_goals(self.lam_a[j, i]))
+        g2a, g2b = int(self._sim_goals(self.lam_h[i, j])), int(self._sim_goals(self.lam_a[i, j]))
+        agg_i, agg_j = g1b + g2a, g1a + g2b
+        note = ""
+        if agg_i != agg_j:
+            win = i if agg_i > agg_j else j
+        else:
+            et_i = int(self._sim_goals(self.lam_h[i, j] / 3.0))
+            et_j = int(self._sim_goals(self.lam_a[i, j] / 3.0))
+            if et_i != et_j:
+                win, note = (i, "pró.") if et_i > et_j else (j, "pró.")
+            else:
+                win, note = (i if self.rng.random() < 0.5 else j), "pen."
+        # Unambiguous: team_a is the higher seed (hosts leg 2), team_b hosts leg 1.
+        # Every score string is written in team_a-team_b order.
+        return {"team_a": self.teams[i], "team_b": self.teams[j],
+                "leg1": f"{g1b}-{g1a}",          # at team_b: a's goals - b's goals
+                "leg2": f"{g2a}-{g2b}",          # at team_a: a's goals - b's goals
+                "agg": f"{agg_i}-{agg_j}",       # a - b
+                "winner": self.teams[win], "winner_idx": win, "note": note}
+
+    def play_single(self) -> dict:
+        """Play ONE full tournament and return its actual story: final league
+        table, every knockout tie with scores, and the champion."""
+        scores = self._league_tables(1)[0]
+        rank = list(np.argsort(-scores))
+        table = pd.DataFrame({
+            "pos": range(1, self.n + 1),
+            "team": [self.teams[i] for i in rank],
+            "pts": [int(scores[i]) for i in rank],
+            "elo": [round(self.elo[self.teams[i]]) for i in rank],
+        })
+        top8, seeded, unseeded = rank[:8], rank[8:16], rank[16:24]
+        rounds: dict[str, list] = {}
+        rounds["playoff"] = [self._two_leg_scored(seeded[k], unseeded[7 - k]) for k in range(8)]
+        po = [t["winner_idx"] for t in rounds["playoff"]]
+        rounds["r16"] = [self._two_leg_scored(top8[k], po[7 - k]) for k in range(8)]
+        alive = [t["winner_idx"] for t in rounds["r16"]]
+        rounds["qf"] = [self._two_leg_scored(alive[a], alive[b])
+                        for a, b in ((0, 7), (3, 4), (1, 6), (2, 5))]
+        q = [t["winner_idx"] for t in rounds["qf"]]
+        rounds["sf"] = [self._two_leg_scored(q[0], q[1]), self._two_leg_scored(q[2], q[3])]
+        s = [t["winner_idx"] for t in rounds["sf"]]
+        gi = int(self._sim_goals(self.lam_h_neutral[s[0], s[1]]))
+        gj = int(self._sim_goals(self.lam_a_neutral[s[0], s[1]]))
+        note = ""
+        if gi == gj:
+            champ = self._single_neutral(s[0], s[1])
+            note = "pró./pen."
+        else:
+            champ = s[0] if gi > gj else s[1]
+        rounds["final"] = [{"team_a": self.teams[s[0]], "team_b": self.teams[s[1]],
+                            "leg1": f"{gi}-{gj}", "leg2": "", "agg": f"{gi}-{gj}",
+                            "winner": self.teams[champ], "winner_idx": champ, "note": note}]
+        return {"table": table, "rounds": rounds, "champion": self.teams[champ],
+                "runner_up": self.teams[s[1] if champ == s[0] else s[0]]}
+
     def simulate(self, n_sims: int = 5000) -> pd.DataFrame:
         if self.knockout is not None and len(self.knockout):
             return self._simulate_from_knockout(n_sims, self.knockout)
