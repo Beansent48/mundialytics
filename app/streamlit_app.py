@@ -96,18 +96,53 @@ TOURNAMENT_COMPETITIONS = [c for c, cfg in COMP_CONFIG.items() if cfg["type"] ==
 
 
 # ── Engine loading ─────────────────────────────────────────────────────────────
+ENGINE_CACHE_VERSION = 1   # bump whenever engine code/config changes
+
+
+def _engine_cache_path(tag: str, df: pd.DataFrame) -> Path:
+    cache_dir = ROOT / "data/processed/cache"
+    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_v{ENGINE_CACHE_VERSION}"
+    return cache_dir / f"engine_{key}.joblib"
+
+
+def _cached_engine_fit(tag: str, df: pd.DataFrame, build):
+    """Disk-cache a fitted engine (fit ~2-3 min -> load <1s). Key = data + version."""
+    import joblib
+    cache_f = _engine_cache_path(tag, df)
+    if cache_f.exists():
+        try:
+            return joblib.load(cache_f)
+        except Exception:
+            pass
+    engine = build(df)
+    try:
+        cache_f.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(engine, cache_f, compress=3)
+        for old in cache_f.parent.glob(f"engine_{tag}_*.joblib"):
+            if old != cache_f:
+                old.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return engine
+
+
 @st.cache_resource(show_spinner="⚙️  Cargando modelos de clubes...")
 def load_club_engine():
     df = load_clubs_data()
-    elo = EloRater(EloConfig(season_reset_fraction=0.40))
-    elo_hist = elo.fit(df)
-    # blend_weight_gl 0.30 (was 0.60): 8-fold backtest — goals-AttackDefense
-    # deserves ~70%, GL ~30% (0.30 beat 0.60 in 8/8 folds). See project_xg_modeling_findings.
-    # sharpen_gamma_1x2=1.2: LOFO-validated 1X2 calibration (RPS/LL/ECE all improve).
-    engine = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.3,
-                              rescale_lambda_to_goals=True, outcome_rho=-0.17,
-                              xg_rate_kwargs={"use_ewma": True})
-    engine.fit(df, elo_history=pd.DataFrame(elo.history))
+
+    def build(d):
+        elo = EloRater(EloConfig(season_reset_fraction=0.40))
+        elo.fit(d)
+        # blend_weight_gl 0.30 (was 0.60): 8-fold backtest — goals-AttackDefense
+        # deserves ~70%, GL ~30% (0.30 beat 0.60 in 8/8 folds). See project_xg_modeling_findings.
+        # sharpen_gamma_1x2: LOFO-validated 1X2 calibration (RPS/LL/ECE all improve).
+        eng = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.3,
+                               rescale_lambda_to_goals=True, outcome_rho=-0.17,
+                               xg_rate_kwargs={"use_ewma": True})
+        eng.fit(d, elo_history=pd.DataFrame(elo.history))
+        return eng
+
+    engine = _cached_engine_fit("clubs", df, build)
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
     return engine, teams, df
 
@@ -115,10 +150,15 @@ def load_club_engine():
 @st.cache_resource(show_spinner="🌍  Cargando modelos de selecciones...")
 def load_intl_engine():
     df = load_international_data(min_year=2010)
-    elo = EloRater(EloConfig(season_reset_fraction=0.35, k_base=28.0))
-    elo_hist = elo.fit(df)
-    engine = PredictionEngine(blend_weight_gl=0.45, ad_rho=-0.06)
-    engine.fit(df, elo_history=pd.DataFrame(elo.history))
+
+    def build(d):
+        elo = EloRater(EloConfig(season_reset_fraction=0.35, k_base=28.0))
+        elo.fit(d)
+        eng = PredictionEngine(blend_weight_gl=0.45, ad_rho=-0.06)
+        eng.fit(d, elo_history=pd.DataFrame(elo.history))
+        return eng
+
+    engine = _cached_engine_fit("intl", df, build)
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
     return engine, teams, df
 
@@ -431,6 +471,51 @@ def log_round_predictions(df_round: pd.DataFrame, comp: str, season: str,
     return len(comb) - len(old)
 
 
+def append_predictions(rows: list[dict]) -> int:
+    """Append rows to the prediction log, keeping the FIRST serve of each key."""
+    new = pd.DataFrame(rows)
+    if new.empty:
+        return 0
+    PRED_LOG.parent.mkdir(parents=True, exist_ok=True)
+    old = pd.read_csv(PRED_LOG) if PRED_LOG.exists() else pd.DataFrame()
+    comb = pd.concat([old, new], ignore_index=True) if len(old) else new
+    comb["linea"] = comb["linea"].astype(str)
+    comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
+    comb.to_csv(PRED_LOG, index=False)
+    return len(comb) - len(old)
+
+
+@st.cache_data(show_spinner=False)
+def _european_results() -> pd.DataFrame:
+    """Real European results from the cached season CSVs, ClubElo names."""
+    try:
+        from mundialytics.statistical_core.competition.european import (
+            fetch_current_elo, make_resolver)
+        resolver = make_resolver(list(fetch_current_elo(ROOT)))
+    except Exception:
+        return pd.DataFrame()
+    rows = []
+    for p in (ROOT / "data/external/uefa").glob("raw_*.csv"):
+        try:
+            df = pd.read_csv(p)
+        except Exception:
+            continue
+        res = df["Result"].astype(str).str.extract(r"(\d+)\s*-\s*(\d+)")
+        df["hg"] = pd.to_numeric(res[0], errors="coerce")
+        df["ag"] = pd.to_numeric(res[1], errors="coerce")
+        df["fecha"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce",
+                                     format="mixed").dt.strftime("%Y-%m-%d")
+        df["home"] = df["Home Team"].astype(str).map(resolver)
+        df["away"] = df["Away Team"].astype(str).map(resolver)
+        rows.append(df.dropna(subset=["home", "away", "hg", "fecha"])[
+            ["fecha", "home", "away", "hg", "ag"]])
+    if not rows:
+        return pd.DataFrame()
+    return (pd.concat(rows, ignore_index=True)
+            .drop_duplicates(subset=["fecha", "home", "away"])
+            .rename(columns={"hg": "home_goals", "ag": "away_goals"}))
+
+
 EVENT_COLS = {"corners": ("home_corners", "away_corners"),
               "yellows": ("home_yellow_cards", "away_yellow_cards"),
               "fouls": ("home_fouls", "away_fouls"),
@@ -449,6 +534,14 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
     res["fecha"] = res["date"].astype(str).str[:10]
     m = log.merge(res.rename(columns={"home_team": "home", "away_team": "away"}),
                   on=["home", "away", "fecha"], how="left")
+    # European rows won't match the domestic foundation — fill from the UEFA results
+    eu_res = _european_results()
+    if len(eu_res):
+        miss = m["home_goals"].isna()
+        fill = (m.loc[miss, ["home", "away", "fecha"]]
+                .merge(eu_res, on=["home", "away", "fecha"], how="left"))
+        m.loc[miss, "home_goals"] = fill["home_goals"].to_numpy()
+        m.loc[miss, "away_goals"] = fill["away_goals"].to_numpy()
     m = m.dropna(subset=["home_goals"])
     out = []
     for r in m.itertuples(index=False):
@@ -1054,6 +1147,37 @@ elif page == "🏆  Europa":
                             unsafe_allow_html=True)
         if pend_count:
             st.caption(f"{pend_count} partidos pendientes con predicción (1 · X · 2, Elo del día).")
+            if st.button("📌 Registrar predicciones de esta jornada europea", key="eu_log_btn"):
+                now_iso = pd.Timestamp.now().isoformat(timespec="seconds")
+                rows_log = []
+                for _, r in sel.iterrows():
+                    if r["played"]:
+                        continue
+                    h_ce3, a_ce3 = resolver_eu(str(r["Home Team"])), resolver_eu(str(r["Away Team"]))
+                    eh3 = elo_by_norm.get(normalize_club(h_ce3)) if h_ce3 else None
+                    ea3 = elo_by_norm.get(normalize_club(a_ce3)) if a_ce3 else None
+                    if not (eh3 and ea3):
+                        continue
+                    d43 = (eh3 - ea3) / 400.0
+                    lh3 = float(np.exp(calib_eu["c"] + calib_eu["hfa"] + calib_eu["b"] * d43))
+                    la3 = float(np.exp(calib_eu["c"] - calib_eu["b"] * d43))
+                    p3 = _op_eu(lh3, la3, dixon_coles_rho=-0.07)
+                    fecha3 = str(pd.to_datetime(r["Date"], dayfirst=True, errors="coerce",
+                                                format="mixed"))[:10]
+                    base3 = dict(logged_at=now_iso, season=f"EU {season_yr}-{season_yr + 1}",
+                                 jornada=f"{comp_eu_label} J{rnd_sel}",
+                                 partido=f"{h_ce3} vs {a_ce3}", fecha=fecha3,
+                                 home=h_ce3, away=a_ce3)
+                    trio3 = {"1": p3["p_home_win"], "X": p3["p_draw"], "2": p3["p_away_win"]}
+                    pick3 = max(trio3, key=trio3.get)
+                    rows_log.append({**base3, "mercado": "1X2", "ambito": "Total", "linea": "",
+                                     "prob": round(trio3[pick3], 4), "seleccion": pick3})
+                    rows_log.append({**base3, "mercado": "Goles", "ambito": "Total", "linea": 2.5,
+                                     "prob": round(p3["p_over_25"], 4),
+                                     "seleccion": "OVER" if p3["p_over_25"] >= 0.5 else "UNDER"})
+                n_new = append_predictions(rows_log)
+                evaluate_prediction_log.clear()
+                st.success(f"{n_new} predicciones europeas registradas — track record en 📈 Resultados.")
 
     # ── análisis completo de un partido europeo ────────────────────────────────
     if raw_eu is not None and league_eu is not None and len(league_eu):

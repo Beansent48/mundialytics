@@ -155,12 +155,23 @@ def main() -> None:
     except Exception as exc:
         print(f"    FAIL europeo: {str(exc)[:120]}", flush=True)
 
-    print("\n=== 7/8 prune fitted-props cache ===", flush=True)
+    print("\n=== 7/8 prune fitted-model caches + backup prediction log ===", flush=True)
     n = 0
-    for f in (ROOT / "data/processed/cache").glob("props_models_*.joblib"):
-        f.unlink(missing_ok=True)
-        n += 1
+    for pat in ["props_models_*.joblib", "engine_*.joblib"]:
+        for f in (ROOT / "data/processed/cache").glob(pat):
+            f.unlink(missing_ok=True)
+            n += 1
     print(f"    removed {n} cache file(s); the app refits + recaches on next load", flush=True)
+    log_f = ROOT / "data/processed/logs/predictions_log.csv"
+    if log_f.exists():
+        bdir = ROOT / "data/processed/logs/backup"
+        bdir.mkdir(parents=True, exist_ok=True)
+        dest = bdir / f"predictions_log_{date.today().isoformat()}.csv"
+        dest.write_bytes(log_f.read_bytes())
+        backups = sorted(bdir.glob("predictions_log_*.csv"))
+        for old in backups[:-10]:
+            old.unlink(missing_ok=True)
+        print(f"    prediction log backed up -> {dest.name} ({len(backups)} kept, max 10)", flush=True)
 
     if args.full:
         run_step("8/8 deployed walk-forward cache (Resultados)",

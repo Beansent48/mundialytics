@@ -29,3 +29,10 @@ Thumbs.db
 
 # Claude Code local tooling config (machine-specific)
 .claude/
+
+# Track record: the production prediction log IS versioned (small, precious)
+!data/processed/
+!data/processed/logs/
+!data/processed/logs/predictions_log.csv
+data/processed/*
+!data/processed/logs
