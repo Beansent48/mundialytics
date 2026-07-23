@@ -832,7 +832,9 @@ elif page == "🏆  Europa":
 
     try:
         from mundialytics.statistical_core.competition.european import (
-            FORMATS, EuropeanTournament, fetch_current_elo, load_calibration)
+            FORMATS, KO_ROUNDS, EuropeanTournament, fetch_current_elo,
+            fetch_season_fixtures, load_calibration, make_resolver, normalize_club,
+            parse_fixturedownload)
         calib_eu = load_calibration(ROOT)
         elo_all = fetch_current_elo(ROOT)
     except Exception as exc:
@@ -844,35 +846,43 @@ elif page == "🏆  Europa":
     comp_eu_label = st.selectbox("Competición", list(COMP_EU), key="eu_comp")
     comp_eu = COMP_EU[comp_eu_label]
 
-    teams_csv = ROOT / f"data/external/uefa/{comp_eu}_teams.csv"
-    fixtures_csv = ROOT / f"data/external/uefa/{comp_eu}_fixtures.csv"
-    elo_sorted = sorted(elo_all.items(), key=lambda kv: -kv[1])
-    if teams_csv.exists():
-        team_list = pd.read_csv(teams_csv)["team"].astype(str).tolist()
-        missing_eu = [t for t in team_list if t not in elo_all]
-        if missing_eu:
-            st.warning(f"Sin Elo para: {', '.join(missing_eu[:8])} (nombres ClubElo).")
-        teams_eu = {t: elo_all[t] for t in team_list if t in elo_all}
-        st.caption(f"Participantes: {teams_csv.name} ({len(teams_eu)} equipos).")
+    resolver_eu = make_resolver(list(elo_all))
+    elo_by_norm = {normalize_club(k): v for k, v in elo_all.items()}
+    today_eu = pd.Timestamp.today()
+    season_yr = today_eu.year if today_eu.month >= 7 else today_eu.year - 1
+    raw_eu = fetch_season_fixtures(ROOT, comp_eu, season_yr)
+
+    league_eu, ko_eu = (None, None)
+    if raw_eu is not None:
+        league_eu, ko_eu = parse_fixturedownload(raw_eu, resolver_eu)
+        teams_real = sorted(set(league_eu.home) | set(league_eu.away))
+        teams_eu = {t: elo_by_norm.get(normalize_club(t)) for t in teams_real}
+        teams_eu = {t: e for t, e in teams_eu.items() if e is not None}
+        played_lg = int(league_eu["home_goals"].notna().sum())
+        ko_played = int(ko_eu["hg"].notna().sum()) if len(ko_eu) else 0
+        if ko_played:
+            cur = next((r for r in reversed(KO_ROUNDS)
+                        if len(ko_eu[(ko_eu["round"] == r) & ko_eu["hg"].notna()])), "playoff")
+            estado = {"playoff": "Playoff", "r16": "Octavos", "qf": "Cuartos",
+                      "sf": "Semifinales", "final": "Final"}[cur]
+            st.success(f"Temporada {season_yr}/{str(season_yr+1)[2:]} REAL cargada — "
+                       f"eliminatorias en curso ({estado}). Las probabilidades parten "
+                       f"del estado actual del torneo.")
+        else:
+            st.success(f"Temporada {season_yr}/{str(season_yr+1)[2:]} REAL cargada — fase liga "
+                       f"{played_lg}/{len(league_eu)} partidos jugados.")
     else:
         tier = {"champions": (0, 36), "europa": (36, 72), "conference": (72, 108)}[comp_eu]
+        elo_sorted = sorted(elo_all.items(), key=lambda kv: -kv[1])
         teams_eu = dict(elo_sorted[tier[0]:tier[1]])
-        st.info(f"⚠️ Participantes ESTIMADOS por ranking Elo (las listas oficiales salen en "
-                f"agosto). Para usar las reales, crea `{teams_csv.relative_to(ROOT)}` con una "
-                f"columna `team` (nombres ClubElo).")
-
-    fixtures_eu = None
-    if fixtures_csv.exists():
-        fixtures_eu = pd.read_csv(fixtures_csv)
-        played_n = int(fixtures_eu["home_goals"].notna().sum())
-        st.caption(f"Calendario: {fixtures_csv.name} — {played_n}/{len(fixtures_eu)} jugados.")
-    else:
-        st.caption("Sin sorteo cargado → modo PRE-SORTEO: cada simulación sortea una fase liga "
-                   "válida por bombos (las probabilidades integran el sorteo).")
+        st.info(f"⚠️ La temporada {season_yr}/{str(season_yr+1)[2:]} aún no está publicada — "
+                "participantes ESTIMADOS por ranking Elo y modo PRE-SORTEO (cada simulación "
+                "sortea una fase liga válida por bombos). En cuanto exista el calendario "
+                "oficial, se cargará automáticamente.")
 
     if st.button("🎲 Simular torneo (2.000 iteraciones)", key="eu_sim"):
-        with st.spinner("Simulando fase liga + eliminatorias..."):
-            tour = EuropeanTournament(comp_eu, teams_eu, calib_eu, fixtures_eu)
+        with st.spinner("Simulando desde el estado actual..."):
+            tour = EuropeanTournament(comp_eu, teams_eu, calib_eu, league_eu, ko_eu)
             st.session_state[f"eu_res_{comp_eu}"] = tour.simulate(2000)
 
     res_eu = st.session_state.get(f"eu_res_{comp_eu}")

@@ -138,6 +138,23 @@ def main() -> None:
               "--out-dir", "data/processed/enriched/understat_xg",
               "--allow-missing-xg"])
 
+    print("\n=== 6b/8 European fixtures refresh (UCL/UEL/UECL) ===", flush=True)
+    try:
+        sys.path.insert(0, str(ROOT / "src"))
+        from mundialytics.statistical_core.competition.european import (
+            FD_SLUG, fetch_season_fixtures)
+        yr = date.today().year if date.today().month >= 7 else date.today().year - 1
+        for comp, slug in FD_SLUG.items():
+            (ROOT / f"data/external/uefa/raw_{slug}_{yr}.csv").unlink(missing_ok=True)
+            df = fetch_season_fixtures(ROOT, comp, yr)
+            if df is not None:
+                res_n = df["Result"].astype(str).str.contains(r"\d+\s*-\s*\d+").sum()
+                print(f"    OK   {slug} {yr}: {len(df)} partidos, {res_n} con resultado", flush=True)
+            else:
+                print(f"    ---  {slug} {yr}: aún no publicado", flush=True)
+    except Exception as exc:
+        print(f"    FAIL europeo: {str(exc)[:120]}", flush=True)
+
     print("\n=== 7/8 prune fitted-props cache ===", flush=True)
     n = 0
     for f in (ROOT / "data/processed/cache").glob("props_models_*.joblib"):
