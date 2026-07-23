@@ -189,9 +189,46 @@ def _build_season_orchestrator(
     bridge = SquadLambdaModel(model)
     lambda_source = SeasonLambdaSource(squad_team_name, squad, bridge, real_source, engine.ad_model_)
     fixtures = generate_double_round_robin([squad_team_name] + real_teams)
+    # FULL-LEAGUE narrative: give every real club a best-XI too, so every match
+    # (not just ours) produces scorers/assists/cards/ratings -> a real league-wide
+    # top-scorer race. The orchestrator already keys rosters by team.
+    rosters: dict[str, list] = {squad_team_name: squad}
+    # signed players leave their original club (the draft's own rule) — without
+    # this a player sits in TWO rosters and his goals are double-counted
+    rosters.update(build_real_team_rosters(model, real_teams,
+                                           exclude={p.player for p in squad}))
     return SeasonOrchestrator(
-        lambda_source, fixtures, squad_roster={squad_team_name: squad}, competition=competition,
+        lambda_source, fixtures, squad_roster=rosters, competition=competition,
     )
+
+
+def build_real_team_rosters(model: PlayerStrengthModel, real_teams: list[str],
+                            exclude: set[str] | None = None) -> dict[str, list]:
+    """Best XI (1-4-3-3 shape) per real club from the player pool, so the whole
+    league gets player-level events. `exclude` drops players already signed by
+    the user's squad — a player must never appear in two rosters (that would
+    double-count his goals). Clubs with too little coverage are skipped (their
+    matches simply keep scoreline-only detail, as before)."""
+    exclude = exclude or set()
+    by_team: dict[str, list] = {}
+    for p in model.profiles_.values():
+        if p.player in exclude:
+            continue
+        by_team.setdefault(canonical_name(p.team), []).append(p)
+    slots = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
+    out: dict[str, list] = {}
+    for team in real_teams:
+        pool = by_team.get(canonical_name(team), [])
+        if not pool:
+            continue
+        xi: list = []
+        for pos, n in slots.items():
+            cands = sorted([p for p in pool if p.position == pos],
+                           key=lambda p: -p.overall)[:n]
+            xi += cands
+        if len(xi) >= 8:          # enough to attribute events meaningfully
+            out[team] = xi
+    return out
 
 
 def render_standings_table(table_df: pd.DataFrame, squad_team_name: str = SQUAD_TEAM_NAME,
@@ -468,6 +505,91 @@ def compute_standings(df_clubs: pd.DataFrame, comp_id: str, season: str) -> pd.D
     return table.sort_values(["pts", "gd", "gf"], ascending=False).reset_index(drop=True)
 
 
+POS_ABBR = {"Goalkeeper": "POR", "Defender": "DEF", "Midfielder": "MED", "Forward": "DEL"}
+
+# Card tiers by our own overall rating. `variant` allows future special editions
+# (award cards, memorable-match cards) to reuse the same renderer.
+CARD_TIERS = {
+    "elite":  {"bg": ("#1b1147", "#3b1d6e"), "ink": "#ffd75e", "line": "#ffd75e", "sub": "#e9d8ff"},
+    "gold":   {"bg": ("#6b5411", "#c9a227"), "ink": "#fff6d0", "line": "#ffe9a3", "sub": "#f3e3ae"},
+    "silver": {"bg": ("#3b4450", "#8c98a6"), "ink": "#ffffff", "line": "#dfe6ee", "sub": "#e3e9f0"},
+    "bronze": {"bg": ("#4a2f1b", "#a97142"), "ink": "#ffeeda", "line": "#f0cba5", "sub": "#f0d7bd"},
+}
+
+
+def _card_tier(overall: float, variant: str | None = None) -> dict:
+    if variant and variant in CARD_TIERS:
+        return CARD_TIERS[variant]
+    if overall >= 90:
+        return CARD_TIERS["elite"]
+    if overall >= 85:
+        return CARD_TIERS["gold"]
+    if overall >= 78:
+        return CARD_TIERS["silver"]
+    return CARD_TIERS["bronze"]
+
+
+def player_card_svg(p, selected: bool = False, variant: str | None = None,
+                    width: int = 150) -> str:
+    """FUT-style player card using OUR ratings only (overall + role + ATA/DEF),
+    never FIFA-style pace/shooting/passing splits."""
+    w, h = 150, 214
+    t = _card_tier(p.overall, variant)
+    uid = abs(hash((p.player, variant or "", selected))) % 10**7
+    is_gk = p.position == "Goalkeeper"
+    # GKs: our defensive axis for them lives in gk_strength
+    off = p.offensive_strength
+    dfn = p.gk_strength if (is_gk and getattr(p, "gk_strength", 0)) else p.defensive_strength
+    glow = ('filter="url(#glow%d)"' % uid) if selected else ""
+    s = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
+         f'style="width:100%;max-width:{width}px;display:block;margin:0 auto">',
+         '<defs>',
+         f'<linearGradient id="g{uid}" x1="0" y1="0" x2="0.4" y2="1">'
+         f'<stop offset="0%" stop-color="{t["bg"][1]}"/>'
+         f'<stop offset="100%" stop-color="{t["bg"][0]}"/></linearGradient>',
+         f'<filter id="glow{uid}" x="-30%" y="-30%" width="160%" height="160%">'
+         f'<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#3b82f6" flood-opacity="0.95"/>'
+         f'</filter>', '</defs>']
+    # card body (hexagon-ish FUT silhouette via rounded rect + notched top)
+    s.append(f'<path d="M8 14 Q8 4 20 4 L130 4 Q142 4 142 14 L142 176 '
+             f'Q142 190 128 196 L79 210 Q75 211 71 210 L22 196 Q8 190 8 176 Z" '
+             f'fill="url(#g{uid})" stroke="{t["line"]}" stroke-width="{3 if selected else 1.5}" '
+             f'{glow}/>')
+    # overall + position + role (left column)
+    s.append(f'<text x="30" y="46" text-anchor="middle" font-size="30" font-weight="800" '
+             f'fill="{t["ink"]}">{p.overall:.0f}</text>')
+    s.append(f'<text x="30" y="62" text-anchor="middle" font-size="11" font-weight="700" '
+             f'fill="{t["sub"]}">{POS_ABBR.get(p.position, "—")}</text>')
+    role = (getattr(p, "role", "") or "").upper()[:9]
+    if role:
+        s.append(f'<text x="30" y="77" text-anchor="middle" font-size="7.5" font-weight="600" '
+                 f'fill="{t["sub"]}" opacity="0.85">{role}</text>')
+    s.append(f'<line x1="52" y1="26" x2="52" y2="78" stroke="{t["line"]}" stroke-width="1" opacity=".5"/>')
+    # crest-ish emblem (no photos available -> typographic monogram)
+    s.append(f'<circle cx="99" cy="52" r="26" fill="#00000033" stroke="{t["line"]}" '
+             f'stroke-width="1" opacity=".8"/>')
+    s.append(f'<text x="99" y="62" text-anchor="middle" font-size="24" font-weight="800" '
+             f'fill="{t["ink"]}" opacity=".92">{_disp(p.player)[:1].upper()}</text>')
+    # name
+    s.append(f'<text x="75" y="112" text-anchor="middle" font-size="13" font-weight="800" '
+             f'fill="{t["ink"]}" letter-spacing="0.5">{_disp(p.player)[:14].upper()}</text>')
+    s.append(f'<line x1="28" y1="122" x2="122" y2="122" stroke="{t["line"]}" stroke-width="1" opacity=".55"/>')
+    # OUR two stats only
+    s.append(f'<text x="52" y="146" text-anchor="middle" font-size="18" font-weight="800" '
+             f'fill="{t["ink"]}">{off:.0f}</text>')
+    s.append(f'<text x="52" y="159" text-anchor="middle" font-size="8" font-weight="700" '
+             f'fill="{t["sub"]}">ATAQUE</text>')
+    s.append(f'<text x="98" y="146" text-anchor="middle" font-size="18" font-weight="800" '
+             f'fill="{t["ink"]}">{dfn:.0f}</text>')
+    s.append(f'<text x="98" y="159" text-anchor="middle" font-size="8" font-weight="700" '
+             f'fill="{t["sub"]}">{"PARADAS" if is_gk else "DEFENSA"}</text>')
+    # team
+    s.append(f'<text x="75" y="181" text-anchor="middle" font-size="8.5" font-weight="600" '
+             f'fill="{t["sub"]}" opacity=".9">{str(p.team).title()[:18]}</text>')
+    s.append('</svg>')
+    return "".join(s)
+
+
 def _rating_color(r: float) -> str:
     """Sofascore-style rating color: red (poor) -> amber -> green (great)."""
     if r >= 8.5:
@@ -486,19 +608,10 @@ def _rating_color(r: float) -> str:
 def match_pitch_svg(events: dict, picks: dict, coords: dict) -> str:
     """Sofascore-style post-match pitch: each player positioned by formation,
     with a colored match-rating badge and goal/assist/card icons."""
-    w, h = 480, 620
+    w, h = 470, 620
     s = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
-         f'style="width:100%;max-width:480px;display:block;margin:0 auto">']
-    # pitch (attacking up; darker, richer green with stripes)
-    s.append(f'<rect width="{w}" height="{h}" fill="#166b34" rx="14"/>')
-    for i in range(6):
-        if i % 2 == 0:
-            s.append(f'<rect x="0" y="{i*h/6}" width="{w}" height="{h/6}" fill="#ffffff08"/>')
-    s.append(f'<rect x="10" y="10" width="{w-20}" height="{h-20}" fill="none" stroke="#ffffff55" stroke-width="2"/>')
-    s.append(f'<circle cx="{w/2}" cy="{h/2}" r="52" fill="none" stroke="#ffffff55" stroke-width="2"/>')
-    s.append(f'<line x1="10" y1="{h/2}" x2="{w-10}" y2="{h/2}" stroke="#ffffff55" stroke-width="2"/>')
-    s.append(f'<rect x="{w/2-90}" y="10" width="180" height="62" fill="none" stroke="#ffffff55" stroke-width="2"/>')
-    s.append(f'<rect x="{w/2-90}" y="{h-72}" width="180" height="62" fill="none" stroke="#ffffff55" stroke-width="2"/>')
+         f'style="width:100%;max-width:470px;display:block;margin:0 auto">']
+    s += _pitch_base_svg(w, h)
 
     for pos, pos_coords in coords.items():
         for slot, (xp, yp) in enumerate(pos_coords):
@@ -537,34 +650,71 @@ def match_pitch_svg(events: dict, picks: dict, coords: dict) -> str:
     return "".join(s)
 
 
-def pitch_svg(picks: dict, coords: dict) -> str:
-    w, h = 460, 600
-    svg = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
-           f'style="width:100%;max-width:460px;display:block;margin:0 auto">']
-    svg.append(f'<rect width="{w}" height="{h}" fill="#1f7a3d" rx="12"/>')
-    svg.append(f'<rect x="8" y="8" width="{w-16}" height="{h-16}" fill="none" stroke="#ffffff66" stroke-width="2"/>')
-    svg.append(f'<circle cx="{w/2}" cy="{h/2}" r="48" fill="none" stroke="#ffffff66" stroke-width="2"/>')
-    svg.append(f'<line x1="8" y1="{h/2}" x2="{w-8}" y2="{h/2}" stroke="#ffffff66" stroke-width="2"/>')
-    svg.append(f'<rect x="{w/2-85}" y="8" width="170" height="58" fill="none" stroke="#ffffff66" stroke-width="2"/>')
-    svg.append(f'<rect x="{w/2-85}" y="{h-66}" width="170" height="58" fill="none" stroke="#ffffff66" stroke-width="2"/>')
+def _pitch_base_svg(w: int, h: int) -> list[str]:
+    """Shared, properly-marked football pitch (mowing stripes, boxes, arcs)."""
+    L = "#ffffff70"
+    s = [f'<defs><linearGradient id="turf" x1="0" y1="0" x2="0" y2="1">'
+         f'<stop offset="0%" stop-color="#1a7f42"/><stop offset="100%" stop-color="#125f30"/>'
+         f'</linearGradient>'
+         f'<radialGradient id="vig" cx="50%" cy="45%" r="75%">'
+         f'<stop offset="60%" stop-color="#00000000"/><stop offset="100%" stop-color="#00000055"/>'
+         f'</radialGradient></defs>',
+         f'<rect width="{w}" height="{h}" fill="url(#turf)" rx="14"/>']
+    for i in range(9):                                    # mowing stripes
+        if i % 2 == 0:
+            s.append(f'<rect x="0" y="{i*h/9:.1f}" width="{w}" height="{h/9:.1f}" fill="#ffffff0a"/>')
+    m = 12
+    s.append(f'<rect x="{m}" y="{m}" width="{w-2*m}" height="{h-2*m}" fill="none" stroke="{L}" stroke-width="2" rx="2"/>')
+    s.append(f'<line x1="{m}" y1="{h/2}" x2="{w-m}" y2="{h/2}" stroke="{L}" stroke-width="2"/>')
+    s.append(f'<circle cx="{w/2}" cy="{h/2}" r="54" fill="none" stroke="{L}" stroke-width="2"/>')
+    s.append(f'<circle cx="{w/2}" cy="{h/2}" r="3" fill="{L}"/>')
+    for top in (True, False):
+        by = m if top else h - m - 66            # 18-yard box
+        s.append(f'<rect x="{w/2-92}" y="{by}" width="184" height="66" fill="none" stroke="{L}" stroke-width="2"/>')
+        sy = m if top else h - m - 26            # 6-yard box
+        s.append(f'<rect x="{w/2-46}" y="{sy}" width="92" height="26" fill="none" stroke="{L}" stroke-width="2"/>')
+        py = m + 46 if top else h - m - 46       # penalty spot
+        s.append(f'<circle cx="{w/2}" cy="{py}" r="2.5" fill="{L}"/>')
+        # penalty arc (drawn outside the box)
+        ay = m + 66 if top else h - m - 66
+        sweep = 1 if top else 0
+        s.append(f'<path d="M {w/2-30} {ay} A 32 32 0 0 {sweep} {w/2+30} {ay}" fill="none" stroke="{L}" stroke-width="2"/>')
+    for cx0, cy0, sw in ((m, m, 1), (w-m, m, 0), (m, h-m, 0), (w-m, h-m, 1)):   # corner arcs
+        s.append(f'<path d="M {cx0} {cy0+(9 if cy0==m else -9)} A 9 9 0 0 {sw} {cx0+(9 if cx0==m else -9)} {cy0}" '
+                 f'fill="none" stroke="{L}" stroke-width="1.5"/>')
+    s.append(f'<rect width="{w}" height="{h}" fill="url(#vig)" rx="14" pointer-events="none"/>')
+    return s
 
+
+def pitch_svg(picks: dict, coords: dict) -> str:
+    """Draft pitch: each filled slot shows a mini player card (our rating)."""
+    w, h = 470, 620
+    svg = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
+           f'style="width:100%;max-width:470px;display:block;margin:0 auto">']
+    svg += _pitch_base_svg(w, h)
     for pos, pos_coords in coords.items():
         for slot, (xp, yp) in enumerate(pos_coords):
-            key = f"{pos}_{slot}"
-            profile = picks.get(key)
+            profile = picks.get(f"{pos}_{slot}")
             cx, cy = xp / 100 * w, yp / 100 * h
-            if profile:
-                label = _disp(profile.player)[:11]
-                ov = f"{profile.overall:.0f}"
-                color = "#16a34a" if profile.overall >= 70 else "#2563eb"
-            else:
-                label, ov, color = "vacío", "", "#9ca3af99"
-            svg.append(f'<circle cx="{cx}" cy="{cy}" r="22" fill="{color}" stroke="white" stroke-width="2"/>')
-            if ov:
-                svg.append(f'<text x="{cx}" y="{cy+5}" text-anchor="middle" font-size="13" '
-                          f'font-weight="700" fill="white">{ov}</text>')
-            svg.append(f'<text x="{cx}" y="{cy+38}" text-anchor="middle" font-size="11" '
-                      f'fill="white" style="text-shadow:0 1px 2px #00000088">{label}</text>')
+            if not profile:
+                svg.append(f'<circle cx="{cx}" cy="{cy}" r="17" fill="#00000040" stroke="#ffffff77" '
+                           f'stroke-width="1.5" stroke-dasharray="4 3"/>')
+                svg.append(f'<text x="{cx}" y="{cy+5}" text-anchor="middle" font-size="15" '
+                           f'fill="#ffffffaa">+</text>')
+                continue
+            t = _card_tier(profile.overall)
+            # mini card chip
+            svg.append(f'<rect x="{cx-20}" y="{cy-24}" width="40" height="46" rx="6" '
+                       f'fill="{t["bg"][1]}" stroke="{t["line"]}" stroke-width="1.5" opacity="0.97"/>')
+            svg.append(f'<text x="{cx}" y="{cy-6}" text-anchor="middle" font-size="16" '
+                       f'font-weight="800" fill="{t["ink"]}">{profile.overall:.0f}</text>')
+            svg.append(f'<text x="{cx}" y="{cy+7}" text-anchor="middle" font-size="7" '
+                       f'font-weight="700" fill="{t["sub"]}">{POS_ABBR.get(profile.position, "")}</text>')
+            svg.append(f'<text x="{cx}" y="{cy+18}" text-anchor="middle" font-size="6.5" '
+                       f'fill="{t["sub"]}" opacity=".9">{(getattr(profile,"role","") or "")[:10].upper()}</text>')
+            svg.append(f'<text x="{cx}" y="{cy+36}" text-anchor="middle" font-size="10.5" '
+                       f'font-weight="700" fill="white" style="text-shadow:0 1px 3px #000000cc">'
+                       f'{_disp(profile.player)[:12]}</text>')
     svg.append('</svg>')
     return "".join(svg)
 
@@ -712,22 +862,18 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
                                           current, model)
 
             st.markdown("---")
-            st.markdown(f"**Candidatos a {pos} — slot #{int(active_slot.rsplit('_',1)[1]) + 1}**")
+            st.markdown(f"<div style='text-align:center;font-size:1.1rem;font-weight:800;"
+                        f"letter-spacing:.06em;color:#d7e3f4'>ELIGE UN JUGADOR</div>"
+                        f"<div style='text-align:center;font-size:.75rem;color:#8b9bb4;"
+                        f"margin-bottom:6px'>{pos} · slot #{int(active_slot.rsplit('_',1)[1]) + 1}</div>",
+                        unsafe_allow_html=True)
             if not candidates:
                 st.caption("Sin candidatos disponibles en esta competición.")
             else:
                 cand_cols = st.columns(len(candidates))
                 for cc, cand in zip(cand_cols, candidates):
                     is_current = current == cand.player
-                    ov_c = "#16a34a" if cand.overall >= 70 else "#2563eb"
-                    border = "border:2px solid #16a34a;" if is_current else ""
-                    cc.markdown(
-                        f'<div style="background:var(--secondary-background-color);border-radius:8px;'
-                        f'padding:6px;text-align:center;font-size:11px;{border}">'
-                        f'<div style="font-weight:700;font-size:16px;color:{ov_c}">{cand.overall:.0f}</div>'
-                        f'<div style="font-weight:500">{_disp(cand.player)[:10]}</div>'
-                        f'<div style="color:#9ca3af;font-size:9px">{cand.team.title()[:14]}</div>'
-                        f'</div>', unsafe_allow_html=True)
+                    cc.markdown(player_card_svg(cand, selected=is_current), unsafe_allow_html=True)
                     if cc.button("Elegido" if is_current else "Elegir",
                                 key=f"pick_{comp_d}_{formation_name}_{active_slot}_{cand.player}",
                                 disabled=is_current):
