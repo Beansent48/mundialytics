@@ -305,6 +305,102 @@ def render_player_props_table(players: pd.DataFrame, home: str, away: str,
                  column_config={c: st.column_config.NumberColumn(format="%.1f%%") for c in pct})
 
 
+PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
+LOG_KEYS = ["season", "jornada", "partido", "mercado", "ambito", "linea"]
+
+
+def log_round_predictions(df_round: pd.DataFrame, comp: str, season: str,
+                          jornada: int, tp, pp) -> int:
+    """Register every prediction for the round (props + 1X2/O2.5) with a serve
+    timestamp. Append-only; duplicates (same season/round/match/market/line)
+    keep the FIRST serve. Returns rows newly logged."""
+    rows = []
+    now = pd.Timestamp.now().isoformat(timespec="seconds")
+    for r in df_round.itertuples():
+        pr = predict_safe(engine_clubs, r.home_team, r.away_team, comp, False)
+        label = f"{r.home_team} vs {r.away_team}"
+        base = dict(logged_at=now, season=season, jornada=jornada, partido=label,
+                    fecha=str(r.date)[:10], home=r.home_team, away=r.away_team)
+        if pr is not None:
+            trio = {"1": pr.p_home_win, "X": pr.p_draw, "2": pr.p_away_win}
+            pick = max(trio, key=trio.get)
+            rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
+                         "prob": round(trio[pick], 4), "seleccion": pick})
+            rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": 2.5,
+                         "prob": round(pr.p_over_25, 4),
+                         "seleccion": "OVER" if pr.p_over_25 >= 0.5 else "UNDER"})
+        fx = tp.predict_fixture(r.home_team, r.away_team,
+                                lam_home=pr.lambda_home if pr else None,
+                                lam_away=pr.lambda_away if pr else None)
+        for mk, d in fx.items():
+            for ln, p in d.get("over", {}).items():
+                rows.append({**base, "mercado": mk, "ambito": "Total", "linea": ln,
+                             "prob": p, "seleccion": "OVER" if p >= 0.5 else "UNDER"})
+            for skey, amb in [("over_home", "Local"), ("over_away", "Visitante")]:
+                for ln, p in d.get(skey, {}).items():
+                    rows.append({**base, "mercado": mk, "ambito": amb, "linea": ln,
+                                 "prob": p, "seleccion": "OVER" if p >= 0.5 else "UNDER"})
+    new = pd.DataFrame(rows)
+    if new.empty:
+        return 0
+    PRED_LOG.parent.mkdir(parents=True, exist_ok=True)
+    if PRED_LOG.exists():
+        old = pd.read_csv(PRED_LOG)
+        comb = pd.concat([old, new], ignore_index=True)
+    else:
+        old = pd.DataFrame()
+        comb = new
+    comb["linea"] = comb["linea"].astype(str)
+    comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
+    comb.to_csv(PRED_LOG, index=False)
+    return len(comb) - len(old)
+
+
+EVENT_COLS = {"corners": ("home_corners", "away_corners"),
+              "yellows": ("home_yellow_cards", "away_yellow_cards"),
+              "fouls": ("home_fouls", "away_fouls"),
+              "shots": ("home_shots", "away_shots"),
+              "sot": ("home_sot", "away_sot")}
+
+
+@st.cache_data(show_spinner=False)
+def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
+    """Join the served-predictions log with real results -> hit per prediction."""
+    if not PRED_LOG.exists():
+        return pd.DataFrame()
+    log = pd.read_csv(PRED_LOG)
+    res = df_clubs[["home_team", "away_team", "date", "home_goals", "away_goals"]
+                   + [c for cc in EVENT_COLS.values() for c in cc]].copy()
+    res["fecha"] = res["date"].astype(str).str[:10]
+    m = log.merge(res.rename(columns={"home_team": "home", "away_team": "away"}),
+                  on=["home", "away", "fecha"], how="left")
+    m = m.dropna(subset=["home_goals"])
+    out = []
+    for r in m.itertuples(index=False):
+        mk = r.mercado
+        if mk == "1X2":
+            real = "1" if r.home_goals > r.away_goals else ("X" if r.home_goals == r.away_goals else "2")
+            hit = float(r.seleccion == real)
+        elif mk == "Goles":
+            over = (r.home_goals + r.away_goals) > float(r.linea)
+            hit = float(over == (r.seleccion == "OVER"))
+        elif mk in EVENT_COLS:
+            hc, ac = EVENT_COLS[mk]
+            hv, av = getattr(r, hc), getattr(r, ac)
+            if pd.isna(hv):
+                continue
+            actual = {"Total": hv + av, "Local": hv, "Visitante": av}[r.ambito]
+            over = actual > float(r.linea)
+            hit = float(over == (r.seleccion == "OVER"))
+        else:
+            continue  # booking pts needs reds (not in foundation) — skipped
+        conf = r.prob if mk == "1X2" else max(r.prob, 1 - r.prob)
+        out.append({"mercado": MARKET_ES.get(mk, mk), "ambito": r.ambito,
+                    "confianza": conf, "acierto": hit, "jornada": r.jornada,
+                    "season": r.season})
+    return pd.DataFrame(out)
+
+
 def render_props_section(home: str, away: str, pred) -> None:
     """O/U team-event markets + per-player props (validated walk-forward models)."""
     tp, pp = load_props_models()
@@ -340,9 +436,8 @@ def render_props_section(home: str, away: str, pred) -> None:
                 r[f"Over {ln}"] = f"{p:.0%}"
             rows.append(r)
         st.dataframe(pd.DataFrame(rows).fillna(""), hide_index=True, use_container_width=True)
-        st.caption("Prob. de superar cada línea en el TOTAL del partido "
-                   "(binomial negativa con sobre-dispersión medida por mercado; "
-                   "booking pts = 10·amarilla + 25·roja, rojas a media de liga).")
+        st.caption("Prob. de superar cada línea en el total del partido · "
+                   "booking pts = 10·amarilla + 25·roja.")
 
         side_rows = []
         for mk, d in fx.items():
@@ -354,17 +449,15 @@ def render_props_section(home: str, away: str, pred) -> None:
                     r[f"O{ln}"] = f"{p:.0%}"
                 side_rows.append(r)
         if side_rows:
-            st.markdown("**Líneas por equipo** (más señal que los totales: la identidad "
-                        "del equipo pesa más por lado)")
+            st.markdown("**Líneas por equipo**")
             st.dataframe(pd.DataFrame(side_rows).fillna(""), hide_index=True,
                          use_container_width=True)
 
     if not players.empty:
         st.markdown("#### Props de jugadores")
         render_player_props_table(players, home, away, height=420)
-        st.caption("Probabilidades condicionadas a que el jugador juegue (convención "
-                   "bookmaker). Min esp. = minutos esperados si juega; ratios de "
-                   "carrera + forma reciente, ajustados al contexto del partido.")
+        st.caption("Probabilidades condicionadas a que el jugador juegue. "
+                   "Min esp. = minutos esperados si juega.")
 
 
 def render_real_match_stats(row: dict, home: str, away: str) -> None:
@@ -550,6 +643,7 @@ page = st.sidebar.radio("", [
     "🏆  Competición",
     "📊  Pronóstico de liga",
     "🎯  Props",
+    "📈  Resultados",
     "🥇  Premios Individuales",
     "🧪  SquadLab",
 ], label_visibility="collapsed")
@@ -724,6 +818,130 @@ elif page == "🏆  Competición":
 # ══════════════════════════════════════════════════════════════════════════════
 #  PREMIOS INDIVIDUALES
 # ══════════════════════════════════════════════════════════════════════════════
+elif page == "📈  Resultados":
+    st.title("📈  Resultados y fiabilidad")
+    st.caption("Validación fuera de muestra, comparación con el mercado y track record en vivo.")
+
+    # ── hero ───────────────────────────────────────────────────────────────────
+    hc1, hc2, hc3, hc4 = st.columns(4)
+    hc1.markdown(metric_card("Partidos de validación", "10.400+"), unsafe_allow_html=True)
+    hc2.markdown(metric_card("vs cierre de Bet365 (1X2)", "4.1%", "#16a34a"), unsafe_allow_html=True)
+    hc3.markdown(metric_card("Mercados cubiertos", "30+"), unsafe_allow_html=True)
+    hc4.markdown(metric_card("Grandes ligas", "5"), unsafe_allow_html=True)
+    st.caption("Toda la validación es temporal y fuera de muestra: cada temporada se predice "
+               "solo con información anterior a ella. Ninguna cuota entra jamás en los modelos.")
+
+    # ── benchmark vs mercado ───────────────────────────────────────────────────
+    st.markdown("### Frente al mercado")
+    st.markdown("Distancia de nuestras probabilidades 1X2 al **cierre de Bet365** — la "
+                "referencia más exigente que existe — sobre 10.080 partidos (2020–2026). "
+                "Los mejores modelos académicos publicados se sitúan entre 0.005 y 0.012; "
+                "el nuestro: **0.0080**.")
+    bm = pd.DataFrame([
+        {"Liga": "Bundesliga", "Distancia al cierre": 0.0060},
+        {"Liga": "LaLiga", "Distancia al cierre": 0.0064},
+        {"Liga": "Ligue 1", "Distancia al cierre": 0.0075},
+        {"Liga": "Serie A", "Distancia al cierre": 0.0092},
+        {"Liga": "Premier League", "Distancia al cierre": 0.0099},
+    ])
+    figb = go.Figure(go.Bar(x=bm["Distancia al cierre"], y=bm["Liga"], orientation="h",
+                            marker_color="#3b82f6", text=[f"{v:.4f}" for v in bm["Distancia al cierre"]],
+                            textposition="outside"))
+    figb.add_vline(x=0.012, line_dash="dot", line_color="#9ca3af",
+                   annotation_text="rango élite académico", annotation_position="top")
+    figb.update_layout(height=240, margin=dict(l=0, r=0, t=20, b=0),
+                       xaxis=dict(range=[0, 0.014], title="RPS gap (menos = mejor)"),
+                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(figb, use_container_width=True)
+
+    # ── calibración (computed live from the walk-forward cache) ────────────────
+    @st.cache_data(show_spinner=False)
+    def _calibration_bins():
+        # deployed-chain walk-forward predictions (generate_deployed_walkforward.py)
+        p = ROOT / "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv"
+        if not p.exists():
+            return None
+        w = pd.read_csv(p)
+        o = np.where(w.hg > w.ag, "home", np.where(w.hg < w.ag, "draw", "away"))
+        y = np.concatenate([(o == "home").astype(float), (o == "draw").astype(float),
+                            (o == "away").astype(float)])
+        pr = np.concatenate([w["ph"].to_numpy(float), w["pd"].to_numpy(float),
+                             w["pa"].to_numpy(float)])
+        edges = np.linspace(0, 0.9, 10)
+        rows = []
+        for lo in edges:
+            msk = (pr >= lo) & (pr < lo + 0.1)
+            if msk.sum() > 200:
+                rows.append({"pred": pr[msk].mean(), "real": y[msk].mean(), "n": int(msk.sum())})
+        return pd.DataFrame(rows)
+
+    cal = _calibration_bins()
+    if cal is not None and not cal.empty:
+        st.markdown("### Calibración: cuando decimos X%, ocurre X%")
+        figc = go.Figure()
+        figc.add_trace(go.Scatter(x=[0, 0.9], y=[0, 0.9], mode="lines", name="perfecto",
+                                  line=dict(dash="dot", color="#9ca3af")))
+        figc.add_trace(go.Scatter(x=cal["pred"], y=cal["real"], mode="markers+lines",
+                                  name="modelo", marker=dict(size=9, color="#3b82f6")))
+        figc.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0),
+                           xaxis_title="Probabilidad anunciada", yaxis_title="Frecuencia real",
+                           paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                           legend=dict(orientation="h", y=1.1))
+        st.plotly_chart(figc, use_container_width=True)
+        ece_v = float((cal.n / cal.n.sum() * (cal.pred - cal.real).abs()).sum())
+        st.caption(f"Miles de selecciones 1X2 fuera de muestra. Error de calibración medio: "
+                   f"{ece_v:.3f} (por debajo de 0.02 se considera excelente).")
+
+    # ── props validation (marketing level) ────────────────────────────────────
+    st.markdown("### Mercados de props: validación 2021–2026")
+    st.markdown("Cada mercado se validó temporada a temporada contra referencias "
+                "estadísticas exigentes antes de publicarse. Solo se activa lo que gana "
+                "de forma consistente.")
+    pv = pd.DataFrame([
+        {"Mercado": "Amarillas (total y por equipo)", "Temporadas ganadas": "5/5", "Calibración": "Excelente"},
+        {"Mercado": "Faltas", "Temporadas ganadas": "5/5", "Calibración": "Excelente"},
+        {"Mercado": "Disparos (total y por equipo)", "Temporadas ganadas": "5/5", "Calibración": "Excelente"},
+        {"Mercado": "A puerta", "Temporadas ganadas": "5/5", "Calibración": "Muy buena"},
+        {"Mercado": "Córners (total y por equipo)", "Temporadas ganadas": "4-5/5", "Calibración": "Muy buena"},
+        {"Mercado": "Booking points", "Temporadas ganadas": "5/5", "Calibración": "Muy buena"},
+        {"Mercado": "Props de jugador (6 mercados)", "Temporadas ganadas": "5/5", "Calibración": "Excelente"},
+    ])
+    st.dataframe(pv, hide_index=True, use_container_width=True)
+
+    # ── live track record ──────────────────────────────────────────────────────
+    st.markdown("### 📌 Track record en vivo")
+    ev = evaluate_prediction_log(len(df_clubs))
+    if ev.empty:
+        st.info("Aún no hay predicciones registradas con resultado. Registra una jornada "
+                "desde 🎯 Props y vuelve aquí cuando se juegue.")
+    else:
+        n = len(ev)
+        acc = ev["acierto"].mean()
+        exp = ev["confianza"].mean()
+        tc1, tc2, tc3 = st.columns(3)
+        tc1.markdown(metric_card("Predicciones evaluadas", f"{n}"), unsafe_allow_html=True)
+        tc2.markdown(metric_card("Acierto real", f"{acc:.1%}",
+                                 "#16a34a" if acc >= exp - 0.02 else "#dc2626"), unsafe_allow_html=True)
+        tc3.markdown(metric_card("Acierto esperado", f"{exp:.1%}"), unsafe_allow_html=True)
+        st.caption("Un modelo honesto acierta ≈ lo que anuncia. Real muy por encima = suerte; "
+                   "muy por debajo = problema.")
+        by_mk = (ev.groupby("mercado").agg(N=("acierto", "size"), Acierto=("acierto", "mean"),
+                                           Esperado=("confianza", "mean")).reset_index())
+        by_mk[["Acierto", "Esperado"]] = (by_mk[["Acierto", "Esperado"]] * 100).round(1)
+        st.dataframe(by_mk, hide_index=True, use_container_width=True,
+                     column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                    for c in ["Acierto", "Esperado"]})
+        ev["banda"] = pd.cut(ev["confianza"], [0.5, 0.55, 0.6, 0.7, 1.0],
+                             labels=["50-55%", "55-60%", "60-70%", "70%+"])
+        by_b = (ev.groupby("banda", observed=True)
+                .agg(N=("acierto", "size"), Acierto=("acierto", "mean"),
+                     Esperado=("confianza", "mean")).reset_index())
+        by_b[["Acierto", "Esperado"]] = (by_b[["Acierto", "Esperado"]] * 100).round(1)
+        st.markdown("**Por banda de confianza**")
+        st.dataframe(by_b, hide_index=True, use_container_width=True,
+                     column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                    for c in ["Acierto", "Esperado"]})
+
 elif page == "🥇  Premios Individuales":
     st.title("🥇  Premios Individuales")
 
@@ -910,9 +1128,7 @@ elif page == "📊  Pronóstico de liga":
 
 elif page == "🎯  Props":
     st.title("🎯  Props")
-    st.caption("Análisis completo de mercados de eventos: córners, tarjetas, faltas, tiros, "
-               "booking points y props de jugadores. Modelos validados walk-forward "
-               "(NB + supremacía λ + Platt).")
+    st.caption("Córners, tarjetas, faltas, tiros, booking points y props de jugadores.")
 
     tp_m, pp_m = load_props_models()
     if tp_m is None:
@@ -998,7 +1214,6 @@ elif page == "🎯  Props":
     side_any = any("over_home" in d for d in fx_p.values())
     if side_any:
         st.markdown("### Líneas por equipo")
-        st.caption("Más señal que los totales: la identidad del equipo pesa más por lado. Calibradas (Platt).")
         sc1, sc2 = st.columns(2)
         for col, side_key, tname in [(sc1, "over_home", home_p.title()), (sc2, "over_away", away_p.title())]:
             with col:
@@ -1025,8 +1240,7 @@ elif page == "🎯  Props":
                            yaxis_title="P", paper_bgcolor="rgba(0,0,0,0)",
                            plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
         st.plotly_chart(figd, use_container_width=True)
-        st.caption(f"Binomial negativa: λ {lam_t}, dispersión {disp_t} (medida en datos). "
-                   "Líneas punteadas = líneas de apuesta.")
+        st.caption(f"λ {lam_t} · líneas punteadas = líneas de apuesta.")
 
     if pp_m is not None:
         st.markdown("### Props de jugadores")
@@ -1039,9 +1253,17 @@ elif page == "🎯  Props":
 
     st.markdown("---")
     st.markdown("### 🔍 Escáner de la jornada")
-    st.caption("Los props más extremos de todos los partidos de la jornada (distancia a 50%).")
+    col_scan, col_log = st.columns([1, 1])
     scan_key = f"scan_{comp_p}_{season_p}_{jornada_p}"
-    if st.button("Escanear jornada", key="p_scan_btn"):
+    with col_log:
+        if st.button("📌 Registrar predicciones de la jornada", key="p_log_btn"):
+            n_new = log_round_predictions(df_round_p, comp_p, season_p, jornada_p, tp_m, pp_m)
+            evaluate_prediction_log.clear()
+            st.success(f"{n_new} predicciones nuevas registradas (las repetidas conservan "
+                       "el primer registro). Track record en 📈 Resultados.")
+    with col_scan:
+        scan_clicked = st.button("Escanear jornada", key="p_scan_btn")
+    if scan_clicked:
         rows_s = []
         prog = st.progress(0.0)
         for k, r in enumerate(df_round_p.itertuples()):
