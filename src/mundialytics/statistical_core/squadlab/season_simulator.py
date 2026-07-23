@@ -60,6 +60,8 @@ class MatchResult:
     away_fouls: int = 0
     home_yellow_cards: int = 0
     away_yellow_cards: int = 0
+    home_xg: float = 0.0
+    away_xg: float = 0.0
 
 
 @dataclass
@@ -194,7 +196,7 @@ class SeasonOrchestrator:
         table_state = {t: {"played": 0, "pts": 0, "gf": 0, "ga": 0} for t in teams}
         matches: list[MatchResult] = []
 
-        for fixture, hg, ag in zip(self.fixtures, hg_all, ag_all):
+        for fixture, hg, ag, lam_h, lam_a in zip(self.fixtures, hg_all, ag_all, lams_h, lams_a):
             hg, ag = int(hg), int(ag)
 
             table_state[fixture.home]["played"] += 1
@@ -228,10 +230,19 @@ class SeasonOrchestrator:
                 cor_h, cor_a = _draw("corners_for")
                 fo_h, fo_a = _draw("fouls_for")
                 yc_h, yc_a = _draw("yellow_cards_for")
+
+                def _xg(lam: float, shots: int) -> float:
+                    # xG anchored to the model's expected goals (lam), nudged by
+                    # the shots actually taken this match, with natural Gamma
+                    # dispersion — so it correlates with shots & averages ~lam.
+                    base = max(0.5 * float(lam) + 0.5 * shots * 0.11, 0.05)
+                    return round(float(rng.gamma(4.0, base / 4.0)), 2)
+
+                xg_h, xg_a = _xg(lam_h, sh_h), _xg(lam_a, sh_a)
                 stats = dict(
                     home_shots=sh_h, away_shots=sh_a, home_sot=sot_h, away_sot=sot_a,
                     home_corners=cor_h, away_corners=cor_a, home_fouls=fo_h, away_fouls=fo_a,
-                    home_yellow_cards=yc_h, away_yellow_cards=yc_a,
+                    home_yellow_cards=yc_h, away_yellow_cards=yc_a, home_xg=xg_h, away_xg=xg_a,
                 )
                 if fixture.home in self.squad_roster:
                     home_events, home_goal_events, home_card_players = self._squad_match_events(
