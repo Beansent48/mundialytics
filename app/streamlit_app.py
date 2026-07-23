@@ -84,7 +84,8 @@ COMP_CONFIG = {
     "Serie A":          {"type": "liga",   "engine": "clubs", "comp_id": "Serie A"},
     "Bundesliga":       {"type": "liga",   "engine": "clubs", "comp_id": "Bundesliga"},
     "Ligue 1":          {"type": "liga",   "engine": "clubs", "comp_id": "Ligue 1"},
-    "Champions League": {"type": "torneo", "engine": "clubs", "groups": None, "teams": CHAMPIONS_LEAGUE_TOP},
+    # Champions/Europa/Conference viven en la página 🏆 Europa (formato suizo real
+    # + ClubElo cross-league); el viejo torneo de 18 equipos big-5 queda retirado.
     "World Cup":        {"type": "torneo", "engine": "intl",  "groups": WC_2022},
     "UEFA Euro":        {"type": "torneo", "engine": "intl",  "groups": EURO_2024},
     "Copa América":     {"type": "torneo", "engine": "intl",  "groups": COPA_2024},
@@ -888,10 +889,12 @@ elif page == "🏆  Europa":
         st.plotly_chart(figeu, use_container_width=True)
 
         tbl_eu = res_eu.rename(columns={
-            "team": "Equipo", "elo": "Elo", "p_top8": "Top 8", "p_playoff": "Playoff",
+            "team": "Equipo", "elo": "Elo", "p_top24": "Pasar fase (Top 24)",
+            "p_top8": "Top 8 directo", "p_playoff": "Playoff",
             "p_r16": "Octavos", "p_qf": "Cuartos", "p_sf": "Semis",
             "p_final": "Final", "p_champion": "Campeón"})
-        pct_eu = ["Top 8", "Playoff", "Octavos", "Cuartos", "Semis", "Final", "Campeón"]
+        pct_eu = ["Pasar fase (Top 24)", "Top 8 directo", "Playoff", "Octavos",
+                  "Cuartos", "Semis", "Final", "Campeón"]
         for c in pct_eu:
             tbl_eu[c] = (tbl_eu[c] * 100).round(1)
         st.dataframe(tbl_eu, hide_index=True, use_container_width=True, height=520,
