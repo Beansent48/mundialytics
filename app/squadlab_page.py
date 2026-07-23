@@ -1007,6 +1007,136 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
     render_monte_carlo_status(st.session_state.get("draft_mc_holder"), MC_N_SIMS)
 
 
+HIST_CSV = ROOT / "data/processed/historical_teams.csv"
+
+
+@st.cache_data(show_spinner=False)
+def load_historical_teams() -> pd.DataFrame:
+    return pd.read_csv(HIST_CSV) if HIST_CSV.exists() else pd.DataFrame()
+
+
+def _tie_row_html(tie: dict, hi: str | None = None) -> str:
+    a, b, w = tie["team_a"], tie["team_b"], tie["winner"]
+    def nm(x):
+        strong = "font-weight:800;color:#e2e8f0" if x == w else "color:#9aa9bf"
+        mark = " ⭐" if hi and x == hi else ""
+        return f'<span style="{strong}">{x.title()}{mark}</span>'
+    note = f' <span style="color:#f59e0b;font-size:.7rem">{tie["note"]}</span>' if tie["note"] else ""
+    legs = f'{tie["leg1"]}' + (f' · {tie["leg2"]}' if tie.get("leg2") else "")
+    return (f'<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;'
+            f'background:#151f30;border:1px solid #243350;border-radius:8px;margin:3px 0">'
+            f'<div style="flex:1;text-align:right;font-size:.86rem">{nm(a)}</div>'
+            f'<div style="min-width:56px;text-align:center;font-weight:800;color:#3b82f6">'
+            f'{tie["agg"]}{note}</div>'
+            f'<div style="flex:1;font-size:.86rem">{nm(b)}</div>'
+            f'<div style="width:82px;text-align:right;color:#64748b;font-size:.68rem">{legs}</div>'
+            f'</div>')
+
+
+def render_historic_champions() -> None:
+    st.markdown("### 🏛️ Champions histórica")
+    st.caption("Una Champions con equipos de cualquier época: el Barça 2011, el Milan de "
+               "Kaká, el Madrid de CR7… Se enfrentan en el formato actual (fase liga de 36 "
+               "+ playoff + eliminatorias a doble partido + final a un solo encuentro).")
+
+    cat = load_historical_teams()
+    if cat.empty:
+        st.warning("Falta el catálogo histórico. Genera con: "
+                   "`python scripts/build_historical_teams.py`")
+        return
+    try:
+        from mundialytics.statistical_core.competition.european import (
+            EuropeanTournament, load_calibration)
+        calib = load_calibration(ROOT)
+    except Exception as exc:
+        st.warning(f"Simulador europeo no disponible: {exc}")
+        return
+
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        pool_mode = st.selectbox(
+            "¿Qué equipos entran?",
+            ["🎲 Aleatorios (entre los 80 mejores)", "🏆 Los 36 mejores de la historia",
+             "🎰 Totalmente aleatorios (cualquier época)", "✍️ Elegir a mano"],
+            key="hist_pool")
+    with c2:
+        seed = st.number_input("Semilla", 1, 9999, 7, key="hist_seed",
+                               help="Cambia la semilla para otro sorteo y otro desarrollo")
+    with c3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        go = st.button("⚽ Jugar la Champions", use_container_width=True, key="hist_go")
+
+    if pool_mode.startswith("✍️"):
+        opts = cat["label"].tolist()
+        default = cat.head(36)["label"].tolist()
+        chosen = st.multiselect("Equipos (elige 36; menos también vale, mínimo 8)",
+                                opts, default=default, key="hist_manual")
+        sel = cat[cat["label"].isin(chosen)]
+    elif pool_mode.startswith("🏆"):
+        sel = cat.head(36)
+    elif pool_mode.startswith("🎲"):
+        sel = cat.head(80).sample(min(36, len(cat)), random_state=int(seed))
+    else:
+        sel = cat.sample(min(36, len(cat)), random_state=int(seed))
+
+    fav = sel.nlargest(1, "strength")
+    st.caption(f"{len(sel)} equipos · favorito: **{fav.iloc[0]['label'].title()}** "
+               f"(elo {fav.iloc[0]['elo']:.0f})" if len(sel) else "")
+
+    if go and len(sel) >= 8:
+        elo = {r.label: float(r.elo) for r in sel.itertuples(index=False)}
+        rng = np.random.default_rng(int(seed) * 1000 + 7)
+        tour = EuropeanTournament("champions", elo, calib, rng=rng)
+        with st.spinner("Jugando la fase liga y las eliminatorias..."):
+            st.session_state["hist_result"] = tour.play_single()
+            st.session_state["hist_probs"] = tour.simulate(600)
+
+    res = st.session_state.get("hist_result")
+    if not res:
+        st.info("Elige los equipos y pulsa **Jugar la Champions**.")
+        return
+
+    champ = res["champion"]
+    st.markdown(
+        f'<div style="text-align:center;padding:16px;margin:8px 0;border-radius:14px;'
+        f'background:linear-gradient(140deg,#1b1147,#3b1d6e);border:2px solid #ffd75e">'
+        f'<div style="font-size:.8rem;letter-spacing:.2em;color:#e9d8ff">CAMPEÓN DE EUROPA</div>'
+        f'<div style="font-size:1.9rem;font-weight:900;color:#ffd75e">{champ.title()}</div>'
+        f'<div style="font-size:.8rem;color:#e9d8ff">venció a {res["runner_up"].title()} '
+        f'en la final</div></div>', unsafe_allow_html=True)
+
+    st.markdown("#### 🗝️ Camino al título")
+    for key, label in [("final", "Final"), ("sf", "Semifinales"), ("qf", "Cuartos"),
+                       ("r16", "Octavos"), ("playoff", "Playoff")]:
+        ties = res["rounds"].get(key, [])
+        if not ties:
+            continue
+        with st.expander(label, expanded=key in ("final", "sf", "qf")):
+            for tie in ties:
+                st.markdown(_tie_row_html(tie, hi=champ), unsafe_allow_html=True)
+
+    with st.expander("📊 Fase liga (clasificación final)"):
+        tbl = res["table"].copy()
+        tbl["team"] = tbl["team"].str.title()
+        st.dataframe(tbl, hide_index=True, use_container_width=True, height=420)
+
+    probs = st.session_state.get("hist_probs")
+    if probs is not None and len(probs):
+        st.markdown("#### 🎯 ¿Quién era favorito? (600 simulaciones del mismo cuadro)")
+        top = probs.head(10)[["team", "elo", "p_top8", "p_champion"]].copy()
+        top["team"] = top["team"].str.title()
+        top[["p_top8", "p_champion"]] = (top[["p_top8", "p_champion"]] * 100).round(1)
+        top = top.rename(columns={"team": "Equipo", "elo": "Elo", "p_top8": "Top 8",
+                                  "p_champion": "Campeón"})
+        st.dataframe(top, hide_index=True, use_container_width=True,
+                     column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                    for c in ["Top 8", "Campeón"]})
+        row = probs[probs["team"] == champ]
+        if len(row):
+            st.caption(f"El campeón partía con un **{row.iloc[0]['p_champion']:.1%}** de "
+                       "probabilidad — así que fue lo esperado o una sorpresa, según el número.")
+
+
 def render_sandbox_mode(model: PlayerStrengthModel, engine=None, df_clubs: pd.DataFrame | None = None):
     st.markdown("### 🔬 Construye tu equipo ideal")
     st.caption("Mezcla jugadores de cualquier época o liga — experimento estadístico sin restricciones, "
@@ -1123,12 +1253,15 @@ def render(engine=None, df_clubs: pd.DataFrame | None = None):
                   "data/processed/player_profiles_with_positions.csv existe.")
         return
 
-    mode = st.radio("Modo", ["🎮 Draft — temporada FM-style", "🔬 Sandbox — equipo libre"], horizontal=True)
+    mode = st.radio("Modo", ["🎮 Draft — temporada FM-style", "🔬 Sandbox — equipo libre",
+                             "🏛️ Champions histórica"], horizontal=True)
 
     if "Draft" in mode:
         if df_clubs is None:
             st.warning("Datos de calendario no disponibles para calcular el colista.")
             return
         render_draft_mode(sq_model, df_clubs, engine)
+    elif "Champions" in mode:
+        render_historic_champions()
     else:
         render_sandbox_mode(sq_model, engine, df_clubs)
