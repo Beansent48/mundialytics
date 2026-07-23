@@ -648,6 +648,7 @@ page = st.sidebar.radio("", [
     "🏆  Competición",
     "📊  Pronóstico de liga",
     "🎯  Props",
+    "🏆  Europa",
     "📈  Resultados",
     "🥇  Premios Individuales",
     "🧪  SquadLab",
@@ -823,6 +824,83 @@ elif page == "🏆  Competición":
 # ══════════════════════════════════════════════════════════════════════════════
 #  PREMIOS INDIVIDUALES
 # ══════════════════════════════════════════════════════════════════════════════
+elif page == "🏆  Europa":
+    st.title("🏆  Competiciones europeas")
+    st.caption("Champions, Europa y Conference League: probabilidades de cada ronda "
+               "simulando el formato completo (fase liga + playoff + eliminatorias).")
+
+    try:
+        from mundialytics.statistical_core.competition.european import (
+            FORMATS, EuropeanTournament, fetch_current_elo, load_calibration)
+        calib_eu = load_calibration(ROOT)
+        elo_all = fetch_current_elo(ROOT)
+    except Exception as exc:
+        st.warning(f"Capa europea no disponible: {exc}")
+        st.stop()
+
+    COMP_EU = {"Champions League": "champions", "Europa League": "europa",
+               "Conference League": "conference"}
+    comp_eu_label = st.selectbox("Competición", list(COMP_EU), key="eu_comp")
+    comp_eu = COMP_EU[comp_eu_label]
+
+    teams_csv = ROOT / f"data/external/uefa/{comp_eu}_teams.csv"
+    fixtures_csv = ROOT / f"data/external/uefa/{comp_eu}_fixtures.csv"
+    elo_sorted = sorted(elo_all.items(), key=lambda kv: -kv[1])
+    if teams_csv.exists():
+        team_list = pd.read_csv(teams_csv)["team"].astype(str).tolist()
+        missing_eu = [t for t in team_list if t not in elo_all]
+        if missing_eu:
+            st.warning(f"Sin Elo para: {', '.join(missing_eu[:8])} (nombres ClubElo).")
+        teams_eu = {t: elo_all[t] for t in team_list if t in elo_all}
+        st.caption(f"Participantes: {teams_csv.name} ({len(teams_eu)} equipos).")
+    else:
+        tier = {"champions": (0, 36), "europa": (36, 72), "conference": (72, 108)}[comp_eu]
+        teams_eu = dict(elo_sorted[tier[0]:tier[1]])
+        st.info(f"⚠️ Participantes ESTIMADOS por ranking Elo (las listas oficiales salen en "
+                f"agosto). Para usar las reales, crea `{teams_csv.relative_to(ROOT)}` con una "
+                f"columna `team` (nombres ClubElo).")
+
+    fixtures_eu = None
+    if fixtures_csv.exists():
+        fixtures_eu = pd.read_csv(fixtures_csv)
+        played_n = int(fixtures_eu["home_goals"].notna().sum())
+        st.caption(f"Calendario: {fixtures_csv.name} — {played_n}/{len(fixtures_eu)} jugados.")
+    else:
+        st.caption("Sin sorteo cargado → modo PRE-SORTEO: cada simulación sortea una fase liga "
+                   "válida por bombos (las probabilidades integran el sorteo).")
+
+    if st.button("🎲 Simular torneo (2.000 iteraciones)", key="eu_sim"):
+        with st.spinner("Simulando fase liga + eliminatorias..."):
+            tour = EuropeanTournament(comp_eu, teams_eu, calib_eu, fixtures_eu)
+            st.session_state[f"eu_res_{comp_eu}"] = tour.simulate(2000)
+
+    res_eu = st.session_state.get(f"eu_res_{comp_eu}")
+    if res_eu is not None:
+        top12 = res_eu.head(12)
+        figeu = go.Figure(go.Bar(
+            x=top12["p_champion"] * 100, y=top12["team"], orientation="h",
+            marker_color="#3b82f6", text=[f"{v:.1%}" for v in top12["p_champion"]],
+            textposition="outside"))
+        figeu.update_layout(height=360, margin=dict(l=0, r=40, t=10, b=0),
+                            yaxis=dict(autorange="reversed"), xaxis_title="P(campeón) %",
+                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.markdown(f"### ¿Quién gana la {comp_eu_label}?")
+        st.plotly_chart(figeu, use_container_width=True)
+
+        tbl_eu = res_eu.rename(columns={
+            "team": "Equipo", "elo": "Elo", "p_top8": "Top 8", "p_playoff": "Playoff",
+            "p_r16": "Octavos", "p_qf": "Cuartos", "p_sf": "Semis",
+            "p_final": "Final", "p_champion": "Campeón"})
+        pct_eu = ["Top 8", "Playoff", "Octavos", "Cuartos", "Semis", "Final", "Campeón"]
+        for c in pct_eu:
+            tbl_eu[c] = (tbl_eu[c] * 100).round(1)
+        st.dataframe(tbl_eu, hide_index=True, use_container_width=True, height=520,
+                     column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                    for c in pct_eu})
+        st.caption("Fuerzas: ClubElo (escala única europea) con mapping Elo→goles calibrado "
+                   "sobre 20.000 partidos propios. Eliminatorias a doble partido con "
+                   "prórroga y penaltis; final única en campo neutral.")
+
 elif page == "📈  Resultados":
     st.title("📈  Resultados y fiabilidad")
     st.caption("Validación fuera de muestra, comparación con el mercado y track record en vivo.")
