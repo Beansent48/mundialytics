@@ -105,14 +105,25 @@ scripts/fit_squad_lambda_calibration_season_scoped.py (precise attack+defense fi
 from __future__ import annotations
 
 # GOAL_ATTACK_SLOPE/INTERCEPT, GOAL_DEFENSE_SLOPE/INTERCEPT: precise per-club
-# regressions from scripts/fit_squad_lambda_calibration_season_scoped.py —
 # attack_idx/defense_idx of a season-reconstructed real roster -> that team's
-# real AttackDefenseModel attack_param/defense_param for that same season, 99
-# matched team-seasons. R^2 = 0.676 (attack) / 0.251 (defense).
-GOAL_ATTACK_SLOPE: float = 0.082619
-GOAL_ATTACK_INTERCEPT: float = -4.461046
-GOAL_DEFENSE_SLOPE: float = 0.123884
-GOAL_DEFENSE_INTERCEPT: float = -7.034504
+# real AttackDefenseModel attack_param/defense_param.
+#
+# VARIANCE-MATCHED (2026-07-23), not least-squares. The end-to-end realism
+# validation (scripts/validate_squadlab_realism.py) proved the old LS-regression
+# constants COMPRESSED every reconstructed squad toward mid-table: a least-
+# squares line with R^2<1 attenuates its output range (predicted std =
+# corr * real std), so defense (R^2=0.25 -> corr 0.5) came out at only HALF the
+# real spread, and title-winning XIs simulated to ~50 pts instead of ~90.
+# These constants instead map the index onto the REAL param distribution's
+# spread (same mean+std, ordering preserved): slope = std_param/std_idx.
+# Result on the 99-club validation: points-spread 14.5 -> 18.1 (real 18.0),
+# correlation 0.72 -> 0.76, MAE 10.7 -> 10.0 pts. The right trade for a
+# SIMULATION (realistic spread) over per-club precision. Residual ~6pt error vs
+# the engine's 4pt ceiling is irreducible player-data noise (defense signal).
+GOAL_ATTACK_SLOPE: float = 0.100588
+GOAL_ATTACK_INTERCEPT: float = -5.545813
+GOAL_DEFENSE_SLOPE: float = 0.247168
+GOAL_DEFENSE_INTERCEPT: float = -14.187625
 
 # Safety clip: never let an extreme squad extrapolate past the real
 # attack/defense parameter range AttackDefenseModel actually produced —
