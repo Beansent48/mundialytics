@@ -140,6 +140,7 @@ class PredictionEngine:
         outcome_rho: float | None = None,  # DC rho for the OUTCOME matrix (None = ad_rho). LOFO-optimal -0.17 with gamma 1.3
         rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
         xg_rate_kwargs: dict | None = None,     # passthrough to XGRateModel (e.g. {"use_ewma": True})
+        goal_temper: float | None = None,  # marginal pmf tempering >1 (goals are sub-Poisson, Pearson ~0.91); None = off
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -179,6 +180,7 @@ class PredictionEngine:
         self.rescale_lambda_to_goals = bool(rescale_lambda_to_goals)
         self.lambda_scale_: float = 1.0
         self.xg_rate_kwargs = dict(xg_rate_kwargs or {})
+        self.goal_temper = float(goal_temper) if goal_temper is not None else None
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -490,7 +492,9 @@ class PredictionEngine:
 
         # Probabilities from score matrix
         rho_m = self.outcome_rho if self.outcome_rho is not None else self.ad_rho
-        probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=rho_m)
+        temper_m = self.goal_temper if self.goal_temper is not None else 1.0
+        probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=rho_m,
+                                      temper=temper_m)
         # Post-hoc 1X2 sharpening (see __init__): trio only, renormalized. Other
         # markets and the scoreline matrix stay raw.
         if abs(self.sharpen_gamma_1x2 - 1.0) > 1e-9:
@@ -498,7 +502,8 @@ class PredictionEngine:
             trio = trio ** self.sharpen_gamma_1x2
             trio = trio / trio.sum()
             probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
-        dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True, dixon_coles_rho=rho_m)
+        dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True,
+                                      dixon_coles_rho=rho_m, temper=temper_m)
 
         # Event lambdas
         sh, sa = self._event_lambda("shots_for", h, a, competition)
