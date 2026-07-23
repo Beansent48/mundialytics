@@ -26,6 +26,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from mundialytics.identity.display_names import display_name as _disp
 from mundialytics.statistical_core.player_strength import PlayerStrengthModel
 from mundialytics.statistical_core.schemas import canonical_name
 from mundialytics.statistical_core.squadlab.calendar import generate_double_round_robin
@@ -328,13 +329,13 @@ def play_live_match(match: MatchResult, squad_team_name: str = SQUAD_TEAM_NAME) 
     def _add_goals(goal_events: list[tuple[str, str | None]] | None, side: str) -> None:
         for scorer, assister in (goal_events or []):
             minute = int(rng.integers(1, 91))
-            desc = f"⚽ Gol de {scorer.split()[-1]}" + (f" (asist. {assister.split()[-1]})" if assister else "")
+            desc = f"⚽ Gol de {_disp(scorer)}" + (f" (asist. {_disp(assister)})" if assister else "")
             timeline.append((minute, side, desc))
 
     def _add_cards(card_players: list[str] | None, side: str) -> None:
         for player in (card_players or []):
             minute = int(rng.integers(1, 91))
-            timeline.append((minute, side, f"🟨 Amarilla a {player.split()[-1]}"))
+            timeline.append((minute, side, f"🟨 Amarilla a {_disp(player)}"))
 
     _add_goals(match.home_goal_events, "home")
     _add_goals(match.away_goal_events, "away")
@@ -470,7 +471,7 @@ def pitch_svg(picks: dict, coords: dict) -> str:
             profile = picks.get(key)
             cx, cy = xp / 100 * w, yp / 100 * h
             if profile:
-                label = profile.player.split()[-1][:11]
+                label = _disp(profile.player)[:11]
                 ov = f"{profile.overall:.0f}"
                 color = "#16a34a" if profile.overall >= 70 else "#2563eb"
             else:
@@ -539,7 +540,9 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
         st.session_state.draft_excluded = set()
         st.session_state.draft_active_slot = None
         st.session_state.draft_reroll = {}
+        st.session_state.draft_token = {}
         st.session_state.draft_active_comp = active_key
+    st.session_state.setdefault("draft_token", {})
 
     comp_match_id = MATCH_COMP_MAP[comp_d]
     seasons = sorted(df_clubs.loc[df_clubs["competition"] == comp_match_id, "season"].unique(), reverse=True)
@@ -605,19 +608,23 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
                 key = f"{pos}_{slot}"
                 current = st.session_state.draft_picks.get(key)
                 is_active = st.session_state.draft_active_slot == key
-                label = (current.split()[-1][:10] if current else f"#{slot + 1}")
+                label = (_disp(current)[:10] if current else f"#{slot + 1}")
                 if sc.button(("🟢 " if is_active else ("✅ " if current else "")) + label,
                            key=f"slotbtn_{comp_d}_{formation_name}_{key}",
                            use_container_width=True):
                     st.session_state.draft_active_slot = None if is_active else key
+                    if not is_active:   # opening a slot -> fresh random candidate draw
+                        st.session_state.draft_token[key] = random.randrange(2**31)
                     st.rerun()
 
         active_slot = st.session_state.draft_active_slot
         if active_slot:
             pos = active_slot.rsplit("_", 1)[0]
             current = st.session_state.draft_picks.get(active_slot)
-            reroll_n = st.session_state.draft_reroll.get(active_slot, 0)
-            seed_str = f"{comp_d}|{formation_name}|{active_slot}|{reroll_n}"
+            # genuine per-view randomness: a token generated when the slot is
+            # opened (and bumped on reroll), not a seed tied to slot identity
+            token = st.session_state.draft_token.setdefault(active_slot, random.randrange(2**31))
+            seed_str = f"{token}"
             candidates = seeded_candidates(pool, pos, seed_str, st.session_state.draft_excluded,
                                           current, model)
 
@@ -635,7 +642,7 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
                         f'<div style="background:var(--secondary-background-color);border-radius:8px;'
                         f'padding:6px;text-align:center;font-size:11px;{border}">'
                         f'<div style="font-weight:700;font-size:16px;color:{ov_c}">{cand.overall:.0f}</div>'
-                        f'<div style="font-weight:500">{cand.player.split()[-1][:10]}</div>'
+                        f'<div style="font-weight:500">{_disp(cand.player)[:10]}</div>'
                         f'<div style="color:#9ca3af;font-size:9px">{cand.team.title()[:14]}</div>'
                         f'</div>', unsafe_allow_html=True)
                     if cc.button("Elegido" if is_current else "Elegir",
@@ -648,7 +655,7 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
                         st.session_state.draft_active_slot = next_empty_slot(coords, st.session_state.draft_picks)
                         st.rerun()
                 if st.button("🎲 Ver otros 5 candidatos", key=f"reroll_{comp_d}_{formation_name}_{active_slot}"):
-                    st.session_state.draft_reroll[active_slot] = reroll_n + 1
+                    st.session_state.draft_token[active_slot] = random.randrange(2**31)
                     st.rerun()
         else:
             st.caption("👆 Pulsa una posición arriba para ver sus 5 candidatos.")
