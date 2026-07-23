@@ -290,15 +290,17 @@ def render_monte_carlo_status(holder: dict | None, n_sims: int = MC_N_SIMS,
 
 # ── Live matchday playback ───────────────────────────────────────────────────
 
-def _stat_grid_html(events: list[tuple[str, float, float]]) -> str:
+def _stat_grid_html(events: list[tuple]) -> str:
     boxes = []
-    for label, hv, av in events:
+    for row in events:
+        label, hv, av = row[0], row[1], row[2]
+        dec = 2 if (len(row) > 3 and row[3]) else 0
         boxes.append(
             '<div style="flex:1;text-align:center;background:var(--secondary-background-color);'
             'border-radius:8px;padding:6px 4px">'
             f'<div style="font-size:10px;color:#9ca3af">{label}</div>'
-            f'<div style="font-weight:700;font-size:1.0rem">{hv:.0f} '
-            f'<span style="color:#9ca3af;font-weight:400;font-size:.8rem">–</span> {av:.0f}</div>'
+            f'<div style="font-weight:700;font-size:1.0rem">{hv:.{dec}f} '
+            f'<span style="color:#9ca3af;font-weight:400;font-size:.8rem">–</span> {av:.{dec}f}</div>'
             '</div>'
         )
     return f'<div style="display:flex;gap:6px;margin-top:6px">{"".join(boxes)}</div>'
@@ -310,7 +312,8 @@ def render_other_results(other_matches: list[MatchResult], squad_team_name: str 
         st.markdown(f"{m.home.title()} **{m.home_goals}-{m.away_goals}** {m.away.title()}")
 
 
-def play_live_match(match: MatchResult, squad_team_name: str = SQUAD_TEAM_NAME) -> None:
+def play_live_match(match: MatchResult, squad_team_name: str = SQUAD_TEAM_NAME,
+                    picks: dict | None = None, coords: dict | None = None) -> None:
     """Blocks for ~21s (two 10-tick, 10s halves + a half-time beat),
     progressively revealing the already-simulated result: a minute clock,
     goal/card events surfacing at pseudo-random minutes, and stats growing
@@ -380,6 +383,7 @@ def play_live_match(match: MatchResult, squad_team_name: str = SQUAD_TEAM_NAME) 
         feed_ph.markdown("<br>".join(reversed(revealed[-6:])) or "_Sin novedades todavía..._",
                          unsafe_allow_html=True)
         stats_ph.markdown(_stat_grid_html([
+            ("xG",        match.home_xg * fraction,           match.away_xg * fraction, True),
             ("Disparos",  match.home_shots * fraction,        match.away_shots * fraction),
             ("A puerta",  match.home_sot * fraction,          match.away_sot * fraction),
             ("Córners",   match.home_corners * fraction,      match.away_corners * fraction),
@@ -403,6 +407,16 @@ def play_live_match(match: MatchResult, squad_team_name: str = SQUAD_TEAM_NAME) 
         time.sleep(LIVE_TICK_SECONDS)
 
     clock_ph.markdown("**⏱️ Final del partido**")
+
+    # ── post-match Sofascore-style rating pitch ────────────────────────────────
+    squad_events = match.home_events if squad_is_home else match.away_events
+    if squad_events and picks and coords:
+        st.markdown("#### 📋 Valoraciones del partido")
+        st.markdown(match_pitch_svg(squad_events, picks, coords), unsafe_allow_html=True)
+        best = max(squad_events.values(), key=lambda e: e.rating)
+        st.caption(f"⭐ MVP: **{_disp(best.player)}** ({best.rating:.1f}) · "
+                   "valoración 0-10 por goles, asistencias, portería a cero y goles encajados. "
+                   f"xG del partido: {(match.home_xg if squad_is_home else match.away_xg):.2f}.")
 
 
 def render_matchday_summary(season_result: SeasonResult, matchday: int,
@@ -452,6 +466,75 @@ def compute_standings(df_clubs: pd.DataFrame, comp_id: str, season: str) -> pd.D
     table = pd.DataFrame(rows.values())
     table["gd"] = table["gf"] - table["ga"]
     return table.sort_values(["pts", "gd", "gf"], ascending=False).reset_index(drop=True)
+
+
+def _rating_color(r: float) -> str:
+    """Sofascore-style rating color: red (poor) -> amber -> green (great)."""
+    if r >= 8.5:
+        return "#137a3c"
+    if r >= 7.5:
+        return "#22a94f"
+    if r >= 7.0:
+        return "#63b544"
+    if r >= 6.5:
+        return "#c99a1e"
+    if r >= 6.0:
+        return "#dd8a2f"
+    return "#d64545"
+
+
+def match_pitch_svg(events: dict, picks: dict, coords: dict) -> str:
+    """Sofascore-style post-match pitch: each player positioned by formation,
+    with a colored match-rating badge and goal/assist/card icons."""
+    w, h = 480, 620
+    s = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
+         f'style="width:100%;max-width:480px;display:block;margin:0 auto">']
+    # pitch (attacking up; darker, richer green with stripes)
+    s.append(f'<rect width="{w}" height="{h}" fill="#166b34" rx="14"/>')
+    for i in range(6):
+        if i % 2 == 0:
+            s.append(f'<rect x="0" y="{i*h/6}" width="{w}" height="{h/6}" fill="#ffffff08"/>')
+    s.append(f'<rect x="10" y="10" width="{w-20}" height="{h-20}" fill="none" stroke="#ffffff55" stroke-width="2"/>')
+    s.append(f'<circle cx="{w/2}" cy="{h/2}" r="52" fill="none" stroke="#ffffff55" stroke-width="2"/>')
+    s.append(f'<line x1="10" y1="{h/2}" x2="{w-10}" y2="{h/2}" stroke="#ffffff55" stroke-width="2"/>')
+    s.append(f'<rect x="{w/2-90}" y="10" width="180" height="62" fill="none" stroke="#ffffff55" stroke-width="2"/>')
+    s.append(f'<rect x="{w/2-90}" y="{h-72}" width="180" height="62" fill="none" stroke="#ffffff55" stroke-width="2"/>')
+
+    for pos, pos_coords in coords.items():
+        for slot, (xp, yp) in enumerate(pos_coords):
+            profile = picks.get(f"{pos}_{slot}")
+            if not profile:
+                continue
+            cx, cy = xp / 100 * w, yp / 100 * h
+            ev = events.get(profile.player)
+            rating = getattr(ev, "rating", 6.5) if ev else 6.5
+            rc = _rating_color(rating)
+            # player disc
+            s.append(f'<circle cx="{cx}" cy="{cy}" r="19" fill="#0b1220" stroke="#e2e8f0" stroke-width="1.5"/>')
+            s.append(f'<text x="{cx}" y="{cy+4}" text-anchor="middle" font-size="12" '
+                     f'font-weight="700" fill="#e2e8f0">{_disp(profile.player)[:3].upper()}</text>')
+            # rating badge (bottom-right of disc)
+            bx, by = cx + 9, cy + 9
+            s.append(f'<rect x="{bx-1}" y="{by-1}" width="30" height="17" rx="4" fill="{rc}" '
+                     f'stroke="#0b1220" stroke-width="1"/>')
+            s.append(f'<text x="{bx+14}" y="{by+12}" text-anchor="middle" font-size="11" '
+                     f'font-weight="800" fill="white">{rating:.1f}</text>')
+            # event icons (top-right of disc): goals, assist, card
+            icons = ""
+            if ev:
+                icons += "⚽" * min(getattr(ev, "goals", 0), 3)
+                if getattr(ev, "assists", 0):
+                    icons += "🅰️"
+                if getattr(ev, "yellow_cards", 0):
+                    icons += "🟨"
+            if icons:
+                s.append(f'<text x="{cx-11}" y="{cy-13}" text-anchor="end" font-size="12">{icons}</text>')
+            # name below
+            s.append(f'<text x="{cx}" y="{cy+34}" text-anchor="middle" font-size="11" '
+                     f'font-weight="600" fill="white" style="text-shadow:0 1px 3px #000000cc">'
+                     f'{_disp(profile.player)[:13]}</text>')
+    s.append('</svg>')
+    return "".join(s)
 
 
 def pitch_svg(picks: dict, coords: dict) -> str:
@@ -718,7 +801,7 @@ def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine
             skip_anim = wc2.button("⏭️ Saltar animación", key=f"draft_skip_anim_{matchday}",
                                    use_container_width=True)
             if play_clicked:
-                play_live_match(squad_match, SQUAD_TEAM_NAME)
+                play_live_match(squad_match, SQUAD_TEAM_NAME, picks_resolved, coords)
                 st.session_state.draft_watched_matchdays.add(matchday)
                 already_watched = True
             elif skip_anim:
