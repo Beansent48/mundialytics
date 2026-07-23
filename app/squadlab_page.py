@@ -26,7 +26,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from mundialytics.identity.display_names import display_name as _disp
+from mundialytics.identity.display_names import display_name as _display_name_raw
 from mundialytics.statistical_core.player_strength import PlayerStrengthModel
 from mundialytics.statistical_core.schemas import canonical_name
 from mundialytics.statistical_core.squadlab.calendar import generate_double_round_robin
@@ -192,28 +192,25 @@ def _build_season_orchestrator(
     # FULL-LEAGUE narrative: give every real club a best-XI too, so every match
     # (not just ours) produces scorers/assists/cards/ratings -> a real league-wide
     # top-scorer race. The orchestrator already keys rosters by team.
-    rosters: dict[str, list] = {squad_team_name: squad}
-    # signed players leave their original club (the draft's own rule) — without
-    # this a player sits in TWO rosters and his goals are double-counted
-    rosters.update(build_real_team_rosters(model, real_teams,
-                                           exclude={p.player for p in squad}))
+    # Drafted players are CLONES: same stats, distinct identity. The real player
+    # keeps playing for his club, and both appear separately in the scorer race
+    # (without cloning, one name in two rosters double-counts his goals).
+    squad_clones = [clone_for_squad(p, squad_team_name) for p in squad]
+    rosters: dict[str, list] = {squad_team_name: squad_clones}
+    rosters.update(build_real_team_rosters(model, real_teams))
     return SeasonOrchestrator(
         lambda_source, fixtures, squad_roster=rosters, competition=competition,
     )
 
 
-def build_real_team_rosters(model: PlayerStrengthModel, real_teams: list[str],
-                            exclude: set[str] | None = None) -> dict[str, list]:
+def build_real_team_rosters(model: PlayerStrengthModel, real_teams: list[str]) -> dict[str, list]:
     """Best XI (1-4-3-3 shape) per real club from the player pool, so the whole
-    league gets player-level events. `exclude` drops players already signed by
-    the user's squad — a player must never appear in two rosters (that would
-    double-count his goals). Clubs with too little coverage are skipped (their
-    matches simply keep scoreline-only detail, as before)."""
-    exclude = exclude or set()
+    league gets player-level events. Real clubs KEEP their players even if the
+    user drafted them — the drafted version is a distinct identity (see
+    clone_for_squad). Clubs with too little coverage are skipped (their matches
+    simply keep scoreline-only detail, as before)."""
     by_team: dict[str, list] = {}
     for p in model.profiles_.values():
-        if p.player in exclude:
-            continue
         by_team.setdefault(canonical_name(p.team), []).append(p)
     slots = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
     out: dict[str, list] = {}
@@ -507,6 +504,37 @@ def compute_standings(df_clubs: pd.DataFrame, comp_id: str, season: str) -> pd.D
 
 POS_ABBR = {"Goalkeeper": "POR", "Defender": "DEF", "Midfielder": "MED", "Forward": "DEL"}
 
+# A drafted player is a CLONE: identical stats, distinct identity. The original
+# keeps playing for his real club, so both compete separately in the scorer
+# race. The mark makes the season-tally key unique (tallies are keyed by name)
+# and is stripped for display.
+SQUAD_CLONE_MARK = " ✦"
+
+
+def clone_for_squad(profile, squad_team_name: str):
+    """Same-stats copy of a player under the user's club and a unique identity."""
+    import dataclasses
+    if str(profile.player).endswith(SQUAD_CLONE_MARK):
+        return profile
+    return dataclasses.replace(profile,
+                               player=f"{profile.player}{SQUAD_CLONE_MARK}",
+                               team=squad_team_name)
+
+
+def _strip_clone(name: str) -> str:
+    return str(name).replace(SQUAD_CLONE_MARK, "")
+
+
+def _disp(name: str | None) -> str:
+    """Short display name; a drafted clone shows its real name plus the mark so
+    it's visibly distinct from the original still playing at his old club."""
+    if not name:
+        return ""
+    raw = str(name)
+    if raw.endswith(SQUAD_CLONE_MARK):
+        return _display_name_raw(_strip_clone(raw)) + SQUAD_CLONE_MARK
+    return _display_name_raw(raw)
+
 # Card tiers by our own overall rating. `variant` allows future special editions
 # (award cards, memorable-match cards) to reuse the same renderer.
 CARD_TIERS = {
@@ -619,7 +647,9 @@ def match_pitch_svg(events: dict, picks: dict, coords: dict) -> str:
             if not profile:
                 continue
             cx, cy = xp / 100 * w, yp / 100 * h
-            ev = events.get(profile.player)
+            # picks hold the ORIGINAL profile; season events are keyed by the
+            # drafted clone's unique name — try both.
+            ev = events.get(profile.player) or events.get(f"{profile.player}{SQUAD_CLONE_MARK}")
             rating = getattr(ev, "rating", 6.5) if ev else 6.5
             rc = _rating_color(rating)
             # player disc
