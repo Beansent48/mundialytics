@@ -1,0 +1,12 @@
+# Mundialytics brand theme — dark "precision analytics" identity.
+# Matches the shareable prediction cards (deep navy + electric blue).
+[theme]
+base = "dark"
+primaryColor = "#3b82f6"
+backgroundColor = "#0b1220"
+secondaryBackgroundColor = "#151f30"
+textColor = "#e2e8f0"
+font = "sans serif"
+
+[server]
+headless = true

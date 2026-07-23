@@ -29,22 +29,75 @@ st.set_page_config(page_title="Mundialytics", page_icon="⚽", layout="wide",
                    initial_sidebar_state="expanded")
 
 st.markdown("""<style>
-    .metric-card{background:var(--secondary-background-color);border-radius:10px;
-        padding:14px 18px;text-align:center;height:90px;display:flex;
-        flex-direction:column;justify-content:center}
-    .metric-label{font-size:.75rem;color:#888;margin-bottom:3px}
-    .metric-value{font-size:1.75rem;font-weight:700;line-height:1}
+    /* ── Mundialytics design system ─────────────────────────────────────── */
+    :root{
+        --mv-navy:#0b1220; --mv-panel:#151f30; --mv-panel-2:#1c2942;
+        --mv-line:#243350; --mv-blue:#3b82f6; --mv-blue-soft:#60a5fa;
+        --mv-green:#10b981; --mv-amber:#f59e0b; --mv-red:#ef4444;
+        --mv-text:#e2e8f0; --mv-muted:#8b9bb4;
+    }
+    html,body,[class*="css"]{font-feature-settings:"tnum" 1;}
+    /* headings: tighter, brand weight */
+    h1{font-weight:800!important;letter-spacing:-.02em}
+    h2,h3{font-weight:700!important;letter-spacing:-.01em}
+    h3{margin-top:1.3rem!important}
+    a{color:var(--mv-blue-soft)}
+
+    /* metric cards */
+    .metric-card{background:linear-gradient(160deg,var(--mv-panel),var(--mv-panel-2));
+        border:1px solid var(--mv-line);border-radius:12px;padding:14px 16px;
+        text-align:center;height:92px;display:flex;flex-direction:column;
+        justify-content:center;transition:border-color .15s}
+    .metric-card:hover{border-color:var(--mv-blue)}
+    .metric-label{font-size:.72rem;color:var(--mv-muted);margin-bottom:4px;
+        text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+    .metric-value{font-size:1.7rem;font-weight:800;line-height:1;color:var(--mv-text)}
+
+    /* form badges */
     .form-badge{display:inline-block;width:26px;height:26px;border-radius:50%;
         font-weight:700;font-size:.8rem;text-align:center;line-height:26px;margin:1px}
-    .form-W{background:#16a34a;color:#fff}
-    .form-D{background:#9ca3af;color:#fff}
-    .form-L{background:#dc2626;color:#fff}
+    .form-W{background:var(--mv-green);color:#04120c}
+    .form-D{background:#64748b;color:#fff}
+    .form-L{background:var(--mv-red);color:#fff}
+
     .fixture-row{padding:10px 14px;border-radius:8px;margin:4px 0;
-        background:var(--secondary-background-color)}
-    .fixture-row:hover{background:#e5e7eb22}
-    h3{margin-top:1.2rem!important}
+        background:var(--mv-panel);border:1px solid transparent}
+    .fixture-row:hover{border-color:var(--mv-line)}
+
+    /* buttons: brand primary */
+    .stButton>button{border-radius:9px;border:1px solid var(--mv-line);
+        font-weight:600;transition:all .15s}
+    .stButton>button:hover{border-color:var(--mv-blue);color:var(--mv-blue-soft)}
+    .stDownloadButton>button{border-radius:9px;font-weight:600}
+
+    /* dataframes + tables: softer grid */
+    [data-testid="stDataFrame"]{border:1px solid var(--mv-line);border-radius:10px}
+
+    /* sidebar radio -> nav pills */
+    section[data-testid="stSidebar"]{background:#0e1626;border-right:1px solid var(--mv-line)}
+    section[data-testid="stSidebar"] .stRadio label{padding:2px 0}
     div[data-testid="stSidebarNav"]{display:none}
+
+    /* brand wordmark */
+    .mv-brand{display:flex;align-items:center;gap:11px;padding:2px 2px 4px}
+    .mv-logo{width:38px;height:38px;border-radius:10px;flex:0 0 38px;
+        background:linear-gradient(140deg,var(--mv-blue),#1e40af);
+        display:flex;align-items:center;justify-content:center;
+        font-weight:900;font-size:20px;color:#fff;
+        box-shadow:0 3px 12px rgba(59,130,246,.35)}
+    .mv-name{font-size:1.32rem;font-weight:800;letter-spacing:-.03em;
+        line-height:1;color:var(--mv-text)}
+    .mv-name .mv-accent{color:var(--mv-blue-soft)}
+    .mv-tag{font-size:.62rem;color:var(--mv-muted);letter-spacing:.16em;
+        text-transform:uppercase;margin-top:3px;font-weight:600}
 </style>""", unsafe_allow_html=True)
+
+
+def brand_header() -> str:
+    return ('<div class="mv-brand">'
+            '<div class="mv-logo">M</div>'
+            '<div><div class="mv-name">Mundi<span class="mv-accent">lytics</span></div>'
+            '<div class="mv-tag">Precision Football Models</div></div></div>')
 
 # ── Tournament presets ─────────────────────────────────────────────────────────
 WC_2022 = {
@@ -252,7 +305,7 @@ def prob_bar_chart(p_home: float, p_draw: float, p_away: float,
     fig = go.Figure()
     for name, val, color in [
         (home.title(), p_home, "#3b82f6"),
-        ("Empate", p_draw, "#9ca3af"),
+        ("Empate", p_draw, "#64748b"),
         (away.title(), p_away, "#ef4444"),
     ]:
         fig.add_trace(go.Bar(
@@ -722,9 +775,9 @@ def render_partido_detail(home: str, away: str, competition: str, neutral: bool,
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:8px;margin:4px 0">'
                 f'<span style="width:36px;font-weight:700;font-size:.95rem">{item["score"]}</span>'
-                f'<div style="flex:1;background:#e5e7eb;border-radius:4px;height:16px">'
+                f'<div style="flex:1;background:#243350;border-radius:4px;height:16px">'
                 f'<div style="width:{bar}px;max-width:100%;background:#3b82f6;border-radius:4px;height:16px"></div>'
-                f'</div><span style="width:40px;text-align:right;color:#6b7280;font-size:.8rem">{pct:.1%}</span>'
+                f'</div><span style="width:40px;text-align:right;color:#8b9bb4;font-size:.8rem">{pct:.1%}</span>'
                 f'</div>', unsafe_allow_html=True)
 
     st.markdown("### Mercados de goles")
@@ -815,8 +868,7 @@ def get_round_fixtures(competition: str, season: str, round_num: int, df: pd.Dat
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
-st.sidebar.markdown("## ⚽ Mundialytics")
-st.sidebar.caption("Motor estadístico de predicción")
+st.sidebar.markdown(brand_header(), unsafe_allow_html=True)
 st.sidebar.divider()
 page = st.sidebar.radio("", [
     "🗓️  Jornada",
@@ -829,7 +881,11 @@ page = st.sidebar.radio("", [
     "🧪  SquadLab",
 ], label_visibility="collapsed")
 st.sidebar.divider()
-st.sidebar.caption("Big5 2021-26 · Selecciones 2010-26\nPoisson GLM · MLE Attack/Defense · ELO")
+st.sidebar.markdown(
+    "<div style='font-size:.68rem;color:#8b9bb4;line-height:1.5'>"
+    "Big5 2021-26 · Selecciones 2010-26 · Europa (ClubElo)<br>"
+    "<span style='color:#10b981'>●</span> 1X2 a 4% del cierre Bet365 · "
+    "props 5/5 folds validados</div>", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
