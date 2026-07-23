@@ -128,9 +128,23 @@ engine_intl,  INTL_TEAMS,  df_intl  = load_intl_engine()
 ALL_TEAMS_COMBINED = sorted(set(CLUB_TEAMS) | set(INTL_TEAMS))
 
 
+PROPS_CACHE_VERSION = 1  # bump whenever src/mundialytics/props logic changes
+
+
 @st.cache_resource(show_spinner="🎯  Cargando modelos de props...")
 def load_props_models():
-    """Team-event + player-prop models (clubs only). Fails soft: (None, None)."""
+    """Team-event + player-prop models (clubs only). Fails soft: (None, None).
+    Fitted objects are disk-cached (fit costs ~45s: 2 AD-MLE fits + Platt
+    walk-forward); the cache key changes with the data or a version bump."""
+    import joblib
+    cache_dir = ROOT / "data/processed/cache"
+    key = f"{len(df_clubs)}_{str(df_clubs['date'].max())[:10]}_v{PROPS_CACHE_VERSION}"
+    cache_f = cache_dir / f"props_models_{key}.joblib"
+    if cache_f.exists():
+        try:
+            return joblib.load(cache_f)
+        except Exception:
+            pass
     try:
         from mundialytics.props import PlayerPropsModel, TeamPropsModel
         tp = TeamPropsModel().fit(df_clubs, root=ROOT)
@@ -142,9 +156,18 @@ def load_props_models():
                [["provider_match_id", "date"]]
                .rename(columns={"provider_match_id": "game_id"}).drop_duplicates("game_id"))
         pm = pd.read_csv(pmp).merge(tmx, on="game_id", how="left")
-        pp = PlayerPropsModel().fit(pm)
+        pp = PlayerPropsModel().fit(
+            pm, shots_path=ROOT / "data/external/advanced/understat/understat_shots.csv")
     except Exception:
         pp = None
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        joblib.dump((tp, pp), cache_f, compress=3)
+        for old in cache_dir.glob("props_models_*.joblib"):
+            if old != cache_f:
+                old.unlink(missing_ok=True)
+    except Exception:
+        pass
     return tp, pp
 
 
@@ -261,6 +284,25 @@ def render_stat_grid(events: list[tuple[str, float, float]]) -> None:
 
 MARKET_ES = {"corners": "Córners", "yellows": "Amarillas", "fouls": "Faltas",
              "shots": "Disparos", "sot": "A puerta", "booking_pts": "Booking pts (10A/25R)"}
+PLAYER_COLS_ES = {"player": "Jugador", "Equipo": "Equipo", "exp_min": "Min esp.",
+                  "p_anytime_scorer": "Gol", "p_2plus_goals": "2+ goles",
+                  "p_shots_over_1_5": "+1.5 tiros", "p_shots_over_2_5": "+2.5 tiros",
+                  "p_assist": "Asistencia", "p_yellow": "Amarilla"}
+
+
+def render_player_props_table(players: pd.DataFrame, home: str, away: str,
+                              height: int = 400) -> None:
+    """Shared per-player props table (match detail + Props page)."""
+    vw = players[players["exp_min"] >= 30].copy()
+    if vw.empty:
+        return
+    vw["Equipo"] = np.where(vw["side"] == "home", home.title(), away.title())
+    tbl = vw[list(PLAYER_COLS_ES)].rename(columns=PLAYER_COLS_ES)
+    pct = [c for c in tbl.columns if c not in ("Jugador", "Equipo", "Min esp.")]
+    for c in pct:
+        tbl[c] = (tbl[c] * 100).round(1)
+    st.dataframe(tbl, hide_index=True, use_container_width=True, height=height,
+                 column_config={c: st.column_config.NumberColumn(format="%.1f%%") for c in pct})
 
 
 def render_props_section(home: str, away: str, pred) -> None:
@@ -319,20 +361,7 @@ def render_props_section(home: str, away: str, pred) -> None:
 
     if not players.empty:
         st.markdown("#### Props de jugadores")
-        view = players[players["exp_min"] >= 30].copy()
-        view["Equipo"] = np.where(view["side"] == "home", home.title(), away.title())
-        cols = {"player": "Jugador", "Equipo": "Equipo", "exp_min": "Min esp.",
-                "p_anytime_scorer": "Gol (anytime)", "p_2plus_goals": "2+ goles",
-                "p_shots_over_1_5": "+1.5 tiros", "p_shots_over_2_5": "+2.5 tiros",
-                "p_assist": "Asistencia", "p_yellow": "Amarilla"}
-        tbl = view[list(cols)].rename(columns=cols)
-        for c in ["Gol (anytime)", "2+ goles", "+1.5 tiros", "+2.5 tiros", "Asistencia", "Amarilla"]:
-            tbl[c] = (tbl[c] * 100).round(1)
-        st.dataframe(
-            tbl, hide_index=True, use_container_width=True, height=420,
-            column_config={c: st.column_config.NumberColumn(format="%.1f%%")
-                           for c in ["Gol (anytime)", "2+ goles", "+1.5 tiros",
-                                     "+2.5 tiros", "Asistencia", "Amarilla"]})
+        render_player_props_table(players, home, away, height=420)
         st.caption("Probabilidades condicionadas a que el jugador juegue (convención "
                    "bookmaker). Min esp. = minutos esperados si juega; ratios de "
                    "carrera + forma reciente, ajustados al contexto del partido.")
@@ -1006,19 +1035,7 @@ elif page == "🎯  Props":
         except Exception:
             players_p = pd.DataFrame()
         if not players_p.empty:
-            vw = players_p[players_p["exp_min"] >= 30].copy()
-            vw["Equipo"] = np.where(vw["side"] == "home", home_p.title(), away_p.title())
-            colsmap = {"player": "Jugador", "Equipo": "Equipo", "exp_min": "Min esp.",
-                       "p_anytime_scorer": "Gol", "p_2plus_goals": "2+ goles",
-                       "p_shots_over_1_5": "+1.5 tiros", "p_shots_over_2_5": "+2.5 tiros",
-                       "p_assist": "Asistencia", "p_yellow": "Amarilla"}
-            tbl_p = vw[list(colsmap)].rename(columns=colsmap)
-            pct_cols = ["Gol", "2+ goles", "+1.5 tiros", "+2.5 tiros", "Asistencia", "Amarilla"]
-            for c in pct_cols:
-                tbl_p[c] = (tbl_p[c] * 100).round(1)
-            st.dataframe(tbl_p, hide_index=True, use_container_width=True, height=380,
-                         column_config={c: st.column_config.NumberColumn(format="%.1f%%")
-                                        for c in pct_cols})
+            render_player_props_table(players_p, home_p, away_p, height=380)
 
     st.markdown("---")
     st.markdown("### 🔍 Escáner de la jornada")
