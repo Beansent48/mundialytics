@@ -33,7 +33,7 @@ FORMATS = {
     "europa": {"n": 36, "games": 8, "label": "Europa League"},
     "conference": {"n": 36, "games": 6, "label": "Conference League"},
 }
-ROUND_LABELS = ["top8", "playoff", "r16", "qf", "sf", "final", "champion"]
+ROUND_LABELS = ["top24", "top8", "playoff", "r16", "qf", "sf", "final", "champion"]
 
 
 def load_calibration(root: str | Path) -> dict:
@@ -199,6 +199,7 @@ class EuropeanTournament:
             top8 = list(rank[:8])
             po_seeded = list(rank[8:16])
             po_unseeded = list(rank[16:24])
+            counts["top24"][rank[:24]] += 1     # pasar la fase liga
             counts["top8"][top8] += 1
             counts["playoff"][rank[8:24]] += 1
             # playoff: seeded (9-16) vs reversed unseeded band (17-24)
