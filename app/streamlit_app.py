@@ -862,7 +862,7 @@ elif page == "📈  Resultados":
         if not p.exists():
             return None
         w = pd.read_csv(p)
-        o = np.where(w.hg > w.ag, "home", np.where(w.hg < w.ag, "draw", "away"))
+        o = np.where(w.hg > w.ag, "home", np.where(w.hg < w.ag, "away", "draw"))
         y = np.concatenate([(o == "home").astype(float), (o == "draw").astype(float),
                             (o == "away").astype(float)])
         pr = np.concatenate([w["ph"].to_numpy(float), w["pd"].to_numpy(float),
