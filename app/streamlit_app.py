@@ -396,8 +396,8 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
             continue  # booking pts needs reds (not in foundation) — skipped
         conf = r.prob if mk == "1X2" else max(r.prob, 1 - r.prob)
         out.append({"mercado": MARKET_ES.get(mk, mk), "ambito": r.ambito,
-                    "confianza": conf, "acierto": hit, "jornada": r.jornada,
-                    "season": r.season})
+                    "lado": r.seleccion, "confianza": conf, "acierto": hit,
+                    "jornada": r.jornada, "season": r.season})
     return pd.DataFrame(out)
 
 
@@ -425,6 +425,11 @@ def render_props_section(home: str, away: str, pred) -> None:
         return
 
     st.markdown("### 🎯 Props del partido")
+
+    def _cell(p: float) -> str:
+        """Dominant side per line — unders are picks too, not just overs."""
+        return f"O {p:.0%}" if p >= 0.5 else f"U {1 - p:.0%}"
+
     if fx:
         rows = []
         for mk, d in fx.items():
@@ -433,11 +438,11 @@ def render_props_section(home: str, away: str, pred) -> None:
                  "λ Visitante": d.get("lambda_away", d.get("lambda_reds", "")),
                  "λ Total": d.get("lambda_total", "")}
             for ln, p in d["over"].items():
-                r[f"Over {ln}"] = f"{p:.0%}"
+                r[f"Línea {ln}"] = _cell(p)
             rows.append(r)
         st.dataframe(pd.DataFrame(rows).fillna(""), hide_index=True, use_container_width=True)
-        st.caption("Prob. de superar cada línea en el total del partido · "
-                   "booking pts = 10·amarilla + 25·roja.")
+        st.caption("O = prob. de superar la línea, U = de quedarse corto (se muestra el lado "
+                   "dominante) · booking pts = 10·amarilla + 25·roja.")
 
         side_rows = []
         for mk, d in fx.items():
@@ -446,7 +451,7 @@ def render_props_section(home: str, away: str, pred) -> None:
             for key, team_name in [("over_home", home.title()), ("over_away", away.title())]:
                 r = {"Mercado": MARKET_ES.get(mk, mk), "Equipo": team_name}
                 for ln, p in d[key].items():
-                    r[f"O{ln}"] = f"{p:.0%}"
+                    r[f"Línea {ln}"] = _cell(p)
                 side_rows.append(r)
         if side_rows:
             st.markdown("**Líneas por equipo**")
@@ -941,6 +946,16 @@ elif page == "📈  Resultados":
         st.dataframe(by_b, hide_index=True, use_container_width=True,
                      column_config={c: st.column_config.NumberColumn(format="%.1f%%")
                                     for c in ["Acierto", "Esperado"]})
+        ou = ev[ev["lado"].isin(["OVER", "UNDER"])]
+        if len(ou) > 20:
+            by_s = (ou.groupby("lado").agg(N=("acierto", "size"), Acierto=("acierto", "mean"),
+                                           Esperado=("confianza", "mean")).reset_index()
+                    .rename(columns={"lado": "Lado"}))
+            by_s[["Acierto", "Esperado"]] = (by_s[["Acierto", "Esperado"]] * 100).round(1)
+            st.markdown("**Overs vs Unders** — el valor vive en ambos lados")
+            st.dataframe(by_s, hide_index=True, use_container_width=True,
+                         column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                        for c in ["Acierto", "Esperado"]})
 
 elif page == "🥇  Premios Individuales":
     st.title("🥇  Premios Individuales")
@@ -1177,15 +1192,19 @@ elif page == "🎯  Props":
         st.markdown(f"**xGoals del motor:** {home_p.title()} {lamh:.2f} – {lama:.2f} {away_p.title()}"
                     + (f" · Árbitro: {referee_p}" if referee_p else ""))
 
-    def ladder_html(over: dict, prefix: str = "O") -> str:
+    def ladder_html(over: dict) -> str:
+        """Each line shows its DOMINANT side — a 26% over is a 74% UNDER and
+        must read as such (value lives on both sides)."""
         html = ""
         for ln, p in over.items():
-            color = "#16a34a" if p >= 0.55 else ("#dc2626" if p <= 0.45 else "#3b82f6")
+            side, sp = ("O", p) if p >= 0.5 else ("U", 1 - p)
+            base = "#3b82f6" if side == "O" else "#f59e0b"
+            color = "#16a34a" if sp >= 0.62 else base
             html += (f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-                     f'<span style="width:52px;font-weight:600;font-size:.85rem">{prefix} {ln}</span>'
+                     f'<span style="width:52px;font-weight:700;font-size:.85rem">{side} {ln}</span>'
                      f'<div style="flex:1;background:#e5e7eb33;border-radius:4px;height:14px">'
-                     f'<div style="width:{p*100:.0f}%;background:{color};border-radius:4px;height:14px"></div></div>'
-                     f'<span style="width:44px;text-align:right;font-size:.85rem;font-weight:600">{p:.0%}</span>'
+                     f'<div style="width:{sp*100:.0f}%;background:{color};border-radius:4px;height:14px"></div></div>'
+                     f'<span style="width:44px;text-align:right;font-size:.85rem;font-weight:600">{sp:.0%}</span>'
                      f'</div>')
         return html
 
