@@ -285,6 +285,80 @@ def render_stat_grid(events: list[tuple[str, float, float]]) -> None:
 
 MARKET_ES = {"corners": "Córners", "yellows": "Amarillas", "fouls": "Faltas",
              "shots": "Disparos", "sot": "A puerta", "booking_pts": "Booking pts (10A/25R)"}
+
+
+def make_match_card(home: str, away: str, ph: float, pdr: float, pa: float,
+                    po25: float, lh: float, la: float, sub: str = "") -> bytes:
+    """Shareable branded PNG (1200x675) for a match prediction."""
+    import io
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(12, 6.75), dpi=100)
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#0f172a")
+    ax.axis("off")
+    ax.text(0.5, 0.93, "MUNDIALYTICS", ha="center", fontsize=15, color="#64748b",
+            fontweight="bold", transform=ax.transAxes)
+    ax.text(0.5, 0.80, f"{home.title()}  vs  {away.title()}", ha="center", fontsize=30,
+            color="white", fontweight="bold", transform=ax.transAxes)
+    if sub:
+        ax.text(0.5, 0.72, sub, ha="center", fontsize=13, color="#94a3b8", transform=ax.transAxes)
+    labels = [home.title()[:14], "Empate", away.title()[:14]]
+    vals = [ph, pdr, pa]
+    colors = ["#3b82f6", "#6b7280", "#ef4444"]
+    x0 = 0.10
+    for i, (lab, v, col) in enumerate(zip(labels, vals, colors)):
+        y = 0.55 - i * 0.13
+        ax.text(x0, y + 0.02, lab, fontsize=15, color="#cbd5e1", transform=ax.transAxes)
+        ax.barh([y], [v * 0.55], left=0.30, height=0.07, color=col,
+                transform=ax.transAxes, zorder=3)
+        ax.barh([y], [0.55], left=0.30, height=0.07, color="#1e293b",
+                transform=ax.transAxes, zorder=2)
+        ax.text(0.30 + v * 0.55 + 0.015, y + 0.015, f"{v:.0%}", fontsize=16, color="white",
+                fontweight="bold", transform=ax.transAxes)
+    ax.text(0.10, 0.10, f"Goles esperados  {lh:.2f} – {la:.2f}", fontsize=14,
+            color="#cbd5e1", transform=ax.transAxes)
+    ax.text(0.60, 0.10, f"Over 2.5:  {po25:.0%}", fontsize=14, color="#cbd5e1",
+            transform=ax.transAxes)
+    ax.text(0.5, 0.02, "probabilidades calibradas · validación out-of-sample", ha="center",
+            fontsize=10, color="#475569", transform=ax.transAxes)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def make_tournament_card(res_df: pd.DataFrame, title: str) -> bytes:
+    """Shareable branded PNG: top-8 champion probabilities."""
+    import io
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    top = res_df.head(8).iloc[::-1]
+    fig, ax = plt.subplots(figsize=(12, 6.75), dpi=100)
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#0f172a")
+    ax.barh(top["team"], top["p_champion"] * 100, color="#3b82f6")
+    for i, (t, v) in enumerate(zip(top["team"], top["p_champion"])):
+        ax.text(v * 100 + 0.5, i, f"{v:.1%}", va="center", color="white",
+                fontsize=13, fontweight="bold")
+    ax.set_title(f"¿Quién gana la {title}?", color="white", fontsize=22,
+                 fontweight="bold", pad=18)
+    ax.tick_params(colors="#cbd5e1", labelsize=13)
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.set_xticks([])
+    ax.text(0.99, -0.08, "MUNDIALYTICS", ha="right", fontsize=12, color="#64748b",
+            fontweight="bold", transform=ax.transAxes)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
 PLAYER_COLS_ES = {"player": "Jugador", "Equipo": "Equipo", "exp_min": "Min esp.",
                   "p_anytime_scorer": "Gol", "p_2plus_goals": "2+ goles",
                   "p_shots_over_1_5": "+1.5 tiros", "p_shots_over_2_5": "+2.5 tiros",
@@ -532,6 +606,13 @@ def render_partido_detail(home: str, away: str, competition: str, neutral: bool,
     ]
     for col, (label, value, color) in zip(cols, data):
         col.markdown(metric_card(label, value, color), unsafe_allow_html=True)
+
+    st.download_button(
+        "📸 Tarjeta para compartir",
+        make_match_card(home, away, pred.p_home_win, pred.p_draw, pred.p_away_win,
+                        pred.p_over_25, pred.lambda_home, pred.lambda_away, sub=competition),
+        file_name=f"{home}_{away}_prediccion.png".replace(" ", "_"), mime="image/png",
+        key=f"card_{home}_{away}")
 
     st.markdown("")
 
@@ -897,6 +978,10 @@ elif page == "🏆  Europa":
                             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.markdown(f"### ¿Quién gana la {comp_eu_label}?")
         st.plotly_chart(figeu, use_container_width=True)
+        st.download_button("📸 Tarjeta para compartir",
+                           make_tournament_card(res_eu, comp_eu_label),
+                           file_name=f"{comp_eu}_campeon.png", mime="image/png",
+                           key=f"eu_card_{comp_eu}")
 
         tbl_eu = res_eu.rename(columns={
             "team": "Equipo", "elo": "Elo", "p_top24": "Pasar fase (Top 24)",
@@ -913,6 +998,54 @@ elif page == "🏆  Europa":
         st.caption("Fuerzas: ClubElo (escala única europea) con mapping Elo→goles calibrado "
                    "sobre 20.000 partidos propios. Eliminatorias a doble partido con "
                    "prórroga y penaltis; final única en campo neutral.")
+
+    # ── partidos de la jornada europea ─────────────────────────────────────────
+    if raw_eu is not None and league_eu is not None and len(league_eu):
+        from mundialytics.statistical_core.distributions import outcome_probabilities as _op_eu
+        st.markdown("---")
+        st.markdown("### Partidos de la fase liga")
+        rr = raw_eu.copy()
+        rr["rnum"] = pd.to_numeric(rr["Round Number"], errors="coerce")
+        lg_rows = rr[rr["rnum"].notna()].copy()
+        lg_rows["played"] = lg_rows["Result"].astype(str).str.contains(r"\d+\s*-\s*\d+")
+        rounds = sorted(lg_rows["rnum"].astype(int).unique())
+        pend_rounds = [r for r in rounds if not lg_rows[lg_rows.rnum == r]["played"].all()]
+        default_r = pend_rounds[0] if pend_rounds else rounds[-1]
+        rnd_sel = st.selectbox("Jornada", rounds, index=rounds.index(default_r), key="eu_round")
+        sel = lg_rows[lg_rows.rnum == rnd_sel]
+        pend_count = 0
+        for _, r in sel.iterrows():
+            h_lbl, a_lbl = str(r["Home Team"]), str(r["Away Team"])
+            h_ce, a_ce = resolver_eu(h_lbl), resolver_eu(a_lbl)
+            c1, c2, c3 = st.columns([3, 2, 3])
+            c1.markdown(f"<div style='text-align:right;font-weight:600;padding-top:4px'>{h_lbl}</div>",
+                        unsafe_allow_html=True)
+            if r["played"]:
+                c2.markdown(f"<div style='text-align:center;font-weight:700'>{r['Result']}</div>",
+                            unsafe_allow_html=True)
+                c3.markdown(f"<div style='font-weight:600;padding-top:4px'>{a_lbl}</div>",
+                            unsafe_allow_html=True)
+            else:
+                eh = elo_by_norm.get(normalize_club(h_ce)) if h_ce else None
+                ea = elo_by_norm.get(normalize_club(a_ce)) if a_ce else None
+                if eh and ea:
+                    d400 = (eh - ea) / 400.0
+                    lh_m = float(np.exp(calib_eu["c"] + calib_eu["hfa"] + calib_eu["b"] * d400))
+                    la_m = float(np.exp(calib_eu["c"] - calib_eu["b"] * d400))
+                    p = _op_eu(lh_m, la_m, dixon_coles_rho=-0.07)
+                    c2.markdown(f"<div style='text-align:center;font-size:.9rem'>"
+                                f"<b>{p['p_home_win']:.0%}</b> · {p['p_draw']:.0%} · "
+                                f"<b>{p['p_away_win']:.0%}</b><br>"
+                                f"<span style='color:#9ca3af;font-size:.75rem'>O2.5 "
+                                f"{p['p_over_25']:.0%}</span></div>", unsafe_allow_html=True)
+                    pend_count += 1
+                else:
+                    c2.markdown("<div style='text-align:center;color:#9ca3af'>sin Elo</div>",
+                                unsafe_allow_html=True)
+                c3.markdown(f"<div style='font-weight:600;padding-top:4px'>{a_lbl}</div>",
+                            unsafe_allow_html=True)
+        if pend_count:
+            st.caption(f"{pend_count} partidos pendientes con predicción (1 · X · 2, Elo del día).")
 
 elif page == "📈  Resultados":
     st.title("📈  Resultados y fiabilidad")
