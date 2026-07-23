@@ -930,7 +930,15 @@ elif page == "🏆  Europa":
     resolver_eu = make_resolver(list(elo_all))
     elo_by_norm = {normalize_club(k): v for k, v in elo_all.items()}
     today_eu = pd.Timestamp.today()
-    season_yr = today_eu.year if today_eu.month >= 7 else today_eu.year - 1
+    auto_yr = today_eu.year if today_eu.month >= 7 else today_eu.year - 1
+    from mundialytics.statistical_core.competition.european import FD_SLUG as _FD_SLUG
+    import re as _re
+    cached_yrs = {int(m.group(1)) for p in (ROOT / "data/external/uefa").glob(
+        f"raw_{_FD_SLUG[comp_eu]}_*.csv") if (m := _re.search(r"_(\d{4})\.csv$", p.name))}
+    yrs_eu = sorted(cached_yrs | {auto_yr}, reverse=True)
+    season_yr = st.selectbox("Temporada", yrs_eu, key="eu_season",
+                             format_func=lambda y: f"{y}/{str(y + 1)[2:]}"
+                             + ("  (próxima)" if y == auto_yr and y not in cached_yrs else ""))
     raw_eu = fetch_season_fixtures(ROOT, comp_eu, season_yr)
 
     league_eu, ko_eu = (None, None)
@@ -1046,6 +1054,97 @@ elif page == "🏆  Europa":
                             unsafe_allow_html=True)
         if pend_count:
             st.caption(f"{pend_count} partidos pendientes con predicción (1 · X · 2, Elo del día).")
+
+    # ── análisis completo de un partido europeo ────────────────────────────────
+    if raw_eu is not None and league_eu is not None and len(league_eu):
+        from mundialytics.statistical_core.competition.club_aliases import CLUBELO_TO_FD
+        from mundialytics.statistical_core.competition.european import (
+            load_event_calibration, predict_euro_events)
+        from mundialytics.props.team_props import SIDE_LINES as _SIDE_EU
+
+        st.markdown("---")
+        st.markdown("### 🔬 Análisis completo de un partido")
+        all_fx = raw_eu.copy()
+        fx_labels = [f"{r['Home Team']} vs {r['Away Team']} ({r['Round Number']})"
+                     for _, r in all_fx.iterrows()]
+        pick_eu = st.selectbox("Partido", fx_labels, key="eu_match_pick")
+        row_eu = all_fx.iloc[fx_labels.index(pick_eu)]
+        h_lbl2, a_lbl2 = str(row_eu["Home Team"]), str(row_eu["Away Team"])
+        h_ce2, a_ce2 = resolver_eu(h_lbl2), resolver_eu(a_lbl2)
+        eh2 = elo_by_norm.get(normalize_club(h_ce2)) if h_ce2 else None
+        ea2 = elo_by_norm.get(normalize_club(a_ce2)) if a_ce2 else None
+        if not (eh2 and ea2):
+            st.warning("Sin Elo para alguno de los equipos.")
+        else:
+            from mundialytics.statistical_core.distributions import outcome_probabilities as _op2
+            d400_2 = (eh2 - ea2) / 400.0
+            lh2 = float(np.exp(calib_eu["c"] + calib_eu["hfa"] + calib_eu["b"] * d400_2))
+            la2 = float(np.exp(calib_eu["c"] - calib_eu["b"] * d400_2))
+            p2 = _op2(lh2, la2, dixon_coles_rho=-0.07)
+            st.plotly_chart(prob_bar_chart(p2["p_home_win"], p2["p_draw"], p2["p_away_win"],
+                                           h_lbl2, a_lbl2), use_container_width=True)
+            mc = st.columns(5)
+            for col, (lab, val) in zip(mc, [
+                    ("xGoals", f"{lh2:.2f} – {la2:.2f}"),
+                    ("Over 1.5", f"{p2['p_over_15']:.0%}"), ("Over 2.5", f"{p2['p_over_25']:.0%}"),
+                    ("Over 3.5", f"{p2['p_over_35']:.0%}"), ("BTTS", f"{p2['p_btts']:.0%}")]):
+                col.markdown(metric_card(lab, val), unsafe_allow_html=True)
+            st.download_button(
+                "📸 Tarjeta para compartir",
+                make_match_card(h_lbl2, a_lbl2, p2["p_home_win"], p2["p_draw"],
+                                p2["p_away_win"], p2["p_over_25"], lh2, la2, sub=comp_eu_label),
+                file_name=f"{h_lbl2}_{a_lbl2}.png".replace(" ", "_"), mime="image/png",
+                key="eu_match_card")
+
+            # team props: full domestic model if both clubs are big-5, Elo-events otherwise
+            fd_h, fd_a = CLUBELO_TO_FD.get(h_ce2), CLUBELO_TO_FD.get(a_ce2)
+            tp_eu, pp_eu = load_props_models()
+            fx_props = None
+            if fd_h and fd_a and tp_eu is not None:
+                fx_props = tp_eu.predict_fixture(fd_h, fd_a, lam_home=lh2, lam_away=la2)
+                src_props = "modelo completo (ambos clubes big-5)"
+            if not fx_props:
+                ev_cal = load_event_calibration(ROOT)
+                if ev_cal:
+                    fx_props = predict_euro_events(eh2, ea2, ev_cal, _SIDE_EU)
+                    src_props = "mapping Elo→eventos (calibrado en 17k partidos)"
+            if fx_props:
+                st.markdown(f"#### Props del partido · <span style='color:#9ca3af;font-size:.8rem'>"
+                            f"{src_props}</span>", unsafe_allow_html=True)
+                rows_p = []
+                for mk, dd in fx_props.items():
+                    if "over" not in dd:
+                        continue
+                    r_ = {"Mercado": MARKET_ES.get(mk, mk),
+                          "λ Local": dd.get("lambda_home", ""), "λ Visit": dd.get("lambda_away", ""),
+                          "λ Total": dd.get("lambda_total", "")}
+                    for ln, pv in dd["over"].items():
+                        r_[f"Línea {ln}"] = f"O {pv:.0%}" if pv >= 0.5 else f"U {1-pv:.0%}"
+                    rows_p.append(r_)
+                st.dataframe(pd.DataFrame(rows_p).fillna(""), hide_index=True,
+                             use_container_width=True)
+
+            # player props: big-5 covered sides only
+            if pp_eu is not None:
+                shown = False
+                for fd_t, lam_t, lbl_t in [(fd_h, lh2, h_lbl2), (fd_a, la2, a_lbl2)]:
+                    if not fd_t:
+                        continue
+                    try:
+                        pl = pp_eu.team_players_for_lambda(fd_t, lam_t)
+                    except Exception:
+                        continue
+                    if pl is None or pl.empty:
+                        continue
+                    if not shown:
+                        st.markdown("#### Props de jugadores")
+                        shown = True
+                    st.markdown(f"**{lbl_t}**")
+                    pl = pl.assign(side="home")
+                    render_player_props_table(pl, lbl_t.lower(), lbl_t.lower(), height=300)
+                if shown:
+                    st.caption("Solo clubes de las 5 grandes ligas (cobertura de datos de "
+                               "jugadores); ratios domésticos + contexto del partido europeo.")
 
 elif page == "📈  Resultados":
     st.title("📈  Resultados y fiabilidad")

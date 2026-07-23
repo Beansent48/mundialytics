@@ -48,6 +48,44 @@ def load_calibration(root: str | Path) -> dict:
     return json.loads(p.read_text())
 
 
+def load_event_calibration(root: str | Path) -> dict | None:
+    p = Path(root) / "data/processed/elo_event_calibration.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def predict_euro_events(elo_h: float, elo_a: float, events_calib: dict,
+                        side_lines: dict[str, list[float]] | None = None) -> dict:
+    """Team-event markets for ANY European pair from the Elo->events mapping
+    (calibrated walk-forward on the big-5 foundation). Same output shape as
+    TeamPropsModel.predict_fixture (lambda_home/away/total + over ladders)."""
+    from scipy.stats import nbinom, poisson
+
+    def p_over(lam, line, disp):
+        k = int(np.floor(line))
+        lam = float(np.clip(lam, 0.2, 60.0))
+        if disp <= 1.05:
+            return float(1.0 - poisson.cdf(k, lam))
+        r = lam / (disp - 1.0)
+        return float(1.0 - nbinom.cdf(k, r, 1.0 / disp))
+
+    d400 = (elo_h - elo_a) / 400.0
+    out: dict = {}
+    for mk, v in events_calib["markets"].items():
+        lh = float(np.exp(v["c"] + v["hfa"] + v["b"] * d400))
+        la = float(np.exp(v["c"] - v["b"] * d400))
+        entry = {
+            "lambda_home": round(lh, 2), "lambda_away": round(la, 2),
+            "lambda_total": round(lh + la, 2), "dispersion": round(v["disp_total"], 2),
+            "over": {ln: round(p_over(lh + la, ln, v["disp_total"]), 4) for ln in v["lines"]},
+        }
+        sl = (side_lines or {}).get(mk)
+        if sl:
+            entry["over_home"] = {ln: round(p_over(lh, ln, v["disp_side"]), 4) for ln in sl}
+            entry["over_away"] = {ln: round(p_over(la, ln, v["disp_side"]), 4) for ln in sl}
+        out[mk] = entry
+    return out
+
+
 def fetch_current_elo(root: str | Path, date_str: str | None = None) -> dict[str, float]:
     """Full ClubElo snapshot for one day ({Club: Elo}, all UEFA clubs), disk-cached."""
     import datetime
