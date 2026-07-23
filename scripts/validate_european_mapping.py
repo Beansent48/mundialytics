@@ -31,7 +31,12 @@ COMPS = {"champions-league": ["2021", "2022", "2023", "2024"],
          "europa-league": ["2021", "2022", "2023", "2024"],
          "conference-league": ["2024"]}
 
-ALIASES = {
+import sys as _sys
+
+_sys.path.insert(0, str(ROOT / "src"))
+from mundialytics.statistical_core.competition.club_aliases import CLUB_ALIASES as ALIASES  # noqa: E402,F401
+
+_LEGACY_ALIASES = {
     "bayern munich": "Bayern", "atletico madrid": "Atletico", "atletico de madrid": "Atletico",
     "man city": "ManCity", "manchester city": "ManCity", "man utd": "ManUnited",
     "manchester united": "ManUnited", "paris saint-germain": "ParisSG", "psg": "ParisSG",
