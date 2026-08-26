@@ -42,14 +42,66 @@ MIN_MATCHED = 8          # of 11 starters, else the XI estimate is too noisy
 TYPICAL_WINDOW = 10      # prior matches defining a team's "usual" XI strength
 
 
+def build_name_map(prof: dict, players: pd.Series) -> dict[str, str]:
+    """Understat player name -> PlayerStrengthModel key.
+
+    Exact match first, then accent/punctuation-normalised, then all-tokens-match
+    on shared surname. Lifts coverage from 58.9% to 78.6% of appearances.
+    Cached to NAMEMAP (a derived artefact, so it is gitignored like the rest of
+    data/processed) and rebuilt automatically when absent.
+    """
+    import re
+    import unicodedata
+
+    def norm(s: str) -> list[str]:
+        s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+        return re.sub(r"[^a-z ]", " ", s).split()
+
+    exact: dict[str, str] = {}
+    by_surname: dict[str, list[str]] = {}
+    for k in prof:
+        t = norm(k)
+        exact.setdefault(" ".join(t), k)
+        if t:
+            by_surname.setdefault(t[-1], []).append(k)
+
+    out: dict[str, str] = {}
+    for q in players.unique():
+        if q in prof:
+            out[q] = q
+            continue
+        t = norm(q)
+        if not t:
+            continue
+        s = " ".join(t)
+        if s in exact:
+            out[q] = exact[s]
+            continue
+        cands = by_surname.get(t[-1], [])
+        both = [c for c in cands if all(tok in norm(c) for tok in t)]
+        if both:
+            out[q] = max(both, key=lambda c: prof[c].overall)
+        elif len(cands) == 1:
+            out[q] = cands[0]
+    return out
+
+
 def build_xi_strength() -> pd.DataFrame:
     """(game_id, team) -> attack/defense index of the XI that actually started."""
     model = PlayerStrengthModel().fit()
     prof = model.profiles_
-    namemap = json.loads(NAMEMAP.read_text(encoding="utf-8"))
 
     pm = pd.read_csv(PM, usecols=["game_id", "team", "player", "position"], low_memory=False)
     start = pm[pm["position"] != "Sub"].copy()
+
+    if NAMEMAP.exists():
+        namemap = json.loads(NAMEMAP.read_text(encoding="utf-8"))
+    else:
+        print("  building the player name map (first run)...", flush=True)
+        namemap = build_name_map(prof, start["player"])
+        NAMEMAP.parent.mkdir(parents=True, exist_ok=True)
+        NAMEMAP.write_text(json.dumps(namemap, ensure_ascii=False), encoding="utf-8")
+
     start["key"] = start["player"].map(namemap)
     start = start.dropna(subset=["key"])
 
