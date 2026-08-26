@@ -16,6 +16,7 @@ import random
 import sys
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1015,6 +1016,67 @@ def load_historical_teams() -> pd.DataFrame:
     return pd.read_csv(HIST_CSV) if HIST_CSV.exists() else pd.DataFrame()
 
 
+# Merge the ways one club is spelled across the two data sources: a curated
+# side's short label ("Milan", "Inter", "Bayern") vs the season file's full name
+# ("ac milan", "inter milan", "bayern munich"), plus accents.
+_CLUB_ALIASES = {
+    "ac milan": "milan", "inter milan": "inter", "internazionale": "inter",
+    "bayern munich": "bayern", "fc bayern": "bayern", "atletico de madrid": "atletico madrid",
+    "manchester utd": "manchester united", "man city": "manchester city",
+    "spurs": "tottenham hotspur", "tottenham": "tottenham hotspur",
+    "paris saint-germain": "paris saint germain", "psg": "paris saint germain",
+    "borussia dortmund": "dortmund", "bvb": "dortmund", "fc porto": "porto",
+    "afc ajax": "ajax", "as roma": "roma", "ssc napoli": "napoli",
+}
+
+
+def _canon_club(name: str) -> str:
+    n = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
+    n = n.lower().strip()
+    return _CLUB_ALIASES.get(n, n)
+
+
+# Best season of each true giant makes the "leyendas" bracket, so it isn't
+# padded by full-coverage 2014/15 mid-table sides (Empoli, Guingamp…) that only
+# rank high because StatsBomb released their whole season.
+_GIANT_CLUBS = {
+    "barcelona", "real madrid", "paris saint germain", "bayern", "manchester city",
+    "manchester united", "liverpool", "chelsea", "arsenal", "juventus", "milan",
+    "inter", "napoli", "roma", "atletico madrid", "dortmund", "sevilla", "valencia",
+    "tottenham hotspur", "bayer leverkusen", "ajax", "porto", "lyon", "as monaco",
+    "atalanta", "villarreal", "real sociedad", "rb leipzig",
+}
+
+
+def _one_per_club(cat: pd.DataFrame) -> pd.DataFrame:
+    """Keep each club's single strongest side.
+
+    StatsBomb released every Barça match, so the raw top-20 is ~19 Barcelona
+    seasons — a 'best historic teams' draw of 19 identical Barças. Collapsing to
+    one entry per club turns it into a varied bracket: Barça, Madrid, Bayern,
+    Milan, Ajax, Porto…"""
+    out = cat.sort_values("strength", ascending=False).copy()
+    out["_club"] = out["team"].map(_canon_club)
+    return (out.drop_duplicates(subset="_club", keep="first")
+               .drop(columns="_club").reset_index(drop=True))
+
+
+def _iconic_pool(cat: pd.DataFrame) -> pd.DataFrame:
+    """Marquee bracket: the 13 curated iconic sides + each giant's best season.
+
+    A curated side (Milan 2007, Bayern 2013…) wins its club over the season
+    version (ac milan 2015) even when weaker on paper — it's the one people mean.
+    """
+    out = cat.copy()
+    out["_club"] = out["team"].map(_canon_club)
+    keep = out[(out["kind"] == "curated") | (out["_club"].isin(_GIANT_CLUBS))]
+    # curated first so it wins the drop_duplicates collision, then by strength
+    keep = keep.assign(_pri=(keep["kind"] != "curated").astype(int))
+    keep = keep.sort_values(["_pri", "strength"], ascending=[True, False])
+    keep = keep.drop_duplicates(subset="_club", keep="first")
+    return keep.sort_values("strength", ascending=False).drop(columns=["_club", "_pri"]).reset_index(drop=True)
+
+
 def _tie_row_html(tie: dict, hi: str | None = None) -> str:
     a, b, w = tie["team_a"], tie["team_b"], tie["winner"]
     def nm(x):
@@ -1035,9 +1097,10 @@ def _tie_row_html(tie: dict, hi: str | None = None) -> str:
 
 def render_historic_champions() -> None:
     st.markdown("### 🏛️ Champions histórica")
-    st.caption("Una Champions con equipos de cualquier época: el Barça 2011, el Milan de "
-               "Kaká, el Madrid de CR7… Se enfrentan en el formato actual (fase liga de 36 "
-               "+ playoff + eliminatorias a doble partido + final a un solo encuentro).")
+    st.caption("Una Champions con equipos de cualquier época: el Barça de Guardiola, el "
+               "Madrid de CR7, el Milan de Kaká, el Ajax de De Jong y De Ligt, el Porto de "
+               "Mourinho… Se enfrentan en el formato actual (fase liga de 36 + playoff + "
+               "eliminatorias a doble partido + final a un solo encuentro).")
 
     cat = load_historical_teams()
     if cat.empty:
@@ -1052,12 +1115,17 @@ def render_historic_champions() -> None:
         st.warning(f"Simulador europeo no disponible: {exc}")
         return
 
+    clubs = _one_per_club(cat)   # one entry per club → varied brackets
+    icons = _iconic_pool(cat)    # curated giants + each giant's best season
+
     c1, c2, c3 = st.columns([2, 1, 1])
     with c1:
         pool_mode = st.selectbox(
             "¿Qué equipos entran?",
-            ["🎲 Aleatorios (entre los 80 mejores)", "🏆 Los 36 mejores de la historia",
-             "🎰 Totalmente aleatorios (cualquier época)", "✍️ Elegir a mano"],
+            ["🏆 Leyendas (equipos icónicos)",
+             "🎲 Sorteo variado (un club, un equipo)",
+             "🎰 Cualquier época (todas las versiones)",
+             "✍️ Elegir a mano"],
             key="hist_pool")
     with c2:
         seed = st.number_input("Semilla", 1, 9999, 7, key="hist_seed",
@@ -1068,14 +1136,14 @@ def render_historic_champions() -> None:
 
     if pool_mode.startswith("✍️"):
         opts = cat["label"].tolist()
-        default = cat.head(36)["label"].tolist()
+        default = icons.head(36)["label"].tolist()
         chosen = st.multiselect("Equipos (elige 36; menos también vale, mínimo 8)",
                                 opts, default=default, key="hist_manual")
         sel = cat[cat["label"].isin(chosen)]
     elif pool_mode.startswith("🏆"):
-        sel = cat.head(36)
+        sel = icons.head(36)
     elif pool_mode.startswith("🎲"):
-        sel = cat.head(80).sample(min(36, len(cat)), random_state=int(seed))
+        sel = clubs.head(64).sample(min(36, len(clubs)), random_state=int(seed))
     else:
         sel = cat.sample(min(36, len(cat)), random_state=int(seed))
 
