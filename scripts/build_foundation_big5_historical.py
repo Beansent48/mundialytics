@@ -25,8 +25,22 @@ This is a full REBUILD (not a merge/append) since it's the exact same
 source for old and new rows alike -- simpler and avoids any schema drift
 between an old and new half of the file.
 
+⚠️ THIS SCRIPT ALONE LEAVES THE FOUNDATION INCOMPLETE. It predates xG and writes
+only the 27 base columns, so running it standalone SILENTLY DROPS the 8 xG
+columns (home_xg, away_xg, home_npxg, ...) that the deployed models use. Always
+follow it with the re-attach step, which is why scripts/update_season.py owns
+both (its steps 4 and 5) and is the supported entry point:
+
+    python scripts/update_season.py            # correct: rebuild + xG re-attach
+
+If you do run this directly, repair it immediately with:
+
+    python -c "import sys; sys.path.insert(0,'scripts'); \
+               from update_season import augment_foundation_with_xg as f; f()"
+
 Run:
-    python scripts/build_foundation_big5_historical.py
+    python scripts/build_foundation_big5_historical.py              # Big5 (deployed)
+    python scripts/build_foundation_big5_historical.py --divisions second
 """
 from __future__ import annotations
 
@@ -45,6 +59,7 @@ from mundialytics.identity.normalization import canonical_team_name
 
 RAW_DIR = ROOT / "data/raw/football_data"
 OUT_PATH = ROOT / "data/processed/foundation_big5_multi_season.csv"
+OUT_PATH_SECOND = ROOT / "data/processed/foundation_second_divisions.csv"
 
 _FD_MAP = {
     "Date": "date",
@@ -72,6 +87,19 @@ _DIV_LABELS = {
     "F1": "Ligue 1",
 }
 
+# Second divisions live in a SEPARATE foundation file, never mixed into the one
+# above. AttackDefenseModel fits jointly (global mu + per-league effects), so
+# folding 35k second-division matches into the deployed foundation would shift
+# the Big5 team parameters — exactly what the protect-the-baseline rule forbids.
+# Built with `--divisions second`; the default run is untouched.
+_DIV_LABELS_SECOND = {
+    "E1": "Championship",
+    "SP2": "LaLiga 2",
+    "D2": "2. Bundesliga",
+    "I2": "Serie B",
+    "F2": "Ligue 2",
+}
+
 
 def _season_label(season_code: str) -> str:
     yy1, yy2 = season_code[:2], season_code[2:]
@@ -96,7 +124,7 @@ def _parse_one(path: Path) -> pd.DataFrame:
     out = out.dropna(subset=["date", "home_goals", "away_goals"]).reset_index(drop=True)
     out["home_goals"] = out["home_goals"].astype(int)
     out["away_goals"] = out["away_goals"].astype(int)
-    out["competition"] = _DIV_LABELS.get(league, league)
+    out["competition"] = {**_DIV_LABELS, **_DIV_LABELS_SECOND}.get(league, league)
     out["season"] = _season_label(season_code)
     out["match_id"] = [f"fduk_{season_code}_{league}_{i:05d}" for i in range(len(out))]
     out["neutral"] = 0
@@ -112,15 +140,25 @@ def _parse_one(path: Path) -> pd.DataFrame:
 
 
 def main() -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--divisions", choices=["big5", "second"], default="big5",
+                    help="big5 (default, the deployed foundation) or second "
+                         "(E1/SP2/D2/I2/F2 -> a separate file)")
+    args = ap.parse_args()
+    labels = _DIV_LABELS if args.divisions == "big5" else _DIV_LABELS_SECOND
+    out_path = OUT_PATH if args.divisions == "big5" else OUT_PATH_SECOND
+
     # Only root-level CSVs from the csv-mode downloader (named
-    # "{season}_{league}.csv", e.g. "0001_E0.csv"), restricted to Big5 league
-    # codes. data/raw/football_data/ also has older per-season SUBDIRECTORIES
-    # (2122/, 2223/, ...) from an earlier --mode zip download that pulled
-    # every league in DEFAULT_LEAGUES (Championship, Scottish leagues, etc.)
-    # -- rglob would double-count 2021-2026 and pull in non-Big5 leagues.
+    # "{season}_{league}.csv", e.g. "0001_E0.csv"), restricted to the chosen
+    # league codes. data/raw/football_data/ also has older per-season
+    # SUBDIRECTORIES (2122/, 2223/, ...) from an earlier --mode zip download
+    # that pulled every league in DEFAULT_LEAGUES -- rglob would double-count
+    # 2021-2026 and pull in leagues we did not ask for.
     files = sorted(
         f for f in RAW_DIR.glob("*.csv")
-        if f.stem.split("_", 1)[-1] in _DIV_LABELS
+        if f.stem.split("_", 1)[-1] in labels
     )
     frames = []
     skipped = []
@@ -143,8 +181,8 @@ def main() -> None:
     ]
     combined = combined[col_order].sort_values("date").reset_index(drop=True)
 
-    combined.to_csv(OUT_PATH, index=False)
-    print(f"Wrote {len(combined)} matches -> {OUT_PATH}")
+    combined.to_csv(out_path, index=False)
+    print(f"Wrote {len(combined)} matches -> {out_path}")
     print(f"Skipped {len(skipped)} files (missing required columns): {skipped[:10]}")
     print(f"Date range: {combined['date'].min()} - {combined['date'].max()}")
     print(combined["season"].value_counts().sort_index())
