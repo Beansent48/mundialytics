@@ -36,3 +36,5 @@ Thumbs.db
 !data/processed/logs/predictions_log.csv
 data/processed/*
 !data/processed/logs
+# ...but not its rotating copies (update_season.py keeps 10; git already has the history)
+data/processed/logs/backup/
