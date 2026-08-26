@@ -131,6 +131,34 @@ def test_engine_home_advantage(clubs_engine):
     assert a.p_home_win > b.p_away_win         # RM home > RM away vs same foe
 
 
+# ── season rollover ─────────────────────────────────────────────────────────
+def test_team_props_fits_on_a_just_started_season():
+    """A season that has only played its opening matchday must not break the fit.
+
+    Those matches carry no prior-form features, so the Platt walk-forward's test
+    fold for that season comes out empty and PoissonRegressor.predict used to
+    raise on 0 samples. load_props_models() catches everything and returns
+    (None, None), so the whole app silently lost team props every August.
+    One league is enough to reproduce it and keeps this test ~12s.
+    """
+    import pandas as pd
+    from mundialytics.props import TeamPropsModel
+
+    found = ROOT / "data/processed/foundation_big5_multi_season.csv"
+    if not found.exists():
+        pytest.skip("foundation not built")
+    df = pd.read_csv(found, low_memory=False)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df[(df["competition"] == "Premier League") & (df["date"] >= "2016-07-01")]
+
+    seasons = sorted(df["season"].dropna().unique())
+    if len(df[df["season"] == seasons[-1]]) > 60:
+        pytest.skip("newest season is not a just-started one")
+
+    tp = TeamPropsModel().fit(df, root=ROOT)   # must not raise
+    assert getattr(tp, "_platt", None), "Platt calibration came out empty"
+
+
 # ── european simulator ──────────────────────────────────────────────────────
 def test_euro_seeded_reproducible():
     from mundialytics.statistical_core.competition.european import EuropeanTournament

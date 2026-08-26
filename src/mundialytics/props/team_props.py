@@ -335,6 +335,13 @@ class TeamPropsModel:
                 continue
             reg = PoissonRegressor(alpha=0.1, max_iter=1000).fit(tr[feats], tr["ev_for"].clip(lower=0))
             te = lr[lr.match_id.isin(set(te_m.match_id))].dropna(subset=feats).copy()
+            # A just-started season contributes no usable rows: its opening
+            # matchdays have no prior-form features yet, so dropna empties the
+            # fold and PoissonRegressor.predict raises on 0 samples. Skipping
+            # costs nothing (the fold had no OOF pairs to collect) and keeps the
+            # whole fit from failing soft to None every August.
+            if te.empty:
+                continue
             te["pred"] = np.clip(reg.predict(te[feats]), 0.1, 25)
             pv = te.pivot_table(index="match_id", columns="is_home", values="pred").dropna()
             if pv.empty:
