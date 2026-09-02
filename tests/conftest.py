@@ -5,12 +5,37 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-# Quarantine legacy (pre-v0.50) test files that fail at IMPORT because they
-# reference code removed long ago (player_global_id, normalize_matches, ...).
-# They predate the current model/props/european work and were never maintained.
-# Ignoring them keeps the MAINTAINED suite (test_golden, test_models_integration,
-# test_squadlab_season_engine) collectable so `pytest tests/` runs clean — while
-# an import break in a maintained test still errors loudly (not on this list).
+# Quarantine legacy (pre-v0.50) test files that fail at IMPORT.
+#
+# AUDITED 2026-09-03 by executing every one of them, after "known broken" turned
+# out to be wrong for 10 of the 11 runtime failures elsewhere in the suite (one
+# was just a missing re-export). All 21 do genuinely fail to import. Grouped by
+# the symbol they need, and whether it exists anywhere in src/:
+#
+#   GONE — no such symbol in the codebase, so these need the removed feature
+#   rebuilt, not a test fix:
+#     player_global_id                (7 files)  identity.normalization
+#     canonical_provider_player_id    (3)        data.provider_identity
+#     normalize_matches               (2)        data.schema
+#     scheduled_events_response_to_df (2)        adapters.sofascore
+#     scoreboard_response_to_df       (2)        adapters.espn
+#     load_lineups                    (1)        data.loaders
+#     classify_competition            (1)        data.competition_taxonomy
+#     merge_player_events_with_lineups(1)        data.events
+#     normalize_fixtures              (1)        data.schema  (a function of that
+#                                                name lives in adapters/
+#                                                creativesdev.py, but it is a
+#                                                different contract)
+#
+#   The statsbomb/wyscout symbols these files also wanted DID exist and were
+#   simply unexported; that gap is now fixed in data/adapters/__init__.py and is
+#   worth having on its own. test_event_data_sources.py still stays here: it
+#   needs merge_player_events_with_lineups, and its remaining assertions expect
+#   lowercased player names while the live adapter (the one the player-ratings
+#   pipeline depends on) emits raw names — an outdated contract, not a bug.
+#
+# Ignoring these keeps `pytest tests/` clean, while an import break in a
+# maintained test still errors loudly (not on this list).
 # To revive one: fix its imports and remove it from LEGACY_BROKEN.
 LEGACY_BROKEN = [
     "test_agent_improvements.py", "test_audit_regressions.py",
