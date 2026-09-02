@@ -634,8 +634,9 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
     if not PRED_LOG.exists():
         return pd.DataFrame()
     log = pd.read_csv(PRED_LOG)
+    red_cols = [c for c in ("home_red_cards", "away_red_cards") if c in df_clubs.columns]
     res = df_clubs[["home_team", "away_team", "date", "home_goals", "away_goals"]
-                   + [c for cc in EVENT_COLS.values() for c in cc]].copy()
+                   + [c for cc in EVENT_COLS.values() for c in cc] + red_cols].copy()
     res["fecha"] = res["date"].astype(str).str[:10]
     m = log.merge(res.rename(columns={"home_team": "home", "away_team": "away"}),
                   on=["home", "away", "fecha"], how="left")
@@ -665,8 +666,21 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
             actual = {"Total": hv + av, "Local": hv, "Visitante": av}[r.ambito]
             over = actual > float(r.linea)
             hit = float(over == (r.seleccion == "OVER"))
+        elif mk == "booking_pts":
+            # 10 per yellow + 25 per red, the standard scale the model prices on.
+            # This branch used to be a bare `continue` because reds were not in
+            # the foundation, so 7% of every logged round was silently
+            # unscoreable. home/away_red_cards are now carried through.
+            hy, ay = r.home_yellow_cards, r.away_yellow_cards
+            hr = getattr(r, "home_red_cards", float("nan"))
+            ar = getattr(r, "away_red_cards", float("nan"))
+            if pd.isna(hy) or pd.isna(hr):
+                continue
+            actual = 10.0 * (hy + ay) + 25.0 * (hr + ar)
+            over = actual > float(r.linea)
+            hit = float(over == (r.seleccion == "OVER"))
         else:
-            continue  # booking pts needs reds (not in foundation) — skipped
+            continue
         conf = r.prob if mk == "1X2" else max(r.prob, 1 - r.prob)
         out.append({"mercado": MARKET_ES.get(mk, mk), "ambito": r.ambito,
                     "lado": r.seleccion, "confianza": conf, "acierto": hit,

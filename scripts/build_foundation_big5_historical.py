@@ -77,6 +77,18 @@ _FD_MAP = {
     "AF": "away_fouls",
     "HY": "home_yellow_cards",
     "AY": "away_yellow_cards",
+    # Red cards: 100% covered from 2005/06 on (patchy before, hence the NaNs in
+    # the early seasons). Added 2026-09-03 because their absence silently made
+    # every booking-points prediction unevaluable -- evaluate_prediction_log()
+    # skipped that market outright for want of reds, so 7% of the logged track
+    # record could never be scored.
+    "HR": "home_red_cards",
+    "AR": "away_red_cards",
+    # Half-time goals: 100% covered across all 26 seasons. Unlocks the half-time
+    # market family (HT result, HT over/under, HT/FT) and first-half vs
+    # second-half scoring profiles as features.
+    "HTHG": "home_goals_ht",
+    "HTAG": "away_goals_ht",
 }
 
 _DIV_LABELS = {
@@ -176,6 +188,7 @@ def main() -> None:
         "date", "home_team", "away_team", "home_goals", "away_goals", "competition",
         "home_shots", "away_shots", "home_sot", "away_sot", "home_corners", "away_corners",
         "home_fouls", "away_fouls", "home_yellow_cards", "away_yellow_cards",
+        "home_red_cards", "away_red_cards", "home_goals_ht", "away_goals_ht",
         "match_id", "neutral", "team_scope", "source", "stage", "season",
         "home_team_raw", "home_team_id", "away_team_raw", "away_team_id", "source_file",
     ]
