@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from mundialytics.statistical_core.prediction_engine import PredictionEngine  # noqa: E402
+from mundialytics.props.half_time import HalfTimeModel  # noqa: E402
 from mundialytics.ratings.elo import EloConfig, EloRater  # noqa: E402
 
 FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
@@ -114,6 +115,8 @@ def main() -> None:
     eng.fit(df, elo_history=pd.DataFrame(elo.history))
     known = set(df.home_team) | set(df.away_team)
 
+    htm = HalfTimeModel()   # stateless: a scaling of the lambdas above
+
     tp = None
     try:
         from mundialytics.props import TeamPropsModel
@@ -145,6 +148,22 @@ def main() -> None:
         rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": 2.5,
                      "prob": round(p.p_over_25, 4),
                      "seleccion": "OVER" if p.p_over_25 >= 0.5 else "UNDER"})
+
+        # Half-time markets, derived from the same lambdas (see props/half_time.py).
+        ht = htm.predict_half_time(p.lambda_home, p.lambda_away)
+        ht_trio = {"1": ht["p_home"], "X": ht["p_draw"], "2": ht["p_away"]}
+        ht_pick = max(ht_trio, key=ht_trio.get)
+        rows.append({**base, "mercado": "ht_1x2", "ambito": "Total", "linea": "",
+                     "prob": round(ht_trio[ht_pick], 4), "seleccion": ht_pick})
+        for ln, pr in ht["over"].items():
+            rows.append({**base, "mercado": "ht_goles", "ambito": "Total", "linea": ln,
+                         "prob": round(float(pr), 4),
+                         "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+        paths = htm.predict_ht_ft(p.lambda_home, p.lambda_away)
+        best = max(paths, key=paths.get)
+        rows.append({**base, "mercado": "ht_ft", "ambito": "Total", "linea": "",
+                     "prob": round(paths[best], 4), "seleccion": best})
+
         if tp is None:
             continue
         try:

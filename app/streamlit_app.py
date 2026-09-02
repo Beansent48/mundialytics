@@ -402,7 +402,9 @@ def render_stat_grid(events: list[tuple[str, float, float]]) -> None:
 
 
 MARKET_ES = {"corners": "Córners", "yellows": "Amarillas", "fouls": "Faltas",
-             "shots": "Disparos", "sot": "A puerta", "booking_pts": "Booking pts (10A/25R)"}
+             "shots": "Disparos", "sot": "A puerta", "booking_pts": "Booking pts (10A/25R)",
+             "ht_1x2": "1X2 al descanso", "ht_goles": "Goles al descanso",
+             "ht_ft": "Descanso/Final"}
 
 
 def make_match_card(home: str, away: str, ph: float, pdr: float, pa: float,
@@ -634,9 +636,10 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
     if not PRED_LOG.exists():
         return pd.DataFrame()
     log = pd.read_csv(PRED_LOG)
-    red_cols = [c for c in ("home_red_cards", "away_red_cards") if c in df_clubs.columns]
+    extra = [c for c in ("home_red_cards", "away_red_cards",
+                         "home_goals_ht", "away_goals_ht") if c in df_clubs.columns]
     res = df_clubs[["home_team", "away_team", "date", "home_goals", "away_goals"]
-                   + [c for cc in EVENT_COLS.values() for c in cc] + red_cols].copy()
+                   + [c for cc in EVENT_COLS.values() for c in cc] + extra].copy()
     res["fecha"] = res["date"].astype(str).str[:10]
     m = log.merge(res.rename(columns={"home_team": "home", "away_team": "away"}),
                   on=["home", "away", "fecha"], how="left")
@@ -666,6 +669,23 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
             actual = {"Total": hv + av, "Local": hv, "Visitante": av}[r.ambito]
             over = actual > float(r.linea)
             hit = float(over == (r.seleccion == "OVER"))
+        elif mk in ("ht_1x2", "ht_goles", "ht_ft"):
+            # Half-time markets, settled from home/away_goals_ht (in the
+            # foundation since 2026-09-03). See props/half_time.py.
+            hh = getattr(r, "home_goals_ht", float("nan"))
+            ah = getattr(r, "away_goals_ht", float("nan"))
+            if pd.isna(hh) or pd.isna(ah):
+                continue
+            ht_res = "1" if hh > ah else ("X" if hh == ah else "2")
+            if mk == "ht_1x2":
+                hit = float(r.seleccion == ht_res)
+            elif mk == "ht_goles":
+                over = (hh + ah) > float(r.linea)
+                hit = float(over == (r.seleccion == "OVER"))
+            else:
+                ft_res = ("1" if r.home_goals > r.away_goals
+                          else ("X" if r.home_goals == r.away_goals else "2"))
+                hit = float(r.seleccion == f"{ht_res}/{ft_res}")
         elif mk == "booking_pts":
             # 10 per yellow + 25 per red, the standard scale the model prices on.
             # This branch used to be a bare `continue` because reds were not in
@@ -681,7 +701,11 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
             hit = float(over == (r.seleccion == "OVER"))
         else:
             continue
-        conf = r.prob if mk == "1X2" else max(r.prob, 1 - r.prob)
+        # For pick-one markets the stored prob IS the selection's probability;
+        # for over/under it is the OVER probability, so the confidence in an
+        # UNDER pick is its complement.
+        pick_one = mk in ("1X2", "ht_1x2", "ht_ft")
+        conf = r.prob if pick_one else max(r.prob, 1 - r.prob)
         out.append({"mercado": MARKET_ES.get(mk, mk), "ambito": r.ambito,
                     "lado": r.seleccion, "confianza": conf, "acierto": hit,
                     "jornada": r.jornada, "season": r.season})
