@@ -13,6 +13,7 @@ from mundialytics.statistical_core.player_event_model import PlayerEventModel
 from mundialytics.statistical_core.reporting import build_daily_html_report
 from mundialytics.statistical_core.team_stats_model import TeamStatsModel
 from mundialytics.statistical_core.tournament_simulator import TournamentSimulationConfig, TournamentSimulator
+import pytest
 
 
 def _fixtures() -> pd.DataFrame:
@@ -105,7 +106,10 @@ def test_report_generation(tmp_path: Path) -> None:
     ts = TeamStatsModel().fit(_events()).predict_fixtures(_fixtures(), mp)
     path = build_daily_html_report(tmp_path / "report.html", mp, ts, pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {"warnings": []})
     assert path.exists()
-    assert "Mundialytics Statistical Matchday" in path.read_text(encoding="utf-8")
+    # The report was renamed to "Advanced Match Report" in statistical_core/
+    # reporting.py; this assertion still carried the v0.20 title. The generator
+    # itself works, so the contract is updated rather than the code changed.
+    assert "Mundialytics Advanced Match Report" in path.read_text(encoding="utf-8")
 
 
 def test_run_statistical_matchday_outputs(tmp_path: Path) -> None:

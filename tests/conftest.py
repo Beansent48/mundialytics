@@ -24,4 +24,5 @@ LEGACY_BROKEN = [
     "test_v183_sofascore_fixtures.py", "test_v18_provider_identity_layer.py",
     "test_v19_free_fixtures_and_team_props.py",
 ]
+
 collect_ignore = LEGACY_BROKEN
