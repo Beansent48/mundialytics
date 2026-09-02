@@ -96,7 +96,7 @@ st.markdown("""<style>
 def brand_header() -> str:
     return ('<div class="mv-brand">'
             '<div class="mv-logo">M</div>'
-            '<div><div class="mv-name">Mundi<span class="mv-accent">lytics</span></div>'
+            '<div><div class="mv-name">Mundia<span class="mv-accent">lytics</span></div>'
             '<div class="mv-tag">Precision Football Models</div></div></div>')
 
 # ── Tournament presets ─────────────────────────────────────────────────────────
@@ -608,6 +608,27 @@ EVENT_COLS = {"corners": ("home_corners", "away_corners"),
 
 
 @st.cache_data(show_spinner=False)
+def pending_predictions() -> pd.DataFrame:
+    """Logged predictions whose match has not been played yet.
+
+    Worth surfacing: a public commitment made before kickoff is the part that
+    makes the track record credible, and it is visible from the moment the round
+    is logged rather than only once results land.
+    """
+    if not PRED_LOG.exists():
+        return pd.DataFrame()
+    try:
+        log = pd.read_csv(PRED_LOG)
+    except Exception:
+        return pd.DataFrame()
+    if log.empty:
+        return pd.DataFrame()
+    played = set(df_clubs["home_team"].astype(str) + "|" + df_clubs["away_team"].astype(str)
+                 + "|" + df_clubs["date"].astype(str).str[:10])
+    key = log["home"].astype(str) + "|" + log["away"].astype(str) + "|" + log["fecha"].astype(str)
+    return log[~key.isin(played)]
+
+
 def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
     """Join the served-predictions log with real results -> hit per prediction."""
     if not PRED_LOG.exists():
@@ -1449,10 +1470,24 @@ elif page == "📈  Resultados":
 
     # ── live track record ──────────────────────────────────────────────────────
     st.markdown("### 📌 Track record en vivo")
+    st.caption("Cada predicción se registra **antes** de que el partido se juegue, con fecha "
+               "y hora. Nada se añade a posteriori: por eso esto es un track record y no una "
+               "lista de aciertos elegida después.")
+
+    pend = pending_predictions()
+    if not pend.empty:
+        pc1, pc2, pc3 = st.columns(3)
+        pc1.markdown(metric_card("Partidos comprometidos", f"{pend['partido'].nunique()}"),
+                     unsafe_allow_html=True)
+        pc2.markdown(metric_card("Predicciones en juego", f"{len(pend):,}"),
+                     unsafe_allow_html=True)
+        pc3.markdown(metric_card("Se resuelven", f"{pend['fecha'].min()} → {pend['fecha'].max()}"),
+                     unsafe_allow_html=True)
+
     ev = evaluate_prediction_log(len(df_clubs))
     if ev.empty:
-        st.info("Aún no hay predicciones registradas con resultado. Registra una jornada "
-                "desde 🎯 Props y vuelve aquí cuando se juegue.")
+        st.info("Predicciones ya registradas y esperando a que se jueguen los partidos. "
+                "En cuanto haya resultados aparecerá aquí el acierto real frente al anunciado.")
     else:
         n = len(ev)
         acc = ev["acierto"].mean()
