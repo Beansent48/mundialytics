@@ -4,6 +4,22 @@ import json
 from pathlib import Path
 import pandas as pd
 
+# Re-exported 2026-09-03: both live in adapters/statsbomb.py and work, but the
+# package never surfaced them, so `from mundialytics.data.adapters import
+# statsbomb_events_to_lineups` raised ImportError and two test files sat in
+# quarantine for it. Same missing-re-export pattern as PlayerEventModel.
+from mundialytics.data.adapters.statsbomb import (  # noqa: E402,F401
+    statsbomb_events_to_lineups,
+    statsbomb_events_to_player_events,
+    statsbomb_events_to_tactical_shifts,
+    statsbomb_events_to_team_events,
+    statsbomb_open_data_match_metadata,
+)
+from mundialytics.data.adapters.wyscout import (  # noqa: E402,F401
+    wyscout_events_to_player_events,
+    wyscout_matches_to_lineups,
+)
+
 def _season_from_path(path: str | Path) -> str:
     name = Path(path).stem
     prefix = name.split("_")[0]
