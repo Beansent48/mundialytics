@@ -220,6 +220,12 @@ def parse_api_football_fixture_stats_json(paths: Iterable[Path | str], source_na
         fixture_id = ""
         date = ""
         competition = ""
+        # `season` is emitted in the row dict below; without this initialisation
+        # the function raised NameError on its first fixture, so the whole
+        # API-Football import path (scripts/import_provider_fixture_stats.py)
+        # was dead on arrival. Read from the league block like the sibling
+        # parsers in this module do.
+        season = ""
         teams_meta: dict[str, str] = {}
         # Direct API-Football endpoint response.
         if isinstance(payload, dict):
@@ -230,6 +236,7 @@ def parse_api_football_fixture_stats_json(paths: Iterable[Path | str], source_na
             league = payload.get("league") or payload.get("competition") or {}
             if isinstance(league, dict):
                 competition = str(league.get("name") or league.get("id") or "")
+                season = str(league.get("season_name") or league.get("season") or "")
             teams = payload.get("teams") or {}
             if isinstance(teams, dict):
                 home = teams.get("home") or {}

@@ -7,6 +7,12 @@ tournament simulation, betting value, output contracts and reporting.
 from mundialytics.statistical_core.betting_value import BettingValueConfig, BettingValueEngine
 from mundialytics.statistical_core.scorer_model import CompetitionForecastEngine, ScorerForecastConfig
 from mundialytics.statistical_core.match_model import MatchOutcomeModel
+# Re-exported 2026-09-03. The class was importable from its own module all
+# along, but not from the package, so `from mundialytics.statistical_core import
+# PlayerEventModel` -- which scripts/run_statistical_matchday.py does -- raised
+# ImportError and took six tests down with it. Not to be confused with
+# models/player_event_model.py, a different and genuinely broken module.
+from mundialytics.statistical_core.player_event_model import PlayerEventModel
 from mundialytics.statistical_core.model_lab import run_model_lab
 from mundialytics.statistical_core.event_evaluation import EventEvaluationConfig, evaluate_event_models_temporal
 from mundialytics.statistical_core.event_model_lab import run_event_model_lab
