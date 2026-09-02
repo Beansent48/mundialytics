@@ -1,0 +1,431 @@
+logged_at,season,jornada,partido,fecha,home,away,mercado,ambito,linea,prob,seleccion
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,1X2,Total,,0.5537,1
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,Goles,Total,2.5,0.4677,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Total,7.5,0.7061,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Total,8.5,0.5904,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Total,9.5,0.4714,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Total,10.5,0.3532,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Total,11.5,0.2507,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Local,3.5,0.7157,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Local,4.5,0.5622,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Local,5.5,0.4176,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Visitante,3.5,0.5593,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Visitante,4.5,0.394,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,corners,Visitante,5.5,0.2628,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Total,2.5,0.6581,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Total,3.5,0.4515,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Total,4.5,0.2748,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Total,5.5,0.1501,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Total,6.5,0.0744,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Local,1.5,0.4323,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Local,2.5,0.1735,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Visitante,1.5,0.624,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,yellows,Visitante,2.5,0.329,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,fouls,Total,19.5,0.8506,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,fouls,Total,21.5,0.7264,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,fouls,Total,23.5,0.563,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,fouls,Total,25.5,0.3968,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Total,20.5,0.7703,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Total,22.5,0.6441,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Total,24.5,0.4997,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Total,26.5,0.3554,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Local,9.5,0.8828,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Local,11.5,0.7584,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Local,13.5,0.602,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Visitante,9.5,0.4802,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Visitante,11.5,0.2957,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,shots,Visitante,13.5,0.1644,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,sot,Total,6.5,0.7071,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,sot,Total,7.5,0.5759,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,sot,Total,8.5,0.4417,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,sot,Total,9.5,0.3186,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,booking_pts,Total,30.5,0.5616,OVER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,booking_pts,Total,40.5,0.4007,UNDER
+2026-07-23T12:23:58,2025-2026,38,mallorca vs oviedo,2026-05-23,mallorca,oviedo,booking_pts,Total,50.5,0.2664,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,1X2,Total,,0.5447,1
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,Goles,Total,2.5,0.4598,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Total,7.5,0.6488,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Total,8.5,0.5261,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Total,9.5,0.4113,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Total,10.5,0.2979,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Total,11.5,0.2035,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Local,3.5,0.6753,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Local,4.5,0.5158,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Local,5.5,0.3723,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Visitante,3.5,0.5131,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Visitante,4.5,0.3498,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,corners,Visitante,5.5,0.2262,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Total,2.5,0.7866,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Total,3.5,0.6107,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Total,4.5,0.4276,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Total,5.5,0.271,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Total,6.5,0.1566,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Local,1.5,0.5868,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Local,2.5,0.2939,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Visitante,1.5,0.7303,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,yellows,Visitante,2.5,0.446,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,fouls,Total,19.5,0.9603,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,fouls,Total,21.5,0.9096,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,fouls,Total,23.5,0.8164,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,fouls,Total,25.5,0.6905,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Total,20.5,0.7419,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Total,22.5,0.6086,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Total,24.5,0.4633,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Total,26.5,0.3231,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Local,9.5,0.8568,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Local,11.5,0.7177,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Local,13.5,0.5523,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Visitante,9.5,0.4856,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Visitante,11.5,0.3003,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,shots,Visitante,13.5,0.1677,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,sot,Total,6.5,0.7614,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,sot,Total,7.5,0.639,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,sot,Total,8.5,0.5058,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,sot,Total,9.5,0.3778,UNDER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,booking_pts,Total,30.5,0.6913,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,booking_pts,Total,40.5,0.535,OVER
+2026-07-23T12:23:58,2025-2026,38,girona vs elche,2026-05-23,girona,elche,booking_pts,Total,50.5,0.3869,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,1X2,Total,,0.6232,1
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,Goles,Total,2.5,0.5103,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Total,7.5,0.7321,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Total,8.5,0.6205,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Total,9.5,0.5007,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Total,10.5,0.381,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Total,11.5,0.2753,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Local,3.5,0.7868,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Local,4.5,0.6501,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Local,5.5,0.5092,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Visitante,3.5,0.499,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Visitante,4.5,0.3368,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,corners,Visitante,5.5,0.2157,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Total,2.5,0.6855,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Total,3.5,0.4829,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Total,4.5,0.3026,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Total,5.5,0.1704,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Total,6.5,0.0871,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Local,1.5,0.463,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Local,2.5,0.1945,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Visitante,1.5,0.6458,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,yellows,Visitante,2.5,0.3508,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,fouls,Total,19.5,0.798,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,fouls,Total,21.5,0.6524,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,fouls,Total,23.5,0.4799,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,fouls,Total,25.5,0.3185,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Total,20.5,0.7575,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Total,22.5,0.628,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Total,24.5,0.483,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Total,26.5,0.3405,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Local,9.5,0.8428,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Local,11.5,0.6968,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Local,13.5,0.5279,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Visitante,9.5,0.5466,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Visitante,11.5,0.3545,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,shots,Visitante,13.5,0.2073,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,sot,Total,6.5,0.8227,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,sot,Total,7.5,0.7154,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,sot,Total,8.5,0.5886,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,sot,Total,9.5,0.4592,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,booking_pts,Total,30.5,0.5881,OVER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,booking_pts,Total,40.5,0.4265,UNDER
+2026-07-23T12:23:58,2025-2026,38,real madrid vs ath bilbao,2026-05-23,real madrid,ath bilbao,booking_pts,Total,50.5,0.2884,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,1X2,Total,,0.3776,1
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,Goles,Total,2.5,0.3463,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Total,7.5,0.6288,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Total,8.5,0.5045,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Total,9.5,0.3916,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Total,10.5,0.2804,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Total,11.5,0.189,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Local,3.5,0.6646,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Local,4.5,0.5039,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Local,5.5,0.3611,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Visitante,3.5,0.4935,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Visitante,4.5,0.3318,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,corners,Visitante,5.5,0.2117,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Total,2.5,0.8757,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Total,3.5,0.7434,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Total,4.5,0.5799,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Total,5.5,0.4145,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Total,6.5,0.2722,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Local,1.5,0.7747,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Local,2.5,0.5039,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Visitante,1.5,0.762,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,yellows,Visitante,2.5,0.4867,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,fouls,Total,19.5,0.9737,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,fouls,Total,21.5,0.9366,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,fouls,Total,23.5,0.8629,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,fouls,Total,25.5,0.7565,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Total,20.5,0.6014,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Total,22.5,0.4481,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Total,24.5,0.3126,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Total,26.5,0.1996,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Local,9.5,0.6067,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Local,11.5,0.4122,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Local,13.5,0.2525,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Visitante,9.5,0.6069,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Visitante,11.5,0.4125,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,shots,Visitante,13.5,0.2527,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,sot,Total,6.5,0.6314,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,sot,Total,7.5,0.4936,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,sot,Total,8.5,0.3632,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,sot,Total,9.5,0.2502,UNDER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,booking_pts,Total,30.5,0.7975,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,booking_pts,Total,40.5,0.6626,OVER
+2026-07-23T12:23:58,2025-2026,38,getafe vs osasuna,2026-05-23,getafe,osasuna,booking_pts,Total,50.5,0.5171,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,1X2,Total,,0.4519,2
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,Goles,Total,2.5,0.5205,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Total,7.5,0.7832,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Total,8.5,0.6819,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Total,9.5,0.5623,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Total,10.5,0.4417,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Total,11.5,0.3308,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Local,3.5,0.6416,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Local,4.5,0.4787,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Local,5.5,0.3376,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Visitante,3.5,0.7609,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Visitante,4.5,0.6171,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,corners,Visitante,5.5,0.4738,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Total,2.5,0.7349,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Total,3.5,0.5428,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Total,4.5,0.3588,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Total,5.5,0.2137,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Total,6.5,0.1158,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Local,1.5,0.5961,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Local,2.5,0.3024,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Visitante,1.5,0.6238,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,yellows,Visitante,2.5,0.3288,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,fouls,Total,19.5,0.7221,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,fouls,Total,21.5,0.556,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,fouls,Total,23.5,0.383,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,fouls,Total,25.5,0.2364,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Total,20.5,0.7148,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Total,22.5,0.5757,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Total,24.5,0.4306,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Total,26.5,0.2949,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Local,9.5,0.6323,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Local,11.5,0.4384,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Local,13.5,0.274,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Visitante,9.5,0.7387,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Visitante,11.5,0.5579,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,shots,Visitante,13.5,0.3815,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,sot,Total,6.5,0.7125,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,sot,Total,7.5,0.5819,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,sot,Total,8.5,0.4477,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,sot,Total,9.5,0.324,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,booking_pts,Total,30.5,0.6357,OVER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,booking_pts,Total,40.5,0.4749,UNDER
+2026-07-23T12:23:58,2025-2026,38,valencia vs barcelona,2026-05-23,valencia,barcelona,booking_pts,Total,50.5,0.3311,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,1X2,Total,,0.3993,1
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,Goles,Total,2.5,0.4096,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Total,7.5,0.6151,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Total,8.5,0.4899,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Total,9.5,0.3784,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Total,10.5,0.2688,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Total,11.5,0.1795,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Local,3.5,0.6113,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Local,4.5,0.4466,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Local,5.5,0.3085,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Visitante,3.5,0.5349,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Visitante,4.5,0.3704,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,corners,Visitante,5.5,0.243,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Total,2.5,0.7892,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Total,3.5,0.6143,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Total,4.5,0.4313,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Total,5.5,0.2742,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Total,6.5,0.159,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Local,1.5,0.5834,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Local,2.5,0.2909,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Visitante,1.5,0.7373,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,yellows,Visitante,2.5,0.4547,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,fouls,Total,19.5,0.8985,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,fouls,Total,21.5,0.8005,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,fouls,Total,23.5,0.6558,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,fouls,Total,25.5,0.4935,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Total,20.5,0.6238,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Total,22.5,0.4721,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Total,24.5,0.3339,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Total,26.5,0.216,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Local,9.5,0.5974,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Local,11.5,0.403,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Local,13.5,0.2451,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Visitante,9.5,0.647,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Visitante,11.5,0.4538,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,shots,Visitante,13.5,0.2871,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,sot,Total,6.5,0.6418,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,sot,Total,7.5,0.5045,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,sot,Total,8.5,0.3733,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,sot,Total,9.5,0.2588,UNDER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,booking_pts,Total,30.5,0.694,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,booking_pts,Total,40.5,0.5381,OVER
+2026-07-23T12:23:58,2025-2026,38,celta vs sevilla,2026-05-23,celta,sevilla,booking_pts,Total,50.5,0.3899,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,1X2,Total,,0.451,1
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,Goles,Total,2.5,0.5038,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Total,7.5,0.7482,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Total,8.5,0.6395,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Total,9.5,0.5194,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Total,10.5,0.3992,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Total,11.5,0.2916,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Local,3.5,0.7633,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Local,4.5,0.6201,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Local,5.5,0.477,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Visitante,3.5,0.5699,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Visitante,4.5,0.4045,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,corners,Visitante,5.5,0.2717,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Total,2.5,0.7657,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Total,3.5,0.5826,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Total,4.5,0.3984,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Total,5.5,0.2461,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Total,6.5,0.1385,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Local,1.5,0.5837,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Local,2.5,0.2911,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Visitante,1.5,0.6941,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,yellows,Visitante,2.5,0.4031,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,fouls,Total,19.5,0.8047,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,fouls,Total,21.5,0.6615,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,fouls,Total,23.5,0.4897,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,fouls,Total,25.5,0.3274,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Total,20.5,0.8572,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Total,22.5,0.7606,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Total,24.5,0.6295,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Total,26.5,0.48,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Local,9.5,0.8697,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Local,11.5,0.7376,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Local,13.5,0.5762,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Visitante,9.5,0.7071,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Visitante,11.5,0.5204,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,shots,Visitante,13.5,0.3461,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,sot,Total,6.5,0.7939,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,sot,Total,7.5,0.6788,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,sot,Total,8.5,0.5482,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,sot,Total,9.5,0.4187,UNDER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,booking_pts,Total,30.5,0.6685,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,booking_pts,Total,40.5,0.5099,OVER
+2026-07-23T12:23:58,2025-2026,38,betis vs levante,2026-05-23,betis,levante,booking_pts,Total,50.5,0.3632,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,1X2,Total,,0.4214,1
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,Goles,Total,2.5,0.45,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Total,7.5,0.7896,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Total,8.5,0.6898,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Total,9.5,0.5706,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Total,10.5,0.45,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Total,11.5,0.3386,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Local,3.5,0.759,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Local,4.5,0.6148,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Local,5.5,0.4714,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Visitante,3.5,0.6565,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Visitante,4.5,0.495,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,corners,Visitante,5.5,0.3527,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Total,2.5,0.8666,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Total,3.5,0.7287,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Total,4.5,0.5617,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Total,5.5,0.3961,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Total,6.5,0.2563,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Local,1.5,0.73,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Local,2.5,0.4456,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Visitante,1.5,0.7816,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,yellows,Visitante,2.5,0.5135,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,fouls,Total,19.5,0.9121,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,fouls,Total,21.5,0.8229,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,fouls,Total,23.5,0.686,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,fouls,Total,25.5,0.5275,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Total,20.5,0.8288,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Total,22.5,0.7211,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Total,24.5,0.5835,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Total,26.5,0.4341,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Local,9.5,0.823,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Local,11.5,0.6683,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Local,13.5,0.4957,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Visitante,9.5,0.7222,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Visitante,11.5,0.5381,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,shots,Visitante,13.5,0.3626,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,sot,Total,6.5,0.7839,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,sot,Total,7.5,0.6664,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,sot,Total,8.5,0.5348,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,sot,Total,9.5,0.4057,UNDER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,booking_pts,Total,30.5,0.7849,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,booking_pts,Total,40.5,0.6465,OVER
+2026-07-23T12:23:58,2025-2026,38,alaves vs vallecano,2026-05-23,alaves,vallecano,booking_pts,Total,50.5,0.4996,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,1X2,Total,,0.3753,1
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,Goles,Total,2.5,0.4715,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Total,7.5,0.732,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Total,8.5,0.6204,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Total,9.5,0.5005,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Total,10.5,0.3809,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Total,11.5,0.2752,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Local,3.5,0.6636,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Local,4.5,0.5028,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Local,5.5,0.36,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Visitante,3.5,0.6637,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Visitante,4.5,0.5028,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,corners,Visitante,5.5,0.3601,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Total,2.5,0.866,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Total,3.5,0.7277,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Total,4.5,0.5605,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Total,5.5,0.3949,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Total,6.5,0.2553,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Local,1.5,0.7319,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Local,2.5,0.4479,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Visitante,1.5,0.7786,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,yellows,Visitante,2.5,0.5094,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,fouls,Total,19.5,0.9504,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,fouls,Total,21.5,0.8908,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,fouls,Total,23.5,0.786,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,fouls,Total,25.5,0.6498,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Total,20.5,0.8659,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Total,22.5,0.773,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Total,24.5,0.6443,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Total,26.5,0.4953,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Local,9.5,0.8921,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Local,11.5,0.7736,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Local,13.5,0.6213,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Visitante,9.5,0.6816,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Visitante,11.5,0.4914,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,shots,Visitante,13.5,0.3198,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,sot,Total,6.5,0.806,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,sot,Total,7.5,0.694,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,sot,Total,8.5,0.5649,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,sot,Total,9.5,0.4352,UNDER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,booking_pts,Total,30.5,0.7849,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,booking_pts,Total,40.5,0.6465,OVER
+2026-07-23T12:23:58,2025-2026,38,espanol vs sociedad,2026-05-23,espanol,sociedad,booking_pts,Total,50.5,0.4996,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,1X2,Total,,0.4491,1
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,Goles,Total,2.5,0.5296,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Total,7.5,0.7438,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Total,8.5,0.6343,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Total,9.5,0.5143,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Total,10.5,0.3942,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Total,11.5,0.2871,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Local,3.5,0.6816,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Local,4.5,0.5228,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Local,5.5,0.3791,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Visitante,3.5,0.6646,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Visitante,4.5,0.5039,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,corners,Visitante,5.5,0.361,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Total,2.5,0.7538,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Total,3.5,0.5669,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Total,4.5,0.3826,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Total,5.5,0.233,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Total,6.5,0.1292,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Local,1.5,0.529,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Local,2.5,0.2445,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Visitante,1.5,0.713,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,yellows,Visitante,2.5,0.425,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,fouls,Total,19.5,0.6743,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,fouls,Total,21.5,0.5005,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,fouls,Total,23.5,0.3321,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,fouls,Total,25.5,0.1968,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Total,20.5,0.7793,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Total,22.5,0.6555,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Total,24.5,0.5117,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Total,26.5,0.3663,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Local,9.5,0.827,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Local,11.5,0.6741,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Local,13.5,0.5021,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Visitante,9.5,0.619,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Visitante,11.5,0.4247,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,shots,Visitante,13.5,0.2627,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,sot,Total,6.5,0.7622,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,sot,Total,7.5,0.64,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,sot,Total,8.5,0.5068,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,sot,Total,9.5,0.3788,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,booking_pts,Total,30.5,0.6553,OVER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,booking_pts,Total,40.5,0.4956,UNDER
+2026-07-23T12:23:58,2025-2026,38,villarreal vs ath madrid,2026-05-24,villarreal,ath madrid,booking_pts,Total,50.5,0.35,UNDER
