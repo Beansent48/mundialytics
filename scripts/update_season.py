@@ -142,6 +142,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--season", default=None, help="Season code like 2627 (auto from date)")
     ap.add_argument("--skip-understat", action="store_true", help="Skip the network-heavy Understat pulls")
+    ap.add_argument("--skip-logging", action="store_true",
+                    help="Skip logging predictions for the upcoming round")
     ap.add_argument("--full", action="store_true",
                     help="Also regenerate the deployed walk-forward cache (Resultados page, ~15 min)")
     args = ap.parse_args()
@@ -226,6 +228,18 @@ def main() -> None:
         for old in backups[:-10]:
             old.unlink(missing_ok=True)
         print(f"    prediction log backed up -> {dest.name} ({len(backups)} kept, max 10)", flush=True)
+
+    if not args.skip_logging:
+        # Log the upcoming round BEFORE it is played. This is what makes the
+        # track record real: predictions must be written pre-kickoff, by an
+        # engine fitted only on played matches. Doing it here means it happens
+        # every weekly refresh instead of depending on someone remembering to
+        # click a button -- which is exactly why the log held a single
+        # retroactive matchday for a whole season (see the quarantine README).
+        run_step("7b/8 log upcoming round (pre-match track record)",
+                 [PY, "scripts/log_upcoming_round.py"])
+    else:
+        print("\n=== 7b/8 upcoming-round logging SKIPPED ===", flush=True)
 
     if args.full:
         run_step("8/8 deployed walk-forward cache (Resultados)",
