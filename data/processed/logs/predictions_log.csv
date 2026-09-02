@@ -2972,3 +2972,141 @@ logged_at,season,jornada,partido,fecha,home,away,mercado,ambito,linea,prob,selec
 2026-09-02T23:29:13,2026-2027,4,sunderland vs arsenal,2026-09-12,sunderland,arsenal,booking_pts,Total,30.5,0.5673,OVER
 2026-09-02T23:29:13,2026-2027,4,sunderland vs arsenal,2026-09-12,sunderland,arsenal,booking_pts,Total,40.5,0.3956,UNDER
 2026-09-02T23:29:13,2026-2027,4,sunderland vs arsenal,2026-09-12,sunderland,arsenal,booking_pts,Total,50.5,0.2545,UNDER
+2026-09-02T23:58:28,2026-2027,3,toulouse vs lille,2026-09-03,toulouse,lille,shots,Visitante,11.5,0.5258,OVER
+2026-09-02T23:58:28,2026-2027,6,sociedad vs celta,2026-09-03,sociedad,celta,sot,Total,8.5,0.5099,OVER
+2026-09-02T23:58:28,2026-2027,3,lyon vs auxerre,2026-09-04,lyon,auxerre,fouls,Total,25.5,0.4674,UNDER
+2026-09-02T23:58:28,2026-2027,3,lyon vs auxerre,2026-09-04,lyon,auxerre,shots,Local,13.5,0.5163,OVER
+2026-09-02T23:58:28,2026-2027,3,lyon vs auxerre,2026-09-04,lyon,auxerre,sot,Total,8.5,0.5053,OVER
+2026-09-02T23:58:28,2026-2027,3,lyon vs auxerre,2026-09-04,lyon,auxerre,booking_pts,Total,40.5,0.4871,UNDER
+2026-09-02T23:58:28,2026-2027,2,stuttgart vs fc koln,2026-09-04,stuttgart,fc koln,corners,Visitante,3.5,0.5311,OVER
+2026-09-02T23:58:28,2026-2027,2,stuttgart vs fc koln,2026-09-04,stuttgart,fc koln,fouls,Total,19.5,0.5363,OVER
+2026-09-02T23:58:28,2026-2027,2,stuttgart vs fc koln,2026-09-04,stuttgart,fc koln,shots,Visitante,11.5,0.5271,OVER
+2026-09-02T23:58:28,2026-2027,3,genoa vs como,2026-09-04,genoa,como,fouls,Total,25.5,0.413,UNDER
+2026-09-02T23:58:28,2026-2027,3,genoa vs como,2026-09-04,genoa,como,booking_pts,Total,40.5,0.4891,UNDER
+2026-09-02T23:58:28,2026-2027,4,betis vs real madrid,2026-09-04,betis,real madrid,corners,Total,9.5,0.5175,OVER
+2026-09-02T23:58:28,2026-2027,4,betis vs real madrid,2026-09-04,betis,real madrid,fouls,Total,23.5,0.4917,UNDER
+2026-09-02T23:58:28,2026-2027,4,betis vs real madrid,2026-09-04,betis,real madrid,shots,Total,26.5,0.5058,OVER
+2026-09-02T23:58:28,2026-2027,4,betis vs real madrid,2026-09-04,betis,real madrid,shots,Visitante,13.5,0.5451,OVER
+2026-09-02T23:58:28,2026-2027,3,paris sg vs monaco,2026-09-04,paris sg,monaco,sot,Total,9.5,0.4845,UNDER
+2026-09-02T23:58:28,2026-2027,3,newcastle vs bournemouth,2026-09-05,newcastle,bournemouth,corners,Total,10.5,0.5186,OVER
+2026-09-02T23:58:28,2026-2027,3,newcastle vs bournemouth,2026-09-05,newcastle,bournemouth,corners,Visitante,4.5,0.5136,OVER
+2026-09-02T23:58:28,2026-2027,3,newcastle vs bournemouth,2026-09-05,newcastle,bournemouth,fouls,Total,23.5,0.4973,UNDER
+2026-09-02T23:58:28,2026-2027,3,newcastle vs bournemouth,2026-09-05,newcastle,bournemouth,sot,Total,8.5,0.5023,OVER
+2026-09-02T23:58:28,2026-2027,3,fiorentina vs torino,2026-09-05,fiorentina,torino,fouls,Total,25.5,0.5405,OVER
+2026-09-02T23:58:28,2026-2027,2,hoffenheim vs dortmund,2026-09-05,hoffenheim,dortmund,corners,Local,4.5,0.4909,UNDER
+2026-09-02T23:58:28,2026-2027,2,hoffenheim vs dortmund,2026-09-05,hoffenheim,dortmund,fouls,Total,21.5,0.6105,OVER
+2026-09-02T23:58:28,2026-2027,2,hoffenheim vs dortmund,2026-09-05,hoffenheim,dortmund,shots,Total,24.5,0.5194,OVER
+2026-09-02T23:58:28,2026-2027,2,leverkusen vs union berlin,2026-09-05,leverkusen,union berlin,yellows,Local,1.5,0.514,OVER
+2026-09-02T23:58:28,2026-2027,2,leverkusen vs union berlin,2026-09-05,leverkusen,union berlin,fouls,Total,19.5,0.5247,OVER
+2026-09-02T23:58:28,2026-2027,2,leverkusen vs union berlin,2026-09-05,leverkusen,union berlin,sot,Total,9.5,0.5063,OVER
+2026-09-02T23:58:28,2026-2027,2,werder bremen vs rb leipzig,2026-09-05,werder bremen,rb leipzig,yellows,Visitante,1.5,0.5047,OVER
+2026-09-02T23:58:28,2026-2027,2,werder bremen vs rb leipzig,2026-09-05,werder bremen,rb leipzig,shots,Total,26.5,0.5126,OVER
+2026-09-02T23:58:28,2026-2027,2,werder bremen vs rb leipzig,2026-09-05,werder bremen,rb leipzig,booking_pts,Total,30.5,0.5088,OVER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,Goles,Total,2.5,0.4978,UNDER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,corners,Visitante,4.5,0.5978,OVER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,yellows,Total,3.5,0.4886,UNDER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,yellows,Visitante,1.5,0.4724,UNDER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,fouls,Total,21.5,0.5907,OVER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,shots,Local,13.5,0.4753,UNDER
+2026-09-02T23:58:28,2026-2027,2,paderborn vs freiburg,2026-09-05,paderborn,freiburg,sot,Total,8.5,0.4795,UNDER
+2026-09-02T23:58:28,2026-2027,3,nott m forest vs tottenham,2026-09-05,nott m forest,tottenham,shots,Local,13.5,0.4988,UNDER
+2026-09-02T23:58:28,2026-2027,3,fulham vs crystal palace,2026-09-05,fulham,crystal palace,yellows,Local,1.5,0.5052,OVER
+2026-09-02T23:58:28,2026-2027,3,fulham vs crystal palace,2026-09-05,fulham,crystal palace,fouls,Total,21.5,0.5062,OVER
+2026-09-02T23:58:28,2026-2027,3,brighton vs leeds,2026-09-05,brighton,leeds,corners,Total,9.5,0.5054,OVER
+2026-09-02T23:58:28,2026-2027,3,brighton vs leeds,2026-09-05,brighton,leeds,shots,Visitante,9.5,0.5354,OVER
+2026-09-02T23:58:28,2026-2027,3,brentford vs sunderland,2026-09-05,brentford,sunderland,corners,Total,9.5,0.4992,UNDER
+2026-09-02T23:58:28,2026-2027,4,ath bilbao vs ath madrid,2026-09-05,ath bilbao,ath madrid,fouls,Total,23.5,0.5043,OVER
+2026-09-02T23:58:28,2026-2027,4,ath bilbao vs ath madrid,2026-09-05,ath bilbao,ath madrid,shots,Total,24.5,0.5054,OVER
+2026-09-02T23:58:28,2026-2027,4,ath bilbao vs ath madrid,2026-09-05,ath bilbao,ath madrid,booking_pts,Total,40.5,0.4939,UNDER
+2026-09-02T23:58:28,2026-2027,3,lens vs lorient,2026-09-05,lens,lorient,yellows,Total,3.5,0.4755,UNDER
+2026-09-02T23:58:28,2026-2027,3,inter vs napoli,2026-09-05,inter,napoli,yellows,Local,1.5,0.4925,UNDER
+2026-09-02T23:58:28,2026-2027,3,inter vs napoli,2026-09-05,inter,napoli,yellows,Visitante,1.5,0.4995,UNDER
+2026-09-02T23:58:28,2026-2027,3,inter vs napoli,2026-09-05,inter,napoli,fouls,Total,21.5,0.4272,UNDER
+2026-09-02T23:58:28,2026-2027,3,inter vs napoli,2026-09-05,inter,napoli,shots,Total,24.5,0.5597,OVER
+2026-09-02T23:58:28,2026-2027,3,hull vs aston villa,2026-09-05,hull,aston villa,corners,Local,3.5,0.501,OVER
+2026-09-02T23:58:28,2026-2027,3,hull vs aston villa,2026-09-05,hull,aston villa,yellows,Total,3.5,0.5406,OVER
+2026-09-02T23:58:28,2026-2027,3,hull vs aston villa,2026-09-05,hull,aston villa,shots,Total,24.5,0.4817,UNDER
+2026-09-02T23:58:28,2026-2027,3,hull vs aston villa,2026-09-05,hull,aston villa,shots,Local,11.5,0.4977,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Total,7.5,0.9675,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Total,8.5,0.9393,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Total,9.5,0.8791,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Total,10.5,0.8076,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Total,11.5,0.7233,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Local,3.5,0.9742,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Local,4.5,0.9407,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Local,5.5,0.8878,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Visitante,3.5,0.6897,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Visitante,4.5,0.5321,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,corners,Visitante,5.5,0.388,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Total,2.5,0.8055,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Total,3.5,0.6369,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Total,4.5,0.4556,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Total,5.5,0.2956,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Total,6.5,0.1751,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Local,1.5,0.6268,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Local,2.5,0.3318,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Visitante,1.5,0.736,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,yellows,Visitante,2.5,0.453,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,fouls,Total,19.5,0.9791,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,fouls,Total,21.5,0.9481,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,fouls,Total,23.5,0.8839,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,fouls,Total,25.5,0.788,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Total,20.5,0.8611,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Total,22.5,0.7662,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Total,24.5,0.6362,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Total,26.5,0.487,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Local,9.5,0.8838,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Local,11.5,0.7601,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Local,13.5,0.6042,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Visitante,9.5,0.6881,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Visitante,11.5,0.4988,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,shots,Visitante,13.5,0.3264,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,sot,Total,6.5,0.8009,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,sot,Total,7.5,0.6875,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,sot,Total,8.5,0.5577,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,sot,Total,9.5,0.4282,UNDER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,booking_pts,Total,30.5,0.7116,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,booking_pts,Total,40.5,0.5579,OVER
+2026-09-02T23:58:28,2026-2027,4,vallecano vs santander,2026-09-05,vallecano,santander,booking_pts,Total,50.5,0.4091,UNDER
+2026-09-02T23:58:28,2026-2027,3,roma vs atalanta,2026-09-05,roma,atalanta,shots,Visitante,9.5,0.4599,UNDER
+2026-09-02T23:58:28,2026-2027,3,le havre vs brest,2026-09-05,le havre,brest,shots,Visitante,11.5,0.5442,OVER
+2026-09-02T23:58:28,2026-2027,4,villarreal vs la coruna,2026-09-05,villarreal,la coruna,yellows,Visitante,2.5,0.4964,UNDER
+2026-09-02T23:58:28,2026-2027,3,frosinone vs venezia,2026-09-06,frosinone,venezia,shots,Total,26.5,0.5062,OVER
+2026-09-02T23:58:28,2026-2027,3,parma vs monza,2026-09-06,parma,monza,corners,Visitante,3.5,0.5098,OVER
+2026-09-02T23:58:28,2026-2027,3,parma vs monza,2026-09-06,parma,monza,fouls,Total,25.5,0.5196,OVER
+2026-09-02T23:58:28,2026-2027,3,parma vs monza,2026-09-06,parma,monza,shots,Local,13.5,0.4981,UNDER
+2026-09-02T23:58:28,2026-2027,3,parma vs monza,2026-09-06,parma,monza,shots,Visitante,9.5,0.5512,OVER
+2026-09-02T23:58:28,2026-2027,3,parma vs monza,2026-09-06,parma,monza,sot,Total,7.5,0.5074,OVER
+2026-09-02T23:58:28,2026-2027,3,troyes vs strasbourg,2026-09-06,troyes,strasbourg,corners,Visitante,4.5,0.4968,UNDER
+2026-09-02T23:58:28,2026-2027,3,troyes vs strasbourg,2026-09-06,troyes,strasbourg,yellows,Local,1.5,0.4636,UNDER
+2026-09-02T23:58:28,2026-2027,3,troyes vs strasbourg,2026-09-06,troyes,strasbourg,booking_pts,Total,30.5,0.4972,UNDER
+2026-09-02T23:58:28,2026-2027,3,everton vs man united,2026-09-06,everton,man united,corners,Total,9.5,0.5007,OVER
+2026-09-02T23:58:28,2026-2027,3,everton vs man united,2026-09-06,everton,man united,yellows,Total,3.5,0.5166,OVER
+2026-09-02T23:58:28,2026-2027,3,everton vs man united,2026-09-06,everton,man united,fouls,Total,21.5,0.5147,OVER
+2026-09-02T23:58:28,2026-2027,3,everton vs man united,2026-09-06,everton,man united,shots,Total,26.5,0.5315,OVER
+2026-09-02T23:58:28,2026-2027,2,hamburg vs mainz,2026-09-06,hamburg,mainz,fouls,Total,21.5,0.5441,OVER
+2026-09-02T23:58:28,2026-2027,2,hamburg vs mainz,2026-09-06,hamburg,mainz,shots,Visitante,13.5,0.5649,OVER
+2026-09-02T23:58:28,2026-2027,4,valencia vs barcelona,2026-09-06,valencia,barcelona,yellows,Total,3.5,0.4958,UNDER
+2026-09-02T23:58:28,2026-2027,4,valencia vs barcelona,2026-09-06,valencia,barcelona,fouls,Total,23.5,0.3944,UNDER
+2026-09-02T23:58:28,2026-2027,4,valencia vs barcelona,2026-09-06,valencia,barcelona,booking_pts,Total,40.5,0.4361,UNDER
+2026-09-02T23:58:28,2026-2027,3,angers vs rennes,2026-09-06,angers,rennes,yellows,Total,3.5,0.5034,OVER
+2026-09-02T23:58:28,2026-2027,3,angers vs rennes,2026-09-06,angers,rennes,fouls,Total,23.5,0.55,OVER
+2026-09-02T23:58:28,2026-2027,3,angers vs rennes,2026-09-06,angers,rennes,shots,Total,26.5,0.5413,OVER
+2026-09-02T23:58:28,2026-2027,3,bologna vs sassuolo,2026-09-06,bologna,sassuolo,fouls,Total,25.5,0.4496,UNDER
+2026-09-02T23:58:28,2026-2027,3,bologna vs sassuolo,2026-09-06,bologna,sassuolo,booking_pts,Total,40.5,0.4827,UNDER
+2026-09-02T23:58:28,2026-2027,4,malaga vs levante,2026-09-06,malaga,levante,corners,Total,9.5,0.5182,OVER
+2026-09-02T23:58:28,2026-2027,4,malaga vs levante,2026-09-06,malaga,levante,corners,Local,4.5,0.5463,OVER
+2026-09-02T23:58:28,2026-2027,4,malaga vs levante,2026-09-06,malaga,levante,yellows,Total,4.5,0.4202,UNDER
+2026-09-02T23:58:28,2026-2027,4,malaga vs levante,2026-09-06,malaga,levante,shots,Total,24.5,0.5113,OVER
+2026-09-02T23:58:28,2026-2027,4,malaga vs levante,2026-09-06,malaga,levante,shots,Local,11.5,0.5296,OVER
+2026-09-02T23:58:28,2026-2027,4,malaga vs levante,2026-09-06,malaga,levante,shots,Visitante,11.5,0.5812,OVER
+2026-09-02T23:58:28,2026-2027,4,alaves vs osasuna,2026-09-06,alaves,osasuna,corners,Total,9.5,0.4928,UNDER
+2026-09-02T23:58:28,2026-2027,4,alaves vs osasuna,2026-09-06,alaves,osasuna,booking_pts,Total,50.5,0.5054,OVER
+2026-09-02T23:58:28,2026-2027,3,marseille vs paris fc,2026-09-06,marseille,paris fc,fouls,Total,21.5,0.4921,UNDER
+2026-09-02T23:58:28,2026-2027,3,juventus vs milan,2026-09-06,juventus,milan,shots,Total,26.5,0.4968,UNDER
+2026-09-02T23:58:28,2026-2027,3,juventus vs milan,2026-09-06,juventus,milan,shots,Visitante,9.5,0.4682,UNDER
+2026-09-02T23:58:28,2026-2027,3,cagliari vs lecce,2026-09-07,cagliari,lecce,fouls,Total,25.5,0.4234,UNDER
+2026-09-02T23:58:28,2026-2027,3,cagliari vs lecce,2026-09-07,cagliari,lecce,shots,Total,24.5,0.5148,OVER
+2026-09-02T23:58:28,2026-2027,3,udinese vs lazio,2026-09-07,udinese,lazio,corners,Local,4.5,0.492,UNDER
+2026-09-02T23:58:28,2026-2027,4,elche vs sociedad,2026-09-07,elche,sociedad,shots,Total,24.5,0.5307,OVER
+2026-09-02T23:58:28,2026-2027,4,elche vs sociedad,2026-09-07,elche,sociedad,sot,Total,8.5,0.544,OVER
