@@ -167,3 +167,56 @@ def test_euro_seeded_reproducible():
     r1 = EuropeanTournament("champions", elos, calib, rng=np.random.default_rng(123)).simulate(300)
     r2 = EuropeanTournament("champions", elos, calib, rng=np.random.default_rng(123)).simulate(300)
     assert np.allclose(r1["p_champion"].to_numpy(), r2["p_champion"].to_numpy())
+
+
+# ── track-record integrity ──────────────────────────────────────────────────
+def test_prediction_log_is_genuinely_pre_match():
+    """Every logged prediction must pre-date its own kickoff.
+
+    The log was once filled retroactively: 430 rows written 2026-07-23 for
+    matches played 2026-05-23/24, by an engine fitted on those same matches.
+    That made the "Track record en vivo" page a fiction. This pins the property
+    that makes it real -- a prediction is only evidence if it existed first.
+    """
+    import pandas as pd
+
+    log_f = ROOT / "data/processed/logs/predictions_log.csv"
+    if not log_f.exists():
+        pytest.skip("no prediction log")
+    log = pd.read_csv(log_f)
+    if log.empty:
+        pytest.skip("prediction log is empty")
+
+    logged = pd.to_datetime(log["logged_at"], errors="coerce")
+    played = pd.to_datetime(log["fecha"], errors="coerce")
+    assert logged.notna().all(), "rows without a logged_at timestamp"
+    assert played.notna().all(), "rows without a match date"
+
+    # +1 day: `fecha` is date-only, so a prediction made the morning of the
+    # match is legitimately later than that date's midnight.
+    late = log[logged > played + pd.Timedelta(days=1)]
+    assert late.empty, (
+        f"{len(late)} predictions logged after their match "
+        f"(e.g. {late.iloc[0]['partido']} played {late.iloc[0]['fecha']}, "
+        f"logged {late.iloc[0]['logged_at']})")
+
+
+def test_prediction_log_has_no_duplicate_keys():
+    """Re-running the logger must not append duplicates.
+
+    linea="" round-trips through CSV as NaN; a bare astype(str) turned that into
+    "nan" for stored rows and "" for fresh ones, so dedupe missed them and every
+    re-run added one row per fixture.
+    """
+    import pandas as pd
+
+    log_f = ROOT / "data/processed/logs/predictions_log.csv"
+    if not log_f.exists():
+        pytest.skip("no prediction log")
+    log = pd.read_csv(log_f)
+    if log.empty:
+        pytest.skip("prediction log is empty")
+    log["linea"] = log["linea"].fillna("").astype(str).replace("nan", "")
+    keys = ["season", "jornada", "partido", "mercado", "ambito", "linea", "seleccion"]
+    dup = log.duplicated(subset=keys).sum()
+    assert dup == 0, f"{dup} duplicated prediction rows"
