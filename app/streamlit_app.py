@@ -543,7 +543,10 @@ def log_round_predictions(df_round: pd.DataFrame, comp: str, season: str,
     else:
         old = pd.DataFrame()
         comb = new
-    comb["linea"] = comb["linea"].astype(str)
+    # linea="" (the 1X2 rows) round-trips through CSV as NaN; a bare
+    # astype(str) makes that "nan" for stored rows and "" for fresh ones, so
+    # they never dedupe and every re-log appends a duplicate per fixture.
+    comb["linea"] = comb["linea"].fillna("").astype(str).replace("nan", "")
     comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
     comb.to_csv(PRED_LOG, index=False)
     return len(comb) - len(old)
@@ -557,7 +560,10 @@ def append_predictions(rows: list[dict]) -> int:
     PRED_LOG.parent.mkdir(parents=True, exist_ok=True)
     old = pd.read_csv(PRED_LOG) if PRED_LOG.exists() else pd.DataFrame()
     comb = pd.concat([old, new], ignore_index=True) if len(old) else new
-    comb["linea"] = comb["linea"].astype(str)
+    # linea="" (the 1X2 rows) round-trips through CSV as NaN; a bare
+    # astype(str) makes that "nan" for stored rows and "" for fresh ones, so
+    # they never dedupe and every re-log appends a duplicate per fixture.
+    comb["linea"] = comb["linea"].fillna("").astype(str).replace("nan", "")
     comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
     comb.to_csv(PRED_LOG, index=False)
     return len(comb) - len(old)
