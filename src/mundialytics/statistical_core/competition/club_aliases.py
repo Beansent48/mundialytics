@@ -76,3 +76,26 @@ CLUBELO_TO_FD: dict[str, str] = {
     "Nice": "nice", "Lens": "lens", "Brest": "brest", "Rennes": "rennes",
     "Strasbourg": "strasbourg", "Toulouse": "toulouse", "Nantes": "nantes",
 }
+
+# Added 2026-09-03 after auditing the 2026/27 draw against the ClubElo snapshot.
+# Every value below was checked to EXIST in the table -- 53 of the pre-existing
+# entries point at concatenated forms ("ManCity", "UnionBerlin") this snapshot
+# spells with spaces, which silently dropped those matches from the local
+# roll-forward until make_resolver was taught to validate its aliases.
+CLUB_ALIASES.update({
+    # 2026/27 European participants
+    "levski sofia": "Levski",
+    "n.e.c.": "Nijmegen",
+    "nec": "Nijmegen",
+    "pafos": "Paphos",
+    "sint-truidense": "St Truiden",
+    "l. red imps": "Lincoln",
+    "lincoln red imps": "Lincoln",
+    # NOT "Inter" -- fuzzy matching mapped this Andorran club onto Inter Milan
+    "inter escaldes": "Escaldes",
+    # football-data.co.uk abbreviations, needed by the roll-forward
+    "ath madrid": "Atletico",
+    "espanol": "Espanyol",
+    "fc koln": "Koeln",
+    "la coruna": "Depor",
+})
