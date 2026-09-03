@@ -123,9 +123,9 @@ Recorded because negative results are the expensive part of the project:
 
 ## Conclusions
 
-- **The engine works.** Calibrated probabilities across 1X2, totals, BTTS,
-  half-time and player/team props; 78% of the way from an uninformed baseline to
-  the closing line; validated out-of-sample in time throughout.
+- **The club engine works.** Calibrated 1X2 probabilities, 78% of the way from
+  an uninformed baseline to the closing line, validated out-of-sample in time.
+  That is the part with an external yardstick behind it.
 - **As a betting edge, it does not.** That question was asked properly and the
   answer was no, so that line of work is closed.
 - **What it is now:** an analytics engine — simulate a season from the current
@@ -145,31 +145,56 @@ Recorded because negative results are the expensive part of the project:
 
 ## Status
 
-### Built and running
+Split by how strong the evidence is, because "it works" means three different
+things below and collapsing them would be dishonest.
+
+### Measured against an external yardstick
+
+| Area | Evidence |
+|---|---|
+| Club match prediction — 1X2, O/U 2.5 | 10,080 matches against Bet365 closing odds · `scripts/benchmark_vs_bet365.py` |
+| Club 1X2 calibration | reliability diagram over 10,403 walk-forward predictions · `scripts/plot_calibration.py` |
+
+### Built and exercised, but not benchmarked
+
+Each of these runs, returns sensible output, and is covered by the test suite.
+None has been scored against an external reference, so read the ordering they
+produce and not the exact probabilities.
 
 | Area | What works |
 |---|---|
-| Match prediction | 1X2, totals, BTTS, correct score, full score matrix |
 | Half-time markets | HT result, HT over/under, HT-FT |
-| Player props | 6 markets, penalty-taker split |
+| Player props | 6 markets, penalty-taker split, own backtest and Platt calibration |
 | Team props | totals, team-side lines, booking points |
-| League forecasting | title / European places / relegation, from the current table |
-| Tournament simulation | group stage, knockout and Golden Boot by Monte Carlo |
+| League forecasting | title / European places / relegation from the current table |
 | European competitions | Swiss league phase, pre-draw Monte Carlo over ClubElo |
-| Player ratings | position-scoped role system, cross-era baseline, per-season deltas |
-| Individual awards | top-scorer prediction, player profiles, team rankings |
-| Data quality | canonical team registry, entity guardrails, leakage-safe snapshots, audits |
-| Odds layer | ingestion, de-vigging, market mapping, value and staking |
+| Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
+| Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
+| Odds layer | ingestion, de-vigging, market mapping, value, staking |
 | Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
-| Live logging | every prediction written pre-kickoff, settled afterwards |
+| Live logging | every prediction written pre-kickoff and settled afterwards |
 
-The odds layer is dormant by choice: it was built while the betting question was
-still open, and it stays because the benchmark above depends on it.
+The odds layer is dormant by choice: built while the betting question was still
+open, kept because the benchmark above depends on it.
 
 ### In progress
 
 Listed because half-finished work is normal and hiding it helps nobody.
 
+- **National teams** — a second engine on international results from 2010. It
+  *discriminates* well: trained to 2022 and scored on the 1,425 internationals
+  since, RPS 0.1792 against 0.2317 for the base rates. But it is **not
+  calibrated** and must not be read as a probability: goals are over-predicted
+  (mean λ 2.24–2.37 against 1.63–1.16 actual), the home/away asymmetry comes out
+  inverted, and draws land at 15.2% predicted against 22.5% actual. The
+  home-advantage term for the national scope is the first place to look.
+  Reproduce with `python scripts/evaluate_national_engine.py`.
+- **Tournament simulation and top scorer** — the Monte Carlo itself is correct:
+  group stage, knockout and Golden Boot all run and rank plausibly. But every
+  tournament preset is a national competition, so it runs on the engine above
+  and inherits its miscalibration. **Mechanically done, not calibrated** — a
+  top-scorer probability from it is a ranking, not a number to trust. Fixing the
+  national engine fixes this too.
 - **SquadLab** — assemble a squad, real or historical, and simulate its season
   match by match. Simulator, calendar, player-rating layer and the all-time
   squad catalogue work. The calibration mapping player ratings onto team
@@ -178,15 +203,6 @@ Listed because half-finished work is normal and hiding it helps nobody.
   than an attacking one, so closing that gap needs better data rather than a
   better fit. Reasoning in
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
-- **National teams** — a second engine on international results from 2010, and
-  the one the tournament simulator runs on. It *discriminates* well: trained to
-  2022 and scored on the 1,425 internationals since, RPS 0.1792 against 0.2317
-  for the base rates. But it is **not calibrated**, and unlike the club engine it
-  should not be read as a probability: goals are over-predicted (mean λ
-  2.24–2.37 against 1.63–1.16 actual), the home/away asymmetry comes out
-  inverted, and draws land at 15.2% predicted against 22.5% actual. The
-  home-advantage term for the national scope is the first place to look.
-  Measure it with `python scripts/evaluate_national_engine.py`.
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
 - **xG coverage** — ~97% of matches. Bundesliga 2024/25 is the notable hole, an
