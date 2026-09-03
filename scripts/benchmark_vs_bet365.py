@@ -94,6 +94,19 @@ def main() -> None:
     ll_b = float(-np.log(np.clip(book[np.arange(len(y_idx)), y_idx], 1e-9, 1)).mean())
     print(f"  LL    OURS {ll_o:.4f} | BET365 {ll_b:.4f} | gap {ll_o - ll_b:+.4f}")
     print(f"  mean |p_ours - p_book| (home prob): {np.abs(ours[:, 0] - book[:, 0]).mean():.4f}")
+
+    # Uninformed anchors, so the gap to the book has a scale to read it against:
+    # "4% behind Bet365" means nothing until you know what knowing nothing costs.
+    unif = np.full_like(ours, 1 / 3)
+    rates = np.bincount(y_idx, minlength=3) / len(y_idx)
+    base = np.tile(rates, (len(y_idx), 1))
+    r_unif, r_base = rps3(y_idx, unif), rps3(y_idx, base)
+    r_ours, r_book = rps3(y_idx, ours), rps3(y_idx, book)
+    span = r_base - r_book
+    print(f"  baselines: uniform 1/3 {r_unif:.4f} | league base rates {r_base:.4f} "
+          f"({rates[0]:.1%}/{rates[1]:.1%}/{rates[2]:.1%})")
+    print(f"  base rates -> closing line spans {span:.4f} RPS; "
+          f"we cover {(r_base - r_ours) / span:.1%} of it")
     print("\n  per season (RPS ours | book | gap):")
     for s, g in ok.groupby("season"):
         gi = np.where(g.hg > g.ag, 0, np.where(g.hg == g.ag, 1, 2))

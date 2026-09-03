@@ -24,21 +24,33 @@ Measured on **10,080 Big 5 matches, 2020/21–2025/26**, against Bet365's
 **closing** odds (100% closing coverage, proportionally de-vigged). Odds are
 never model inputs — they are only the yardstick.
 
+Where the engine sits, in ranked probability score (lower is better):
+
+| Predictor | RPS (1X2) |
+|---|---|
+| Uniform 1/3 — no information at all | 0.2356 |
+| League base rates — home advantage only | 0.2308 |
+| **This engine** | **0.2025** |
+| Bet365 closing odds | 0.1946 |
+
+Between knowing nothing and the best-informed price on the market there is
+0.0362 of RPS. **The engine covers 78% of it.**
+
+Head to head with the closing line:
+
 | | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
 |---|---|---|---|
 | This engine | 0.2025 | 0.9933 | 0.6806 |
 | Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
 | gap | +0.0080 | +0.0253 | +0.0095 |
 
-Lower is better. The engine does **not** beat the closing line — it sits about
-4% behind it, which is roughly where a good non-commercial model lands. The gap
-holds across every season and every league (worst: Premier League +0.0099;
-best: Bundesliga +0.0060), which is what makes it a ceiling rather than noise.
-That gap was investigated directly (see [What didn't work](#what-didnt-work))
-and the conclusion was to stop treating this as a betting edge and treat it as
-an analytics engine. Publishing the negative result is the point.
+It does **not** beat the closing line — about 4% behind, and the gap holds in
+every season and every league (worst Premier League +0.0099, best Bundesliga
++0.0060), which is what makes it a ceiling rather than noise. Bet365's closing
+price carries injury news, confirmed lineups and the weight of informed money;
+this engine has public data and nothing else.
 
-Reproduce it:
+Reproduce all of it:
 
 ```bash
 python scripts/benchmark_vs_bet365.py
@@ -100,6 +112,28 @@ Recorded because negative results are the expensive part of the project:
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
 
+## Conclusions
+
+- **The engine works.** Calibrated probabilities across 1X2, totals, BTTS,
+  half-time and player/team props; 78% of the way from an uninformed baseline to
+  the closing line; validated out-of-sample in time throughout.
+- **As a betting edge, it does not.** That question was asked properly and the
+  answer was no, so that line of work is closed.
+- **What it is now:** an analytics engine — simulate a season from the current
+  table, price a hypothetical squad, quantify the uncertainty in a fixture —
+  shipped with a measured statement of how far to trust it.
+
+## Known limitations
+
+- Goals are modelled as **independent** Poisson with the Dixon-Coles correction
+  applied to the low-score cells only. That is a patch, not a correlation model;
+  a true bivariate Poisson or a copula would be the next step.
+- **Team level.** The main model sees no lineups and no injuries. An oracle test
+  — handing the model perfect lineup knowledge — capped that loss at ~3%.
+- **One bookmaker.** Bet365 alone. A multi-book consensus, or Pinnacle, would be
+  a harder yardstick.
+- **Big 5 leagues only** for the trained model; no cross-league scale.
+
 ## Running it
 
 ```bash
@@ -135,12 +169,11 @@ tests/                  159 tests green on a clean checkout; 32 more
 docs/                   design docs and full version history
 ```
 
-## Scope and honesty
+## Scope and data
 
-This is a research and analytics project run in **paper mode**. No money has
-been staked on it and it is not intended as a betting product — the benchmark
-above is precisely the reason. Data comes from free public sources
-(football-data.co.uk, StatsBomb Open Data, ClubElo, FBref, Understat).
+Research project, run in **paper mode** — no money has ever been staked on it.
+Everything comes from free public sources: football-data.co.uk (results and
+odds), Understat and StatsBomb Open Data (xG and events), ClubElo, FBref.
 
 Full version-by-version history: [`docs/README_FULL.md`](docs/README_FULL.md)
 and [`CHANGELOG.md`](CHANGELOG.md). Design decisions:
