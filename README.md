@@ -157,6 +157,8 @@ things below and collapsing them would be dishonest.
 | European competitions | held-out season, RPS 0.2104 vs 0.2340 base rates · `scripts/evaluate_european_layer.py` |
 | Player props — 6 markets | 263,551 player-matches, beats naive and position baselines in 5 of 5 temporal folds, ECE 0.0009–0.0130 · `scripts/backtest_player_props.py` |
 | League forecasting | 388 team-seasons forecast from matchday 19; Brier 0.0168 / 0.0425 / 0.0684 for champion / top 4 / relegation against 0.0489 / 0.1637 / 0.1307 base rates · `scripts/evaluate_league_forecast.py` |
+| Half-time markets | 10,403 walk-forward matches; HT 1X2 RPS 0.1968 vs 0.2084 base rates, ECE 0.008–0.013 on the totals · `scripts/evaluate_half_time.py` |
+| Team props — 5 event totals | 8,844 matches; beats the league base rate in 4–5 of 5 folds depending on market, ECE 0.007–0.048 · `scripts/backtest_team_props.py` |
 
 The club rows are the strongest evidence in the project: the yardstick is a
 sharp bookmaker's closing price, not a baseline.
@@ -186,16 +188,30 @@ decimals in all three events, though that part is partly structural — each
 simulated season awards exactly one title, four top-four places and three
 relegations — so read it as a sanity check rather than as calibration evidence.
 
-### Built and exercised, but not benchmarked
+Half-time markets are a stateless transformation of the full-time lambdas — a
+global first-half share, because a per-team share was measured and turned out to
+be noise (r = −0.118). Fed the same walk-forward lambdas the club benchmark
+uses, HT 1X2 lands at RPS 0.1968 against 0.2084 for the base rates, with the
+aggregate split almost exact (0.343/0.399/0.258 predicted, 0.338/0.401/0.262
+actual). The over/under gains are small — 0.005 of log loss — which is what a
+global share should be expected to deliver.
 
-Each of these runs, returns sensible output, and is covered by the test suite.
-None has been scored against an external reference, so read the ordering they
-produce and not the exact probabilities.
+Team props are the weakest of the measured rows and the README should say so.
+They do beat the league base rate, but by less: log-loss deltas run from −0.056
+on fouls down to −0.003 on corners, and the calibration error, 0.007 to 0.048,
+is several times the player-props level. **Corners specifically are marginal** —
+a ~0.004 edge that survives only 4 of 5 folds. Treat those lines as barely
+better than the base rate.
+
+### Infrastructure — exercised and tested, nothing to score
+
+These emit no probabilities of their own, so there is nothing to score the way
+the rows above are scored. They run, and the test suite covers them. Player
+ratings are the one partial exception: they are validated indirectly, through
+the SquadLab calibration reported under In progress.
 
 | Area | What works |
 |---|---|
-| Half-time markets | HT result, HT over/under, HT-FT |
-| Team props | totals, team-side lines, booking points |
 | Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
 | Odds layer | ingestion, de-vigging, market mapping, value, staking |
