@@ -156,6 +156,7 @@ things below and collapsing them would be dishonest.
 | Club 1X2 calibration | reliability diagram over 10,403 walk-forward predictions · `scripts/plot_calibration.py` |
 | European competitions | held-out season, RPS 0.2104 vs 0.2340 base rates · `scripts/evaluate_european_layer.py` |
 | Player props — 6 markets | 263,551 player-matches, beats naive and position baselines in 5 of 5 temporal folds, ECE 0.0009–0.0130 · `scripts/backtest_player_props.py` |
+| League forecasting | 388 team-seasons forecast from matchday 19; Brier 0.0168 / 0.0425 / 0.0684 for champion / top 4 / relegation against 0.0489 / 0.1637 / 0.1307 base rates · `scripts/evaluate_league_forecast.py` |
 
 The club rows are the strongest evidence in the project: the yardstick is a
 sharp bookmaker's closing price, not a baseline.
@@ -175,6 +176,16 @@ markets (anytime scorer, 2+ goals, shots 1.5/2.5, assist, yellow card) beat all
 three in every one of the five temporal folds, and the calibration error stays
 under 1.3% everywhere. This is the best-validated layer after the club engine.
 
+League forecasts are scored by stopping four Big 5 seasons at matchday 19 and
+simulating the rest. Leakage is controlled twice: the engine is fitted only on
+matches played before that season started, and the league state only sees
+results before the cutoff. Against the base rate a table gives you for free
+(1/20 champion, 4/20 top four, 3/20 relegated) the Brier score is 66%, 74% and
+48% lower. Mean predicted probability matches the realised rate to three
+decimals in all three events, though that part is partly structural — each
+simulated season awards exactly one title, four top-four places and three
+relegations — so read it as a sanity check rather than as calibration evidence.
+
 ### Built and exercised, but not benchmarked
 
 Each of these runs, returns sensible output, and is covered by the test suite.
@@ -185,7 +196,6 @@ produce and not the exact probabilities.
 |---|---|
 | Half-time markets | HT result, HT over/under, HT-FT |
 | Team props | totals, team-side lines, booking points |
-| League forecasting | title / European places / relegation from the current table |
 | Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
 | Odds layer | ingestion, de-vigging, market mapping, value, staking |
