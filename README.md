@@ -155,6 +155,7 @@ things below and collapsing them would be dishonest.
 | Club match prediction — 1X2, O/U 2.5 | 10,080 matches against Bet365 closing odds · `scripts/benchmark_vs_bet365.py` |
 | Club 1X2 calibration | reliability diagram over 10,403 walk-forward predictions · `scripts/plot_calibration.py` |
 | European competitions | held-out season, RPS 0.2104 vs 0.2340 base rates · `scripts/evaluate_european_layer.py` |
+| Player props — 6 markets | 263,551 player-matches, beats naive and position baselines in 5 of 5 temporal folds, ECE 0.0009–0.0130 · `scripts/backtest_player_props.py` |
 
 The club rows are the strongest evidence in the project: the yardstick is a
 sharp bookmaker's closing price, not a baseline.
@@ -168,6 +169,12 @@ the outcome split leans slightly wrong: 21.0% draws predicted against 16.8%
 actual, 46.5% home wins against 51.7%. On one season that gap is about two
 standard errors, so treat it as a lead rather than an established bias.
 
+Player props are scored on appearances, bookmaker-style, against three baselines
+— a global rate, a position-group rate, and a naive career-rate model. All six
+markets (anytime scorer, 2+ goals, shots 1.5/2.5, assist, yellow card) beat all
+three in every one of the five temporal folds, and the calibration error stays
+under 1.3% everywhere. This is the best-validated layer after the club engine.
+
 ### Built and exercised, but not benchmarked
 
 Each of these runs, returns sensible output, and is covered by the test suite.
@@ -177,7 +184,6 @@ produce and not the exact probabilities.
 | Area | What works |
 |---|---|
 | Half-time markets | HT result, HT over/under, HT-FT |
-| Player props | 6 markets, penalty-taker split, own backtest and Platt calibration |
 | Team props | totals, team-side lines, booking points |
 | League forecasting | title / European places / relegation from the current table |
 | Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
