@@ -12,18 +12,47 @@ Built and operated solo over ~6 months. It runs a live forward test: every
 prediction is written to a log **before kick-off** and settled against the real
 result afterwards, so the track record cannot be back-fitted.
 
+<!-- Add a screenshot of the running app as docs/img/app.png, then uncomment:
+![The matchday view](docs/img/app.png)
+-->
+
 ## The headline result
 
-| | Ranked Probability Score (1X2) |
-|---|---|
-| This engine | **0.2025** |
-| Bet365 closing odds | 0.1946 |
+Measured on **10,080 Big 5 matches, 2020/21–2025/26**, against Bet365's
+**closing** odds (100% closing coverage, proportionally de-vigged). Odds are
+never model inputs — they are only the yardstick.
+
+| | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
+|---|---|---|---|
+| This engine | 0.2025 | 0.9933 | 0.6806 |
+| Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
+| gap | +0.0080 | +0.0253 | +0.0095 |
 
 Lower is better. The engine does **not** beat the closing line — it sits about
-4% behind it, which is roughly where a good non-commercial model lands. That
-gap was investigated directly (see [Market gap](#what-didnt-work)) and the
-conclusion was to stop treating this as a betting edge and treat it as an
-analytics engine. Publishing the negative result is the point.
+4% behind it, which is roughly where a good non-commercial model lands. The gap
+holds across every season and every league (worst: Premier League +0.0099;
+best: Bundesliga +0.0060), which is what makes it a ceiling rather than noise.
+That gap was investigated directly (see [What didn't work](#what-didnt-work))
+and the conclusion was to stop treating this as a betting edge and treat it as
+an analytics engine. Publishing the negative result is the point.
+
+Reproduce it:
+
+```bash
+python scripts/benchmark_vs_bet365.py
+```
+
+## Is it calibrated?
+
+Being close to the market is one question; saying 30% and being right 30% of
+the time is another. It is:
+
+![1X2 reliability diagram](docs/img/calibration_1x2.png)
+
+Home and away curves track the diagonal across the whole range. Draws never get
+predicted above ~35% — a known property of the sport, not a defect: draws are
+genuinely rarely the favourite. Regenerate with
+`python scripts/plot_calibration.py`.
 
 ## How it works
 
@@ -97,7 +126,7 @@ src/mundialytics/
 ├── data/               schema, entity resolution, provider adapters, QC
 └── simulation/         tournament Monte Carlo
 
-scripts/                ~200 CLI entry points (pipelines, backtests, ops)
+scripts/                ~200 CLI entry points — see scripts/README.md
 tests/                  176 passing tests
 docs/                   design docs and full version history
 ```
