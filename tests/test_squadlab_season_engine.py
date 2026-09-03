@@ -1,7 +1,5 @@
 """Tests for the SquadLab match-by-match season simulation engine
-(src/mundialytics/statistical_core/squadlab/). See
-C:\\Users\\Vicente\\.claude\\plans\\mossy-snuggling-manatee.md for the
-design and the reasoning behind each check.
+(src/mundialytics/statistical_core/squadlab/).
 
 Two checks from the original plan (a per-club calibration ground-truth
 test, and a "Barcelona should land near their real table position"
@@ -14,6 +12,8 @@ range-based and only promises correct ORDERING and a realistic SCALE, not
 per-club precision, so the tests below check exactly that instead.
 """
 from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -32,6 +32,14 @@ from mundialytics.statistical_core.squadlab.player_rating import (
 from mundialytics.statistical_core.squadlab.season_simulator import SeasonOrchestrator
 from mundialytics.statistical_core.squadlab.squad_lambda_model import SquadLambdaModel
 
+# Both fixtures below need the foundation dataset, which is gitignored (large,
+# rebuildable). Skip the module rather than error when it isn't there — CI
+# checks out the code, not the data.
+FOUNDATION = Path(__file__).resolve().parents[1] / "data/processed/foundation_big5_multi_season.csv"
+pytestmark = pytest.mark.skipif(
+    not FOUNDATION.exists(), reason="foundation dataset not built"
+)
+
 POSITION_SLOTS = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
 
 
@@ -44,7 +52,7 @@ def strength_model() -> PlayerStrengthModel:
 
 @pytest.fixture(scope="module")
 def engine(strength_model: PlayerStrengthModel) -> PredictionEngine:
-    df_clubs = pd.read_csv("data/processed/foundation_big5_multi_season.csv")
+    df_clubs = pd.read_csv(FOUNDATION)
     e = PredictionEngine()
     e.fit(df_clubs)
     return e
