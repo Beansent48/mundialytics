@@ -549,7 +549,9 @@ def log_round_predictions(df_round: pd.DataFrame, comp: str, season: str,
     # astype(str) makes that "nan" for stored rows and "" for fresh ones, so
     # they never dedupe and every re-log appends a duplicate per fixture.
     comb["linea"] = comb["linea"].fillna("").astype(str).replace("nan", "")
-    comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
+    comb = comb.drop_duplicates(subset=LOG_KEYS, keep="first")  # NOT + seleccion:
+    # including the pick in the key let the SAME line survive twice once its
+    # probability crossed 0.5 between runs, logging both OVER and UNDER for it.
     comb.to_csv(PRED_LOG, index=False)
     return len(comb) - len(old)
 
@@ -566,7 +568,9 @@ def append_predictions(rows: list[dict]) -> int:
     # astype(str) makes that "nan" for stored rows and "" for fresh ones, so
     # they never dedupe and every re-log appends a duplicate per fixture.
     comb["linea"] = comb["linea"].fillna("").astype(str).replace("nan", "")
-    comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
+    comb = comb.drop_duplicates(subset=LOG_KEYS, keep="first")  # NOT + seleccion:
+    # including the pick in the key let the SAME line survive twice once its
+    # probability crossed 0.5 between runs, logging both OVER and UNDER for it.
     comb.to_csv(PRED_LOG, index=False)
     return len(comb) - len(old)
 

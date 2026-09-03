@@ -220,3 +220,28 @@ def test_prediction_log_has_no_duplicate_keys():
     keys = ["season", "jornada", "partido", "mercado", "ambito", "linea", "seleccion"]
     dup = log.duplicated(subset=keys).sum()
     assert dup == 0, f"{dup} duplicated prediction rows"
+
+
+def test_prediction_log_never_takes_both_sides_of_a_line():
+    """One prediction per (match, market, scope, line) — never OVER and UNDER both.
+
+    The dedup key used to include `seleccion`, so the SAME line survived twice
+    once its probability drifted across 0.5 between runs: 270 rows over 58
+    fixtures ended up logged in both directions. Being scored on both sides of
+    the same bet makes the track record meaningless, so the pick must NOT be
+    part of the identity of a prediction.
+    """
+    import pandas as pd
+
+    log_f = ROOT / "data/processed/logs/predictions_log.csv"
+    if not log_f.exists():
+        pytest.skip("no prediction log")
+    log = pd.read_csv(log_f)
+    if log.empty:
+        pytest.skip("prediction log is empty")
+    log["linea"] = log["linea"].fillna("").astype(str).replace("nan", "")
+    keys = ["season", "jornada", "partido", "mercado", "ambito", "linea"]
+    dup = log[log.duplicated(subset=keys, keep=False)]
+    assert dup.empty, (
+        f"{len(dup)} rows log the same line twice, e.g. "
+        f"{dup.iloc[0]['partido']} {dup.iloc[0]['mercado']} {dup.iloc[0]['linea']}")

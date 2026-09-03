@@ -205,7 +205,9 @@ def main() -> None:
     # the fresh ones, so they never matched and every re-run appended one
     # duplicate per fixture. Normalise the missing value BEFORE stringifying.
     comb["linea"] = comb["linea"].fillna("").astype(str).replace("nan", "")
-    comb = comb.drop_duplicates(subset=LOG_KEYS + ["seleccion"], keep="first")
+    comb = comb.drop_duplicates(subset=LOG_KEYS, keep="first")  # NOT + seleccion:
+    # including the pick in the key let the SAME line survive twice once its
+    # probability crossed 0.5 between runs, logging both OVER and UNDER for it.
     comb.to_csv(PRED_LOG, index=False)
     print(f"\nREGISTRADAS {len(comb) - len(old):,} filas nuevas -> {PRED_LOG} "
           f"(total {len(comb):,})")
