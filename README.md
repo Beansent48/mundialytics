@@ -106,7 +106,7 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
-pytest tests/                    # 176 tests
+pytest tests/                    # 159 pass on a clean checkout
 streamlit run app/streamlit_app.py
 ```
 
@@ -129,7 +129,8 @@ src/mundialytics/
 └── simulation/         tournament Monte Carlo
 
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  176 passing tests
+tests/                  159 tests green on a clean checkout; 32 more
+                        skip unless the local dataset is built
 docs/                   design docs and full version history
 ```
 
