@@ -107,6 +107,46 @@ def main() -> None:
     for r in ch.head(8).itertuples(index=False):
         print(f"    {r.club:22s} {seed[r.club]:7.1f} -> {r.elo:7.1f}  ({r.delta:+6.1f})")
 
+    _report_missing_european(elo, resolver)
+
+
+def _report_missing_european(elo: dict, resolver) -> None:
+    """Name the upcoming European clubs this table cannot rate.
+
+    A ClubElo daily file only lists clubs whose rating period covers that day,
+    so a snapshot can be genuinely incomplete: the 2026-07-23 seed carries 32
+    German clubs (16 first-tier, 16 second) and Bayern is not among them, nor
+    is Stuttgart. That is a hole in the source, not a name-matching problem.
+
+    Imputing them was tried and rejected: anchoring our own EloRater onto the
+    ClubElo scale over the 162 clubs in both gives R^2=0.34, RMSE 125 Elo points
+    (Liverpool off by 241, Man City by 121). At that error a title contender and
+    a mid-table side are indistinguishable, so a fabricated rating would be worse
+    than an honest gap. It resolves itself when the API returns and the seed
+    refreshes; until then, say so out loud.
+    """
+    from mundialytics.statistical_core.competition.european import (
+        FD_SLUG, fetch_season_fixtures)
+    import datetime
+
+    today = pd.Timestamp(datetime.date.today())
+    gaps: dict[str, list[str]] = {}
+    for comp in FD_SLUG:
+        fx = fetch_season_fixtures(ROOT, comp, today.year if today.month >= 7 else today.year - 1)
+        if fx is None or fx.empty:
+            continue
+        teams = sorted(set(fx["Home Team"].astype(str)) | set(fx["Away Team"].astype(str)))
+        miss = [t for t in teams if not (resolver(t) and resolver(t) in elo)]
+        if miss:
+            gaps[comp] = miss
+    if not gaps:
+        print("\n  cobertura europea: todos los participantes tienen rating")
+        return
+    print("\n  SIN RATING para la temporada europea (el snapshot no los trae):")
+    for comp, miss in gaps.items():
+        print(f"    {comp:12s} {len(miss)}: {', '.join(miss)}")
+    print("    -> se resuelve solo cuando la API de ClubElo vuelva y la semilla se refresque")
+
 
 if __name__ == "__main__":
     main()

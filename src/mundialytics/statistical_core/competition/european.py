@@ -23,6 +23,7 @@ Two modes:
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -134,22 +135,45 @@ FD_SLUG = {"champions": "champions-league", "europa": "europa-league",
            "conference": "conference-league"}
 
 
+# ClubElo transliterates rather than strips: Mjällby is "Mjaellby", Nordsjælland
+# is "Nordsjaelland", Köln is "Koeln". Dropping the diacritic instead ("mjllby")
+# matches none of them, so expand these before the generic accent strip.
+_TRANSLIT = {"ä": "ae", "ö": "oe", "ü": "ue", "æ": "ae", "ø": "oe", "å": "aa",
+             "ß": "ss", "Ä": "ae", "Ö": "oe", "Ü": "ue", "Æ": "ae", "Ø": "oe", "Å": "aa"}
+
+
 def normalize_club(s: str) -> str:
-    return re.sub(r"[^a-z]", "", str(s).lower())
+    t = str(s)
+    for k, v in _TRANSLIT.items():
+        t = t.replace(k, v)
+    t = unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z]", "", t.lower())
 
 
 def make_resolver(elo_names) -> "callable":
     """fixturedownload club name -> ClubElo name (aliases + normalized + substring)."""
     from mundialytics.statistical_core.competition.club_aliases import CLUB_ALIASES
-    by_norm = {normalize_club(n): n for n in elo_names}
+    names = set(elo_names)
+    by_norm = {normalize_club(n): n for n in names}
 
     def resolver(name: str):
         low = str(name).lower().strip()
-        if low in CLUB_ALIASES:
-            return CLUB_ALIASES[low]
+        alias = CLUB_ALIASES.get(low)
+        # An alias is only useful if it names a club the table actually has.
+        # 53 of the 121 entries point at concatenated forms ("ManCity",
+        # "UnionBerlin") that this snapshot spells with spaces, and returning
+        # them blind silently dropped those matches from the roll-forward --
+        # Bayern, Man City, Leipzig and Union Berlin among them. Fall through
+        # to matching instead of trusting a dead alias.
+        if alias and alias in names:
+            return alias
         n = normalize_club(name)
         if n in by_norm:
             return by_norm[n]
+        if alias:
+            an = normalize_club(alias)
+            if an in by_norm:
+                return by_norm[an]
         cands = [v for k, v in by_norm.items() if n in k or k in n]
         return cands[0] if len(cands) == 1 else None
 
