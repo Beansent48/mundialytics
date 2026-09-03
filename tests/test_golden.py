@@ -121,3 +121,42 @@ class TestDeployedCalibrations:
         assert c["markets"]["fouls"]["b"] == 0.0
         assert c["markets"]["corners"]["b"] > 0.2
         assert c["markets"]["shots"]["b"] > 0.2
+
+
+# ── date/season sanity ──────────────────────────────────────────────────────
+def test_season_labels_agree_with_their_dates():
+    """A season labelled 2025-2026 must contain 2025/2026 dates, not 1925's.
+
+    Guards a whole class of silly-but-costly bug: two-digit season codes are
+    ambiguous, and a library resolving "2627" to 1926/27 rather than 2026/27
+    returns a full, plausible-looking dataset from the wrong century. That
+    happened on a throwaway FBref probe; it must never reach the foundation.
+    """
+    import pandas as pd
+
+    found = ROOT / "data/processed/foundation_big5_multi_season.csv"
+    if not found.exists():
+        pytest.skip("foundation not built")
+    df = pd.read_csv(found, usecols=["season", "date"], low_memory=False)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "season"])
+
+    bad = []
+    for season, g in df.groupby("season"):
+        y1, y2 = (int(p) for p in str(season).split("-"))
+        years = set(g["date"].dt.year)
+        if not years <= {y1, y2}:
+            bad.append(f"{season}: {sorted(years - {y1, y2})}")
+    assert not bad, f"season labels disagree with their dates -> {bad[:3]}"
+
+
+def test_no_impossible_dates_in_the_foundation():
+    import pandas as pd
+
+    found = ROOT / "data/processed/foundation_big5_multi_season.csv"
+    if not found.exists():
+        pytest.skip("foundation not built")
+    d = pd.to_datetime(pd.read_csv(found, usecols=["date"])["date"], errors="coerce")
+    assert d.notna().all(), "unparseable dates"
+    assert d.min() >= pd.Timestamp("1990-01-01"), f"date from the wrong century: {d.min()}"
+    assert d.max() <= pd.Timestamp.now() + pd.Timedelta(days=7), f"future date: {d.max()}"
