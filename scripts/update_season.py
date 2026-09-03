@@ -229,6 +229,14 @@ def main() -> None:
             old.unlink(missing_ok=True)
         print(f"    prediction log backed up -> {dest.name} ({len(backups)} kept, max 10)", flush=True)
 
+    # Rebuild the locally-advanced ClubElo before logging, so European
+    # predictions use ratings carried forward to today's results rather than a
+    # snapshot frozen whenever the API last worked (it was 502 for three days
+    # running with the Champions League five days out). See
+    # src/mundialytics/ratings/clubelo_local.py.
+    run_step("7c/8 local ClubElo roll-forward",
+             [PY, "scripts/build_local_clubelo.py"])
+
     if not args.skip_logging:
         # Log the upcoming round BEFORE it is played. This is what makes the
         # track record real: predictions must be written pre-kickoff, by an
