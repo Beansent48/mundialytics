@@ -5,12 +5,14 @@
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
-BTTS, half-time markets, team and player props — trained on 20+ seasons of the
-Big 5 European leagues and benchmarked against bookmaker closing odds.
+BTTS, half-time markets and player/team props, fitted on **45,938 matches across
+27 seasons (2000/01–2026/27)** of the Big 5 European leagues — England, Spain,
+Italy, Germany, France — and benchmarked against bookmaker closing odds.
 
-Built and operated solo. It runs a live forward test: every
-prediction is written to a log **before kick-off** and settled against the real
-result afterwards, so the track record cannot be back-fitted.
+Built and operated solo. It runs a live forward test: every prediction is written
+to [`predictions_log.csv`](data/processed/logs/predictions_log.csv) **before
+kick-off** and settled against the real result afterwards, so the track record
+cannot be back-fitted.
 
 ![Match view](docs/img/app.png)
 
@@ -65,7 +67,9 @@ the time is another. It is:
 
 Home and away curves track the diagonal across the whole range. Draws never get
 predicted above ~35% — a known property of the sport, not a defect: draws are
-genuinely rarely the favourite. Regenerate with
+genuinely rarely the favourite. The figure scores all 10,403 walk-forward
+predictions, so its RPS reads 0.2029; the benchmark above uses the 10,080 of them
+that have Bet365 odds attached. Regenerate with
 `python scripts/plot_calibration.py`.
 
 ## How it works
@@ -84,9 +88,9 @@ ClubElo / FBref      ─┘      (entity resolution)        │          │
   fitted jointly by maximum likelihood with exponential time-decay weights, plus
   the Dixon-Coles low-score correction and an internal Elo prior.
 - **Form** — rolling team features computed strictly walk-forward: at every
-  point in the backtest, only matches already played are visible. This was the
-  single biggest accuracy gain in the project (RPS 0.2066 → 0.2027, improving in
-  5 of 5 temporal folds).
+  point in the backtest, only matches already played are visible. The single
+  biggest accuracy gain in the project — roughly 0.004 of RPS, improving in 5 of
+  5 temporal folds.
 - **xG** — a dedicated model predicts each side's expected-goal *rate* rather
   than using raw historical xG as a feature; the raw feature turned out to be
   largely redundant with the strength estimates.
@@ -134,6 +138,37 @@ Recorded because negative results are the expensive part of the project:
   a harder yardstick.
 - **Big 5 leagues only** for the trained model; no cross-league scale.
 
+## Status
+
+Built, validated, and running:
+
+| Area | What works |
+|---|---|
+| Match prediction | 1X2, totals, BTTS, correct score, full score matrix |
+| Half-time markets | HT result, HT over/under, HT-FT |
+| Player props | 6 markets, penalty-taker split |
+| Team props | totals, team-side lines, booking points |
+| League forecasting | title / European places / relegation, from the current table |
+| European competitions | Swiss league phase, pre-draw Monte Carlo |
+| Live logging | every prediction written pre-kickoff, settled afterwards |
+
+Still in progress — listed because half-finished work is normal and hiding it
+helps nobody:
+
+- **SquadLab** — assemble a squad and simulate its season match by match. The
+  simulator, calendar and player-rating layer work. The calibration that maps
+  player ratings onto team strength is precise on the attack axis
+  (R² = 0.68) but only modest on defence (R² = 0.35): the public stats available
+  support a narrower defensive spread than an attacking one, so closing that gap
+  needs better data rather than a better fit. Documented in
+  [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
+- **Competition layer** — leagues are done. Other tournament formats, and props
+  aggregated over a whole competition, are not.
+- **xG coverage** — ~97% of matches. Bundesliga 2024/25 is the notable hole, an
+  upstream scraper bug rather than a missing source.
+- **SquadLab special cards** (award and memorable-match player variants) need
+  season-split player data that isn't built yet.
+
 ## Running it
 
 ```bash
@@ -145,9 +180,9 @@ pytest tests/                    # 159 pass on a clean checkout
 streamlit run app/streamlit_app.py
 ```
 
-The Streamlit app has three sections: match predictions, competition
-forecasting (league tables and European tournaments by Monte Carlo), and
-SquadLab, a sandbox for simulating hypothetical or historical squads.
+The Streamlit app has eight pages: matchday, single-competition simulation,
+league forecasting from the current table, player and team props, European
+competitions, results and track record, individual awards, and SquadLab.
 
 ## Layout
 
@@ -182,4 +217,4 @@ and [`CHANGELOG.md`](CHANGELOG.md). Design decisions:
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
