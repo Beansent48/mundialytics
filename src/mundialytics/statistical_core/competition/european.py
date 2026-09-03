@@ -108,8 +108,18 @@ def fetch_current_elo(root: str | Path, date_str: str | None = None) -> dict[str
             cache.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(cache, index=False)
         except Exception:
-            # network down / API hiccup -> fall back to the most recent cached
-            # snapshot so the whole European layer still works offline
+            # network down / API hiccup. Prefer the LOCALLY ADVANCED table over
+            # the raw snapshot: same seed, but carried forward with the results
+            # we hold (see ratings/clubelo_local.py). The API returned 502 for
+            # three days running with the Champions League five days away, and
+            # the newest snapshot was six weeks old — a rating frozen before the
+            # transfer window is not an honest input.
+            local = Path(root) / "data/processed/clubelo_local.csv"
+            if local.exists():
+                loc = pd.read_csv(local).dropna(subset=["club", "elo"])
+                if len(loc):
+                    return dict(zip(loc["club"].astype(str), loc["elo"].astype(float)))
+            # otherwise the most recent cached snapshot, so the layer still works
             snaps = sorted(daily_dir.glob("*.csv")) if daily_dir.exists() else []
             if not snaps:
                 raise
