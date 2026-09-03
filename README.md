@@ -7,7 +7,8 @@
 A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
 BTTS, half-time markets and player/team props, fitted on **45,938 matches across
 27 seasons (2000/01–2026/27)** of the Big 5 European leagues — England, Spain,
-Italy, Germany, France — and benchmarked against bookmaker closing odds.
+Italy, Germany, France — and benchmarked against bookmaker closing odds. A
+second, separate engine covers national teams on international results from 2010.
 
 Built and operated solo. It runs a live forward test: every prediction is written
 to [`predictions_log.csv`](data/processed/logs/predictions_log.csv) **before
@@ -95,6 +96,9 @@ ClubElo / FBref      ─┘      (entity resolution)        │          │
   than using raw historical xG as a feature; the raw feature turned out to be
   largely redundant with the strength estimates.
 - **Calibration** — Platt scaling per market, validated on held-out seasons.
+- **Scopes** — club and national-team models are fitted and used separately.
+  Strength parameters are not comparable across contexts, so mixing them would
+  quietly corrupt both.
 - **Markets** — the score matrix is derived once and every market (totals,
   BTTS, half-time, correct score) is read off it, so they stay mutually
   consistent by construction.
@@ -140,7 +144,7 @@ Recorded because negative results are the expensive part of the project:
 
 ## Status
 
-Built, validated, and running:
+### Built and running
 
 | Area | What works |
 |---|---|
@@ -149,18 +153,30 @@ Built, validated, and running:
 | Player props | 6 markets, penalty-taker split |
 | Team props | totals, team-side lines, booking points |
 | League forecasting | title / European places / relegation, from the current table |
-| European competitions | Swiss league phase, pre-draw Monte Carlo |
+| Tournament simulation | group stage, knockout and Golden Boot by Monte Carlo |
+| European competitions | Swiss league phase, pre-draw Monte Carlo over ClubElo |
+| National teams | separate engine on international results, 2010 onwards |
+| Player ratings | position-scoped role system, cross-era baseline, per-season deltas |
+| Individual awards | top-scorer prediction, player profiles, team rankings |
+| Data quality | canonical team registry, entity guardrails, leakage-safe snapshots, audits |
+| Odds layer | ingestion, de-vigging, market mapping, value and staking |
+| Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
 | Live logging | every prediction written pre-kickoff, settled afterwards |
 
-Still in progress — listed because half-finished work is normal and hiding it
-helps nobody:
+The odds layer is dormant by choice: it was built while the betting question was
+still open, and it stays because the benchmark above depends on it.
 
-- **SquadLab** — assemble a squad and simulate its season match by match. The
-  simulator, calendar and player-rating layer work. The calibration that maps
-  player ratings onto team strength is precise on the attack axis
-  (R² = 0.68) but only modest on defence (R² = 0.35): the public stats available
-  support a narrower defensive spread than an attacking one, so closing that gap
-  needs better data rather than a better fit. Documented in
+### In progress
+
+Listed because half-finished work is normal and hiding it helps nobody.
+
+- **SquadLab** — assemble a squad, real or historical, and simulate its season
+  match by match. Simulator, calendar, player-rating layer and the all-time
+  squad catalogue work. The calibration mapping player ratings onto team
+  strength is precise on attack (R² = 0.68) and only modest on defence
+  (R² = 0.35): the public stats available support a narrower defensive spread
+  than an attacking one, so closing that gap needs better data rather than a
+  better fit. Reasoning in
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
@@ -188,14 +204,20 @@ competitions, results and track record, individual awards, and SquadLab.
 
 ```
 src/mundialytics/
-├── statistical_core/   probability engine, simulator, dynamic lines
-├── models/             goals, events, minutes
+├── statistical_core/   probability engine, simulator, squadlab, competitions
+├── models/             goals, events, minutes, xG rate
 ├── features/           rolling team features, player baselines
-├── ratings/            internal Elo
+├── ratings/            internal Elo, local ClubElo
 ├── evaluation/         RPS, Brier, log loss, walk-forward backtesting
-├── betting/            odds, value, staking, market mapping
 ├── props/              player and team prop markets
-├── data/               schema, entity resolution, provider adapters, QC
+├── betting/            odds, de-vig, value, staking, market mapping
+├── data/               canonical schema, provider adapters, loaders
+├── data_quality/       team registry, entity guardrails, leakage-safe snapshots
+├── identity/           player and team identity resolution across providers
+├── enrichment/         xG, ClubElo and advanced-stat joins
+├── providers/          external API configuration
+├── matchday/           per-matchday orchestration
+├── reports/            daily picks, paper ledger, match reports
 └── simulation/         tournament Monte Carlo
 
 scripts/                ~200 CLI entry points — see scripts/README.md
