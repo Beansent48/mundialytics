@@ -8,7 +8,8 @@ A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
 BTTS, half-time markets and player/team props, fitted on **45,938 matches across
 27 seasons (2000/01–2026/27)** of the Big 5 European leagues — England, Spain,
 Italy, Germany, France — and benchmarked against bookmaker closing odds. A
-second, separate engine covers national teams on international results from 2010.
+second engine covers national teams; it ranks well but is not yet calibrated
+(see [Status](#status)).
 
 Built and operated solo. It runs a live forward test: every prediction is written
 to [`predictions_log.csv`](data/processed/logs/predictions_log.csv) **before
@@ -155,7 +156,6 @@ Recorded because negative results are the expensive part of the project:
 | League forecasting | title / European places / relegation, from the current table |
 | Tournament simulation | group stage, knockout and Golden Boot by Monte Carlo |
 | European competitions | Swiss league phase, pre-draw Monte Carlo over ClubElo |
-| National teams | separate engine on international results, 2010 onwards |
 | Player ratings | position-scoped role system, cross-era baseline, per-season deltas |
 | Individual awards | top-scorer prediction, player profiles, team rankings |
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots, audits |
@@ -178,6 +178,15 @@ Listed because half-finished work is normal and hiding it helps nobody.
   than an attacking one, so closing that gap needs better data rather than a
   better fit. Reasoning in
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
+- **National teams** — a second engine on international results from 2010, and
+  the one the tournament simulator runs on. It *discriminates* well: trained to
+  2022 and scored on the 1,425 internationals since, RPS 0.1792 against 0.2317
+  for the base rates. But it is **not calibrated**, and unlike the club engine it
+  should not be read as a probability: goals are over-predicted (mean λ
+  2.24–2.37 against 1.63–1.16 actual), the home/away asymmetry comes out
+  inverted, and draws land at 15.2% predicted against 22.5% actual. The
+  home-advantage term for the national scope is the first place to look.
+  Measure it with `python scripts/evaluate_national_engine.py`.
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
 - **xG coverage** — ~97% of matches. Bundesliga 2024/25 is the notable hole, an
