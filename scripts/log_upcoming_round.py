@@ -28,6 +28,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -76,11 +77,107 @@ def fetch_fixtures(year: int) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
+def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
+                  stamp: str, season: str) -> list[dict]:
+    """Pre-kickoff predictions for upcoming UCL/UEL/UECL ties.
+
+    The European layer prices off ClubElo rather than the domestic engine — it
+    is the only cross-league scale, and its Elo->goals constants were calibrated
+    on 1,000 real European matches. Ratings come from the locally-advanced table
+    (ratings/clubelo_local.py), so this keeps working while the ClubElo API is
+    down.
+
+    Clubs the rating table cannot cover are skipped, never guessed.
+    """
+    from mundialytics.statistical_core.competition.european import (
+        FD_SLUG, fetch_current_elo, fetch_season_fixtures, load_calibration,
+        load_event_calibration, make_resolver, predict_euro_events)
+    from mundialytics.statistical_core.distributions import scoreline_distribution
+
+    try:
+        elo = fetch_current_elo(ROOT)
+        calib = load_calibration(ROOT)
+    except Exception as exc:
+        print(f"  europa no disponible: {str(exc)[:70]}")
+        return []
+    ev_calib = load_event_calibration(ROOT)
+    resolver = make_resolver(elo.keys())
+    htm = HalfTimeModel()
+    c, hfa, b = calib["c"], calib["hfa"], calib["b"]
+
+    rows: list[dict] = []
+    for comp, slug in FD_SLUG.items():
+        fx = fetch_season_fixtures(ROOT, comp, year)
+        if fx is None or fx.empty:
+            continue
+        fx = fx.copy()
+        fx["date"] = pd.to_datetime(fx["Date"], dayfirst=True, errors="coerce")
+        fx["played"] = fx["Result"].astype(str).str.contains(r"\d+\s*-\s*\d+", regex=True)
+        up = fx[(~fx.played) & (fx.date > now) & (fx.date <= horizon)]
+        if up.empty:
+            continue
+        skipped = []
+        n_before = len(rows)
+        for _, row in up.iterrows():
+            # explicit column names: fixturedownload's headers contain spaces,
+            # so itertuples renames them positionally (_1, _2, ...) and the
+            # indices shift whenever the file's layout changes
+            h_raw, a_raw = row["Home Team"], row["Away Team"]
+            rnd = row.get("Round Number")
+            r_date = row["date"]
+            h, a = resolver(str(h_raw)), resolver(str(a_raw))
+            if not h or not a or h not in elo or a not in elo:
+                skipped.append(f"{h_raw} vs {a_raw}")
+                continue
+            d400 = (elo[h] - elo[a]) / 400.0
+            lam_h = float(np.exp(c + hfa + b * d400))
+            lam_a = float(np.exp(c - b * d400))
+            dist = scoreline_distribution(lam_h, lam_a, max_goals=10, normalize=True)
+            label = f"{str(h_raw).lower()} vs {str(a_raw).lower()}"
+            base = dict(logged_at=stamp, season=season,
+                        jornada=int(rnd) if pd.notna(rnd) else 0,
+                        partido=label, fecha=f"{r_date:%Y-%m-%d}",
+                        home=str(h_raw).lower(), away=str(a_raw).lower())
+            trio = {"1": dist.p_home_win, "X": dist.p_draw, "2": dist.p_away_win}
+            pick = max(trio, key=trio.get)
+            rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
+                         "prob": round(trio[pick], 4), "seleccion": pick})
+            # scoreline_distribution exposes no p_over_25 attribute; ask its own
+            # total-goals helper rather than inventing a number
+            p_o25 = float(dist.total_goals_probability(2.5, "over"))
+            rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": 2.5,
+                         "prob": round(p_o25, 4),
+                         "seleccion": "OVER" if p_o25 >= 0.5 else "UNDER"})
+            paths = htm.predict_ht_ft(lam_h, lam_a)
+            bestp = max(paths, key=paths.get)
+            rows.append({**base, "mercado": "ht_ft", "ambito": "Total", "linea": "",
+                         "prob": round(paths[bestp], 4), "seleccion": bestp})
+            ht = htm.predict_half_time(lam_h, lam_a)
+            ht_trio = {"1": ht["p_home"], "X": ht["p_draw"], "2": ht["p_away"]}
+            hp = max(ht_trio, key=ht_trio.get)
+            rows.append({**base, "mercado": "ht_1x2", "ambito": "Total", "linea": "",
+                         "prob": round(ht_trio[hp], 4), "seleccion": hp})
+            for ln, pr in ht["over"].items():
+                rows.append({**base, "mercado": "ht_goles", "ambito": "Total", "linea": ln,
+                             "prob": round(float(pr), 4),
+                             "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+            if ev_calib:
+                for mk, dd in predict_euro_events(elo[h], elo[a], ev_calib).items():
+                    for ln, pr in dd.get("over", {}).items():
+                        rows.append({**base, "mercado": mk, "ambito": "Total", "linea": ln,
+                                     "prob": round(float(pr), 4),
+                                     "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+        print(f"  {comp:12s} {len(up):3d} partidos -> {len(rows)-n_before} predicciones"
+              + (f"  (omitidos {len(skipped)}: {skipped[:3]})" if skipped else ""))
+    return rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=8, help="ventana hacia delante")
     ap.add_argument("--dry-run", action="store_true", help="no escribe el log")
     ap.add_argument("--year", type=int, default=None, help="temporada fixturedownload")
+    ap.add_argument("--skip-europe", action="store_true", help="solo ligas domesticas")
     args = ap.parse_args()
 
     now = pd.Timestamp.now()
@@ -183,6 +280,10 @@ def main() -> None:
                     rows.append({**base, "mercado": mk, "ambito": amb, "linea": ln,
                                  "prob": round(float(pr), 4),
                                  "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+
+    if not args.skip_europe:
+        print("\ncompeticiones europeas:")
+        rows += european_rows(year, horizon, now, stamp, season)
 
     if skipped:
         print(f"\nomitidos (equipo sin historial): {len(skipped)} -> {skipped[:6]}")
