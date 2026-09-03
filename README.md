@@ -8,7 +8,7 @@ A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
 BTTS, half-time markets, team and player props — trained on 20+ seasons of the
 Big 5 European leagues and benchmarked against bookmaker closing odds.
 
-Built and operated solo over ~6 months. It runs a live forward test: every
+Built and operated solo. It runs a live forward test: every
 prediction is written to a log **before kick-off** and settled against the real
 result afterwards, so the track record cannot be back-fitted.
 
