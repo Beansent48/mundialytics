@@ -68,8 +68,9 @@ ClubElo / FBref      ─┘      (entity resolution)        │          │
                               xG-rate predictor ────────┘          └─ player props
 ```
 
-- **Goal model** — bivariate Poisson over attack/defence strengths estimated by
-  maximum likelihood, with an internal Elo prior.
+- **Goal model** — Dixon-Coles double Poisson: per-team attack/defence strengths
+  fitted jointly by maximum likelihood with exponential time-decay weights, plus
+  the Dixon-Coles low-score correction and an internal Elo prior.
 - **Form** — rolling team features computed strictly walk-forward: at every
   point in the backtest, only matches already played are visible. This was the
   single biggest accuracy gain in the project (RPS 0.2066 → 0.2027, improving in
