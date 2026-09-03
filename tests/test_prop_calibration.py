@@ -8,6 +8,8 @@ import pandas as pd
 
 from mundialytics.evaluation.prop_calibration import run_market_calibration_search, incoherence_checks
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_prop_calibration_search_improves_biased_market():
     rng = np.random.default_rng(7)
@@ -51,12 +53,13 @@ def test_incoherence_checks_flags_bad_probabilities():
 
 
 def test_calibrate_player_props_cli(tmp_path):
-    src = Path("outputs/v09_sample/props/player_props_backtest_predictions.csv")
+    src = ROOT / "tests/fixtures/player_props_backtest_predictions.csv"
     assert src.exists()
     out_dir = tmp_path / "calibration"
     subprocess.run(
-        [sys.executable, "scripts/calibrate_player_props.py", "--predictions", str(src), "--out-dir", str(out_dir), "--min-market-rows", "10"],
-        check=True,
+        [sys.executable, str(ROOT / "scripts/calibrate_player_props.py"),
+         "--predictions", str(src), "--out-dir", str(out_dir), "--min-market-rows", "10"],
+        check=True, cwd=ROOT,
     )
     assert (out_dir / "calibration_search_results.csv").exists()
     assert (out_dir / "calibration_report.json").exists()
