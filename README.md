@@ -12,9 +12,11 @@ Built and operated solo over ~6 months. It runs a live forward test: every
 prediction is written to a log **before kick-off** and settled against the real
 result afterwards, so the track record cannot be back-fitted.
 
-<!-- Add a screenshot of the running app as docs/img/app.png, then uncomment:
-![The matchday view](docs/img/app.png)
--->
+![Match view](docs/img/app.png)
+
+*One fixture: 1X2, the full score matrix, goal markets and expected team stats —
+every one of them read off the same score distribution, so they cannot disagree
+with each other.*
 
 ## The headline result
 
