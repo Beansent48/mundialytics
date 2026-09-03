@@ -148,12 +148,25 @@ Recorded because negative results are the expensive part of the project:
 Split by how strong the evidence is, because "it works" means three different
 things below and collapsing them would be dishonest.
 
-### Measured against an external yardstick
+### Measured out-of-sample
 
 | Area | Evidence |
 |---|---|
 | Club match prediction — 1X2, O/U 2.5 | 10,080 matches against Bet365 closing odds · `scripts/benchmark_vs_bet365.py` |
 | Club 1X2 calibration | reliability diagram over 10,403 walk-forward predictions · `scripts/plot_calibration.py` |
+| European competitions | held-out season, RPS 0.2104 vs 0.2340 base rates · `scripts/evaluate_european_layer.py` |
+
+The club rows are the strongest evidence in the project: the yardstick is a
+sharp bookmaker's closing price, not a baseline.
+
+The European layer is an Elo→λ model, and its shipped calibration was fitted on
+most of the results available, so scoring it on those would be in-sample. The
+script refits on the earlier seasons only and scores the held-out one (358
+Champions and Europa League matches, priced with point-in-time ClubElo).
+Goal levels come out close — mean λ 1.70–1.30 against 1.81–1.31 actual — while
+the outcome split leans slightly wrong: 21.0% draws predicted against 16.8%
+actual, 46.5% home wins against 51.7%. On one season that gap is about two
+standard errors, so treat it as a lead rather than an established bias.
 
 ### Built and exercised, but not benchmarked
 
@@ -167,7 +180,6 @@ produce and not the exact probabilities.
 | Player props | 6 markets, penalty-taker split, own backtest and Platt calibration |
 | Team props | totals, team-side lines, booking points |
 | League forecasting | title / European places / relegation from the current table |
-| European competitions | Swiss league phase, pre-draw Monte Carlo over ClubElo |
 | Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
 | Odds layer | ingestion, de-vigging, market mapping, value, staking |
@@ -205,6 +217,9 @@ Listed because half-finished work is normal and hiding it helps nobody.
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
+- **European name resolution** — only 80% of UEFA fixtures resolve to a ClubElo
+  club, so a fifth of European matches cannot be priced at all. Alias gaps,
+  mostly transliteration, and the single most mechanical fix on this list.
 - **xG coverage** — ~97% of matches. Bundesliga 2024/25 is the notable hole, an
   upstream scraper bug rather than a missing source.
 - **SquadLab special cards** (award and memorable-match player variants) need
