@@ -69,16 +69,51 @@ def goal_diff_multiplier(margin: int) -> float:
     return 1.75 + (m - 3) / 8.0
 
 
+TEAMS_DIR = "data/external/clubelo/teams"
+
+
+def _latest_from_histories(root: str | Path) -> dict[str, float]:
+    """Each club's most recent rating from its own ClubElo history file.
+
+    A daily snapshot only lists clubs whose rating period covers that exact day,
+    so it can be genuinely incomplete: the 2026-07-23 file carries 32 German
+    clubs (16 first-tier, 16 second) and **Bayern is not among them**, nor is
+    Stuttgart, though the Bundesliga has 18 up top. The 220 per-club history
+    files do have them (Bayern 2000.9, valid from 2026-05-21), so they fill the
+    holes with real ClubElo values instead of guesses.
+    """
+    d = Path(root) / TEAMS_DIR
+    if not d.exists():
+        return {}
+    out: dict[str, float] = {}
+    for f in sorted(d.glob("*.csv")):
+        try:
+            h = pd.read_csv(f, usecols=["Club", "Elo", "To"]).dropna(subset=["Club", "Elo"])
+        except Exception:
+            continue
+        if h.empty:
+            continue
+        row = h.sort_values("To").iloc[-1]
+        out[str(row["Club"])] = float(row["Elo"])
+    return out
+
+
 def load_seed(root: str | Path) -> tuple[dict[str, float], str]:
-    """Newest cached ClubElo snapshot -> {club: elo}, plus its date."""
+    """Newest cached ClubElo snapshot -> {club: elo}, plus its date.
+
+    Gaps in the snapshot are filled from the per-club histories; the snapshot
+    always wins where both have a club, since it is the more recent of the two.
+    """
     d = Path(root) / SEED_DIR
     snaps = sorted(d.glob("*.csv")) if d.exists() else []
     if not snaps:
         raise FileNotFoundError(f"no ClubElo snapshot under {d}")
     latest = snaps[-1]
-    df = pd.read_csv(latest)
-    df = df.dropna(subset=["Club", "Elo"])
-    return (dict(zip(df["Club"].astype(str), df["Elo"].astype(float))), latest.stem)
+    df = pd.read_csv(latest).dropna(subset=["Club", "Elo"])
+    seed = dict(zip(df["Club"].astype(str), df["Elo"].astype(float)))
+    for club, elo in _latest_from_histories(root).items():
+        seed.setdefault(club, elo)
+    return seed, latest.stem
 
 
 def roll_forward(seed: dict[str, float], matches: pd.DataFrame,
