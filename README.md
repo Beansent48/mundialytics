@@ -119,6 +119,16 @@ Recorded because negative results are the expensive part of the project:
   estimates. Only the derived xG-*rate* predictor added signal.
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
+- **Shrinking per-competition parameters.** `AttackDefenseModel` fits μ and home
+  advantage independently per competition, so small ones over-fit: held out on
+  internationals since 2023, the AFC Asian Cup over-predicted both sides by
+  ~0.9 goals off ~115 training matches. Credibility-shrinking each competition
+  toward the sample-weighted pooled fit does exactly what it was designed to do
+  — Asian Cup bias +0.92 → +0.05 — and looked like a small RPS gain on that one
+  window. Across five temporal folds it does not survive: one better, two worse,
+  two tied, with the away-goal bias improving in two and worsening in two. Kept
+  as an opt-in `competition_shrinkage_k`, defaulting to 0, and not deployed.
+  Sweep it with `scripts/experiment_competition_shrinkage.py`.
 
 ## Conclusions
 

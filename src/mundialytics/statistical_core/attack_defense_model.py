@@ -80,6 +80,7 @@ class AttackDefenseModel:
         home_advantage_init: float = 0.10,
         min_matches: int = 5,
         l2_reg: float = 0.01,
+        competition_shrinkage_k: float = 0.0,
         target: str = "goals",
     ):
         # target="goals" -> fit attack/defense to actual goals (classic Maher/DC).
@@ -98,6 +99,11 @@ class AttackDefenseModel:
         self.goal_cap = float(goal_cap)
         self.home_advantage_init = float(home_advantage_init)
         self.min_matches = int(min_matches)
+        # Credibility weight for per-competition mu / home advantage:
+        # w = n / (n + k), so k=0 keeps each competition's own fit untouched
+        # (the historical behaviour) and larger k pulls small competitions
+        # toward the pooled values. See scripts/experiment_competition_shrinkage.py.
+        self.competition_shrinkage_k = float(competition_shrinkage_k)
         self.l2_reg = float(l2_reg)
 
         self.teams_: list[str] = []
@@ -339,6 +345,7 @@ class AttackDefenseModel:
         mean_ha_factor = float(np.mean(home_advs)) if home_advs else math.exp(self.home_advantage_init)
         self.home_adv_ = math.log(max(mean_ha_factor, 0.5))
         self.mu_ = math.log(max(self.global_goal_mean_, 0.1))
+        self._shrink_competition_params(per_league_results)
 
         self.fit_result_ = {
             "success": all(v["success"] for v in per_league_results.values()),
@@ -351,6 +358,46 @@ class AttackDefenseModel:
             "model": "attack_defense_mle_v3_per_league",
         }
         return self
+
+    def _shrink_competition_params(self, per_league: dict[str, Any]) -> None:
+        """Pull small competitions' mu and home advantage toward the pooled fit.
+
+        Every competition is fitted independently, so one with a hundred-odd
+        matches estimates its own goal level and home advantage from very little
+        and over-fits: measured on held-out internationals, the AFC Asian Cup
+        over-predicted both sides by ~0.9 goals off ~115 training matches, while
+        World Cup qualification (3,400) was accurate. Credibility-weight each
+        competition toward the pooled value by its own sample size.
+
+        No-op at k = 0, which is the default.
+        """
+        k = self.competition_shrinkage_k
+        if k <= 0 or not per_league:
+            return
+        # Shrink toward the sample-weighted mean of the fitted competition
+        # intercepts, NOT toward self.mu_. self.mu_ is log(mean goals per side),
+        # which is not on the same scale as a fitted intercept: using it dragged
+        # the large, well-calibrated competitions upward and made the aggregate
+        # bias worse even while it fixed the small ones.
+        idxs, ns = [], []
+        for comp, info in per_league.items():
+            idx = self.league_index_.get(comp)
+            if idx is not None:
+                idxs.append(idx)
+                ns.append(float(info.get("n_matches", 0) or 0))
+        if not idxs or sum(ns) <= 0:
+            return
+        wts = np.array(ns) / float(sum(ns))
+        pooled_mu = float(np.dot(wts, self.league_effect_[idxs]))
+        pooled_ha = float(np.dot(wts, self.league_home_adv_[idxs]))
+        for comp, info in per_league.items():
+            idx = self.league_index_.get(comp)
+            if idx is None:
+                continue
+            n = float(info.get("n_matches", 0) or 0)
+            w = n / (n + k)
+            self.league_effect_[idx] = w * self.league_effect_[idx] + (1 - w) * pooled_mu
+            self.league_home_adv_[idx] = w * self.league_home_adv_[idx] + (1 - w) * pooled_ha
 
     def team_params(self) -> pd.DataFrame:
         """Return a sorted DataFrame of per-team parameters.
