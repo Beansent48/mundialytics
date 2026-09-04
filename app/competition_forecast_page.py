@@ -136,6 +136,15 @@ def render() -> None:
     comp = c1.selectbox("Competición", LEAGUES, key="cf_comp")
     season = c2.selectbox("Temporada", _seasons_for(comp), key="cf_season")
 
+    # A season still being played cannot be read from the bundle: build_bundle
+    # cuts a COMPLETED season at a series of matchdays, and the foundation holds
+    # only played matches, so every cut on an in-progress season leaves nothing
+    # to forecast. LaLiga 2026/27 came back as "matchday 37 of 38" after three
+    # rounds. The live path takes the real remaining calendar instead.
+    if _is_in_progress(comp, season):
+        _render_live(comp, season)
+        return
+
     bundle = fc.load_bundle(comp, season, cache_dir=CACHE_DIR)
 
     if bundle is None or bundle.get("meta", {}).get("schema") != fc.BUNDLE_SCHEMA:
@@ -181,3 +190,68 @@ def render() -> None:
         _upcoming_fixtures(snap)
     with tabs[4]:
         _render_standings(snap)
+
+
+def _is_in_progress(comp: str, season: str) -> bool:
+    """True when this league-season still has matches to play.
+
+    Judged on the calendar rather than the clock: a season is in progress when
+    the foundation holds fewer matches than a full double round-robin.
+    """
+    df = _foundation()
+    sub = df[(df["competition"] == comp) & (df["season"] == season)]
+    if sub.empty:
+        return False
+    teams = len(set(sub["home_team"]) | set(sub["away_team"]))
+    return len(sub) < teams * (teams - 1)
+
+
+def _render_live(comp: str, season: str) -> None:
+    """Forecast an in-progress season from where it actually stands."""
+    key = f"cf_live_{comp}_{season}"
+    snap = st.session_state.get(key)
+    if snap is None:
+        st.info(f"**{comp} {season}** está en juego. El pronóstico se calcula desde el punto "
+                "real de la temporada, con el calendario que queda por jugar.")
+        if not st.button("🔄 Calcular pronóstico en vivo", type="primary"):
+            return
+        with st.spinner(f"Simulando lo que queda de {comp} {season}…"):
+            try:
+                snap = fc.build_live_snapshot(comp, season, _foundation(),
+                                              n_sims=10000, root=ROOT)
+            except ValueError as exc:
+                st.warning(str(exc))
+                return
+            except Exception as exc:
+                st.warning(f"No se pudo calcular: {str(exc)[:140]}")
+                return
+        st.session_state[key] = snap
+
+    tp = pd.DataFrame(snap["forecast"]["team_probs"])
+    st.caption(f"Jornada **{snap['matchday']}** · quedan **{snap['n_remaining']}** partidos "
+               "· 10.000 simulaciones desde el estado real")
+
+    stand = pd.DataFrame(snap["standings"])
+    if not stand.empty:
+        lead = stand.iloc[0]
+        c = st.columns(3)
+        c[0].metric("Líder", _title(lead["team"]), f"{int(lead['points'])} pts")
+        if "p_top4" in tp.columns:
+            fav = tp.nlargest(1, "p_top4").iloc[0]
+            c[1].metric("Más probable en Champions", _title(fav["team"]), f"{fav['p_top4']:.0%}")
+        if "p_relegation" in tp.columns:
+            rel = tp.nlargest(1, "p_relegation").iloc[0]
+            c[2].metric("Más probable descenso", _title(rel["team"]), f"{rel['p_relegation']:.0%}")
+
+    show = tp.copy()
+    if "team" in show.columns:
+        show["team"] = show["team"].map(_title)
+    pct = [c for c in show.columns if c.startswith("p_")]
+    for c in pct:
+        show[c] = (show[c] * 100).round(1)
+    ren = {"team": "Equipo", "expected_points": "Puntos esp.", "p_top4": "Champions",
+           "p_relegation": "Descenso", "p_title": "Título"}
+    show = show.rename(columns={k: v for k, v in ren.items() if k in show.columns})
+    st.dataframe(show, hide_index=True, use_container_width=True,
+                 column_config={ren[c]: st.column_config.NumberColumn(format="%.1f%%")
+                                for c in pct if c in ren})
