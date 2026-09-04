@@ -613,6 +613,43 @@ EVENT_COLS = {"corners": ("home_corners", "away_corners"),
               "sot": ("home_sot", "away_sot")}
 
 
+PLAYER_MARKETS_ES = {"jug_goleador": "Goleador", "jug_2goles": "2+ goles",
+                     "jug_tiros": "Tiros jugador", "jug_asistencia": "Asistencia",
+                     "jug_amarilla": "Amarilla jugador"}
+
+
+@st.cache_data(show_spinner=False)
+def _player_match_actuals() -> pd.DataFrame:
+    """(fecha, equipo, jugador) -> what the player actually did.
+
+    Built from the Understat player-match file, keyed onto football-data team
+    names via understat_team_match_xg. Without this the jug_* markets would be
+    logged and never scored -- exactly the booking-points failure, where a market
+    was priced and served for months while the evaluator silently skipped it.
+    """
+    pm = ROOT / "data/external/advanced/understat/understat_player_match.csv"
+    tm = ROOT / "data/processed/understat_team_match_xg.csv"
+    if not pm.exists() or not tm.exists():
+        return pd.DataFrame()
+    try:
+        p = pd.read_csv(pm, usecols=["game_id", "team", "player", "minutes",
+                                     "goals", "shots", "assists", "yellow_cards"],
+                        low_memory=False)
+        g = pd.read_csv(tm, usecols=["provider_match_id", "date", "home_team",
+                                     "away_team", "home_team_fd", "away_team_fd"])
+    except Exception:
+        return pd.DataFrame()
+    g = g.rename(columns={"provider_match_id": "game_id"}).drop_duplicates("game_id")
+    g["fecha"] = pd.to_datetime(g["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    m = p.merge(g, on="game_id", how="inner")
+    # the player file names teams the Understat way; the log uses football-data's
+    m["equipo"] = np.where(m["team"] == m["home_team"], m["home_team_fd"],
+                           np.where(m["team"] == m["away_team"], m["away_team_fd"], None))
+    m = m.dropna(subset=["equipo", "fecha"])
+    return m[["fecha", "equipo", "player", "minutes", "goals", "shots",
+              "assists", "yellow_cards"]]
+
+
 @st.cache_data(show_spinner=False)
 def pending_predictions() -> pd.DataFrame:
     """Logged predictions whose match has not been played yet.
@@ -655,6 +692,14 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
                 .merge(eu_res, on=["home", "away", "fecha"], how="left"))
         m.loc[miss, "home_goals"] = fill["home_goals"].to_numpy()
         m.loc[miss, "away_goals"] = fill["away_goals"].to_numpy()
+    # player markets settle from a different source (Understat player-match),
+    # so they are joined separately rather than through the team-level frame
+    pl = _player_match_actuals()
+    plk = {}
+    if len(pl):
+        for r in pl.itertuples(index=False):
+            plk[(r.fecha, str(r.equipo), str(r.player))] = r
+
     m = m.dropna(subset=["home_goals"])
     out = []
     for r in m.itertuples(index=False):
@@ -673,6 +718,23 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
             actual = {"Total": hv + av, "Local": hv, "Visitante": av}[r.ambito]
             over = actual > float(r.linea)
             hit = float(over == (r.seleccion == "OVER"))
+        elif mk.startswith("jug_"):
+            # `ambito` carries the player for these markets
+            act = (plk.get((r.fecha, str(r.home), str(r.ambito)))
+                   or plk.get((r.fecha, str(r.away), str(r.ambito))))
+            if act is None:
+                continue          # player data for this match not published yet
+            if mk == "jug_goleador":
+                happened = act.goals >= 1
+            elif mk == "jug_2goles":
+                happened = act.goals >= 2
+            elif mk == "jug_tiros":
+                happened = act.shots > float(r.linea)
+            elif mk == "jug_asistencia":
+                happened = act.assists >= 1
+            else:
+                happened = act.yellow_cards >= 1
+            hit = float(bool(happened) == (r.seleccion == "SI"))
         elif mk in ("ht_1x2", "ht_goles", "ht_ft"):
             # Half-time markets, settled from home/away_goals_ht (in the
             # foundation since 2026-09-03). See props/half_time.py.
@@ -710,7 +772,7 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
         # UNDER pick is its complement.
         pick_one = mk in ("1X2", "ht_1x2", "ht_ft")
         conf = r.prob if pick_one else max(r.prob, 1 - r.prob)
-        out.append({"mercado": MARKET_ES.get(mk, mk), "ambito": r.ambito,
+        out.append({"mercado": {**MARKET_ES, **PLAYER_MARKETS_ES}.get(mk, mk), "ambito": r.ambito,
                     "lado": r.seleccion, "confianza": conf, "acierto": hit,
                     "jornada": r.jornada, "season": r.season})
     return pd.DataFrame(out)

@@ -77,6 +77,80 @@ def fetch_fixtures(year: int) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
+# Player markets: the model's column -> (log market name, line). `ambito` carries
+# the player, since the log's schema has no column of its own for one.
+# Deliberately NOT every market the model exposes. Settled over 120 real
+# matches, the average confidence per market was: 2+ goals 99.3%, shots 2.5
+# 91.0%, assist 93.9%, scorer 92.4%, yellow 86.0%, shots 1.5 82.2%. The high
+# ones are almost all "NO" — a given player usually does not score — so being
+# right 99% of the time on "he will not score twice" is the base rate, not skill.
+# Logging those would lift the track record's headline accuracy from ~65% to
+# ~80% without the model being any better, which is padding. Kept: the four
+# where the call carries information; dropped: 2+ goals and shots over 2.5.
+PLAYER_MARKETS = {
+    "p_anytime_scorer":  ("jug_goleador", ""),
+    "p_shots_over_1_5":  ("jug_tiros", 1.5),
+    "p_assist":          ("jug_asistencia", ""),
+    "p_yellow":          ("jug_amarilla", ""),
+}
+# Only the likely XI. The model returns 26-29 players a side, and `exp_min` is
+# minutes-when-featuring rather than minutes-per-fixture spread over the squad:
+# 22 Barcelona players clear 45, which cannot be a starting eleven. Ranking by
+# exp_min and taking the top 11 is the honest read of "who probably starts".
+PLAYERS_PER_TEAM = 11
+
+
+def _load_player_props():
+    """The cached PlayerPropsModel — fitted on Understat history already on disk.
+
+    Worth being precise about the dependency: PREDICTING needs no new data (the
+    model is already fitted on 620k player-match rows). Only SETTLEMENT needs the
+    current season's player stats, which Understat has not published yet. That is
+    a temporary gap in a source that has published every season since 2014 — not
+    the booking-points situation, where the data sat on disk for years and the
+    evaluator simply never read it.
+    """
+    import glob
+
+    import joblib
+    files = sorted(glob.glob(str(ROOT / "data/processed/cache/props_models_*.joblib")))
+    if not files:
+        print("  player props: sin cache (arranca la app una vez para generarla)")
+        return None
+    try:
+        _, pp = joblib.load(files[-1])
+    except Exception as exc:
+        print(f"  player props: cache ilegible ({str(exc)[:50]})")
+        return None
+    if pp is None:
+        print("  player props: el cache no trae modelo de jugador")
+    else:
+        print("  player props: OK")
+    return pp
+
+
+def player_rows(pp, base: dict, team: str, lam: float) -> list[dict]:
+    """Per-player markets for one side of a fixture."""
+    try:
+        out = pp.team_players_for_lambda(team, float(lam))
+    except Exception:
+        return []
+    if out is None or out.empty:
+        return []
+    out = out.nlargest(PLAYERS_PER_TEAM, "exp_min")
+    rows = []
+    for r in out.itertuples(index=False):
+        for col, (mk, line) in PLAYER_MARKETS.items():
+            p = getattr(r, col, None)
+            if p is None or pd.isna(p):
+                continue
+            p = float(p)
+            rows.append({**base, "mercado": mk, "ambito": str(r.player),
+                         "linea": line, "prob": round(p, 4),
+                         "seleccion": "SI" if p >= 0.5 else "NO"})
+    return rows
+
+
 def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
                   stamp: str, season: str) -> list[dict]:
     """Pre-kickoff predictions for upcoming UCL/UEL/UECL ties.
@@ -178,6 +252,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="no escribe el log")
     ap.add_argument("--year", type=int, default=None, help="temporada fixturedownload")
     ap.add_argument("--skip-europe", action="store_true", help="solo ligas domesticas")
+    ap.add_argument("--skip-players", action="store_true", help="omitir props de jugador")
     args = ap.parse_args()
 
     now = pd.Timestamp.now()
@@ -221,6 +296,10 @@ def main() -> None:
         print("  team props: OK")
     except Exception as exc:
         print(f"  team props no disponibles ({str(exc)[:60]}) — solo 1X2/Goles")
+
+    pp = None
+    if not args.skip_players:
+        pp = _load_player_props()
 
     season = f"{year}-{year+1}"
     stamp = now.isoformat(timespec="seconds")
@@ -268,6 +347,9 @@ def main() -> None:
                                      lam_home=p.lambda_home, lam_away=p.lambda_away)
         except Exception:
             continue
+        if pp is not None:
+            rows += player_rows(pp, base, r.home, p.lambda_home)
+            rows += player_rows(pp, base, r.away, p.lambda_away)
         for mk, dd in fxp.items():
             if not isinstance(dd, dict):
                 continue
