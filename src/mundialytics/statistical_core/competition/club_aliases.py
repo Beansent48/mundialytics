@@ -99,3 +99,23 @@ CLUB_ALIASES.update({
     "fc koln": "Koeln",
     "la coruna": "Depor",
 })
+
+# ESPN spells UEFA participants differently again ("Heart of Midlothian" where
+# ClubElo has "Hearts"), so the European layer needed its own pass when the
+# fixture source moved off fixturedownload. Two clubs stay deliberately absent:
+# ClubElo carries no Slavia Praha at all -- it has Sparta and Bohemians, and
+# "Slavia Sofia" is a different club in a different country -- and no Torreense.
+# An unrated club is handled; a club wearing another club's rating is not.
+CLUB_ALIASES.update({
+    "heart of midlothian": "Hearts",
+    "stade rennais": "Rennes",
+    "agf": "Aarhus",                     # Aarhus Gymnastikforening
+    "hapoel be'er": "Beer-Sheva",        # Hapoel Be'er Sheva
+    "union st.-gilloise": "St Gillis",   # NOT Union Berlin, which fuzzy-matches
+    "inter d'escaldes": "Escaldes",      # NOT "Atletic Club Escaldes", another Andorran side
+    "riga fc": "FK Riga",
+    # ClubElo writes the plain "o" here, so our transliteration (which correctly
+    # turns Koeln's oe) produces "koeben" and matches nothing
+    "f.c. københavn": "FC Kobenhavn",
+    "fc københavn": "FC Kobenhavn",
+})
