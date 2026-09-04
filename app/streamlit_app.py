@@ -738,6 +738,18 @@ def _fbref_player_actuals() -> pd.DataFrame:
     return d.dropna(subset=["fecha", "equipo", "player"])[keep]
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def _uefa_fixtures(competition: str, year: int):
+    """UEFA fixtures for the European page, cached for half an hour.
+
+    fetch_season_fixtures now asks ESPN before falling back to disk, so without
+    this every Streamlit rerun -- a dropdown, a slider -- would make a network
+    call. The TTL is what keeps results arriving during a matchday.
+    """
+    from mundialytics.statistical_core.competition.european import fetch_season_fixtures
+    return fetch_season_fixtures(ROOT, competition, year)
+
+
 @st.cache_data(show_spinner=False)
 def pending_predictions() -> pd.DataFrame:
     """Logged predictions whose match has not been played yet.
@@ -1434,7 +1446,7 @@ elif page == "🏆  Europa":
     season_yr = st.selectbox("Temporada", yrs_eu, key="eu_season",
                              format_func=lambda y: f"{y}/{str(y + 1)[2:]}"
                              + ("  (próxima)" if y == auto_yr and y not in cached_yrs else ""))
-    raw_eu = fetch_season_fixtures(ROOT, comp_eu, season_yr)
+    raw_eu = _uefa_fixtures(comp_eu, season_yr)
 
     league_eu, ko_eu = (None, None)
     if raw_eu is not None:
