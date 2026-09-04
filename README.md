@@ -154,7 +154,7 @@ things below and collapsing them would be dishonest.
 | Club match prediction — 1X2, O/U 2.5 | 10,080 matches against Bet365 closing odds · `scripts/benchmark_vs_bet365.py` |
 | Club 1X2 calibration | reliability diagram over 10,403 walk-forward predictions · `scripts/plot_calibration.py` |
 | European competitions | held-out season, RPS 0.2044 vs 0.2327 base rates · `scripts/evaluate_european_layer.py` |
-| National teams | 1,425 internationals held out, RPS 0.1725 vs 0.2317 base rates, λ 1.63–1.28 against 1.63–1.16 actual · `scripts/evaluate_national_engine.py` |
+| National teams | 1,425 internationals held out, RPS 0.1725 vs 0.2317 base rates; calibrated on the bulk, with a small-sample competition bias · `scripts/evaluate_national_engine.py` |
 | Player props — 6 markets | 263,551 player-matches, beats naive and position baselines in 5 of 5 temporal folds, ECE 0.0009–0.0130 · `scripts/backtest_player_props.py` |
 | League forecasting | 388 team-seasons forecast from matchday 19; Brier 0.0168 / 0.0425 / 0.0684 for champion / top 4 / relegation against 0.0489 / 0.1637 / 0.1307 base rates · `scripts/evaluate_league_forecast.py` |
 | Half-time markets | 10,403 walk-forward matches; HT 1X2 RPS 0.1968 vs 0.2084 base rates, ECE 0.008–0.013 on the totals · `scripts/evaluate_half_time.py` |
@@ -199,9 +199,21 @@ actual). The over/under gains are small — 0.005 of log loss — which is what 
 global share should be expected to deliver.
 
 The national engine is scored the same way: trained to 2022, held out on the
-1,425 internationals since. RPS 0.1725 against 0.2317 for the base rates, with
-mean λ 1.63–1.28 against 1.63–1.16 actual and draws at 23.0% predicted against
-22.5% actual. One caveat that cost a day to learn: `AttackDefenseModel` keeps a
+1,425 internationals since. RPS 0.1725 against 0.2317 for the base rates, draws
+at 23.0% predicted against 22.5% actual, and home λ exact at 1.63.
+
+Away λ is not: 1.28 predicted against 1.16 actual, roughly four standard errors,
+so a real bias rather than noise. Decomposing it is more useful than the
+aggregate. World Cup qualification, 63% of the sample, is well calibrated
+(−0.13 home, −0.01 away), as is the Nations League. The bias concentrates in
+competitions with small fits: Euro qualification runs +0.31/+0.42 and the AFC
+Asian Cup +0.92/+0.94 on 51 matches. `AttackDefenseModel` fits μ and home
+advantage *per competition*, and the Asian Cup gets about 115 training matches
+to do it with — small-sample over-fitting, not a broken home-advantage term.
+Shrinking those per-competition parameters toward the global fit is the obvious
+next experiment.
+
+One caveat that cost a day to learn: `AttackDefenseModel` keeps a
 per-competition μ and home advantage, and an unrecognised competition name falls
 silently to index 0. Price an international as `"unknown"` and it is scored with
 AFC Asian Cup parameters — λ near 3.0 and the home/away order inverted. Always
