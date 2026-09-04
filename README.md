@@ -154,7 +154,7 @@ things below and collapsing them would be dishonest.
 |---|---|
 | Club match prediction — 1X2, O/U 2.5 | 10,080 matches against Bet365 closing odds · `scripts/benchmark_vs_bet365.py` |
 | Club 1X2 calibration | reliability diagram over 10,403 walk-forward predictions · `scripts/plot_calibration.py` |
-| European competitions | held-out season, RPS 0.2104 vs 0.2340 base rates · `scripts/evaluate_european_layer.py` |
+| European competitions | held-out season, RPS 0.2044 vs 0.2327 base rates · `scripts/evaluate_european_layer.py` |
 | Player props — 6 markets | 263,551 player-matches, beats naive and position baselines in 5 of 5 temporal folds, ECE 0.0009–0.0130 · `scripts/backtest_player_props.py` |
 | League forecasting | 388 team-seasons forecast from matchday 19; Brier 0.0168 / 0.0425 / 0.0684 for champion / top 4 / relegation against 0.0489 / 0.1637 / 0.1307 base rates · `scripts/evaluate_league_forecast.py` |
 | Half-time markets | 10,403 walk-forward matches; HT 1X2 RPS 0.1968 vs 0.2084 base rates, ECE 0.008–0.013 on the totals · `scripts/evaluate_half_time.py` |
@@ -165,12 +165,14 @@ sharp bookmaker's closing price, not a baseline.
 
 The European layer is an Elo→λ model, and its shipped calibration was fitted on
 most of the results available, so scoring it on those would be in-sample. The
-script refits on the earlier seasons only and scores the held-out one (358
+script refits on the earlier seasons only and scores the held-out one (410
 Champions and Europa League matches, priced with point-in-time ClubElo).
-Goal levels come out close — mean λ 1.70–1.30 against 1.81–1.31 actual — while
-the outcome split leans slightly wrong: 21.0% draws predicted against 16.8%
-actual, 46.5% home wins against 51.7%. On one season that gap is about two
-standard errors, so treat it as a lead rather than an established bias.
+Goal levels come out close — mean λ 1.72–1.31 against 1.82–1.33 actual — while
+the outcome split leans slightly wrong: 20.8% draws predicted against 17.6%
+actual, 46.6% home wins against 51.5%. On one season that gap is about two
+standard errors, so treat it as a lead rather than an established bias. It is
+also measured on the 84% of fixtures both of whose clubs have a ClubElo history
+— see [European fixture coverage](docs/EUROPEAN_ELO_COVERAGE.md).
 
 Player props are scored on appearances, bookmaker-style, against three baselines
 — a global rate, a position-group rate, and a naive career-rate model. All six
@@ -249,9 +251,14 @@ Listed because half-finished work is normal and hiding it helps nobody.
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
-- **European name resolution** — only 80% of UEFA fixtures resolve to a ClubElo
-  club, so a fifth of European matches cannot be priced at all. Alias gaps,
-  mostly transliteration, and the single most mechanical fix on this list.
+- **European fixture coverage** — 84% of UEFA fixtures have a ClubElo history
+  for both clubs; the other 16% cannot be priced. This is **not** an alias
+  problem, which was the first guess and was wrong: none of the 46 blocked clubs
+  is present on disk under any spelling. They are champions of smaller
+  associations — Cyprus, Israel, Bulgaria, Czechia, the Nordics — whose Elo
+  histories were never downloaded, and the ClubElo API is currently returning
+  502. Audit it with `python scripts/audit_european_elo_coverage.py`; full
+  write-up in [`docs/EUROPEAN_ELO_COVERAGE.md`](docs/EUROPEAN_ELO_COVERAGE.md).
 - **xG coverage** — ~97% of matches. Bundesliga 2024/25 is the notable hole, an
   upstream scraper bug rather than a missing source.
 - **SquadLab special cards** (award and memorable-match player variants) need
