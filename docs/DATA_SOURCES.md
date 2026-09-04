@@ -39,7 +39,7 @@ El proyecto no depende de una única fuente. La idea reproducible es convertir c
 ### 5. Football-Data.co.uk
 
 - Uso: resultados, odds históricas y algunas estadísticas de clubes en CSV/Excel.
-- Ideal para: backtesting de apuestas, 1X2, over/under, handicap, modelos de clubes.
+- Ideal para: modelos de clubes y backtesting de mercados 1X2, over/under y hándicap.
 - Limitación: no es rico para props de jugador.
 - Encaja en: `matches` y `odds`.
 
@@ -62,7 +62,7 @@ El proyecto no depende de una única fuente. La idea reproducible es convertir c
 - Ideal para: generar `fixtures` futuros si el repositorio está actualizado o para demos reproducibles.
 - Limitación: no tiene eventos avanzados ni cuotas.
 
-## Apuestas/cuotas
+## Cuotas
 
 ### 9. Betfair API
 
@@ -73,7 +73,7 @@ El proyecto no depende de una única fuente. La idea reproducible es convertir c
 ### 10. Football-Data.co.uk para odds históricas
 
 - Uso: odds históricas de clubes.
-- Ideal para: backtesting de value betting en mercados de partido.
+- Ideal para: comparar las probabilidades del modelo con el precio de mercado.
 - Limitación: no cubre player props al nivel necesario para Sustituto+.
 
 ## Recomendación práctica

@@ -1,6 +1,6 @@
 # Data source strategy for Mundialytics
 
-The betting engine needs more than final scores. The practical data stack is layered by use case.
+The prediction engine needs more than final scores. The practical data stack is layered by use case.
 
 
 ## Data foundation rule
