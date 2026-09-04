@@ -36,7 +36,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from mundialytics.statistical_core.competition.european import (  # noqa: E402
     make_resolver,
-    normalize_club,
 )
 
 UEFA = ROOT / "data/external/uefa"
@@ -130,7 +129,9 @@ def main() -> None:
 
     keep = []
     for r in m.itertuples():
-        h, a = resolve(normalize_club(r.home)), resolve(normalize_club(r.away))
+        # pass the raw name: make_resolver normalises internally, and
+        # pre-normalising strips the spaces its alias table is keyed on
+        h, a = resolve(r.home), resolve(r.away)
         if not h or not a:
             continue
         eh, ea = elo_on(hist, h, r.date), elo_on(hist, a, r.date)
