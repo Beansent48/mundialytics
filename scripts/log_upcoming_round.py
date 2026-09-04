@@ -131,10 +131,17 @@ def fetch_fixtures(year: int) -> pd.DataFrame:
 # where the call carries information; dropped: 2+ goals and shots over 2.5.
 PLAYER_MARKETS = {
     "p_anytime_scorer":  ("jug_goleador", ""),
+    "p_2plus_goals":     ("jug_2goles", ""),
     "p_shots_over_1_5":  ("jug_tiros", 1.5),
+    "p_shots_over_2_5":  ("jug_tiros", 2.5),
     "p_assist":          ("jug_asistencia", ""),
     "p_yellow":          ("jug_amarilla", ""),
 }
+# 2+ goals and shots over 2.5 were priced by the model and understood by the
+# evaluator -- which already carries a `jug_2goles` branch and a "2+ goles"
+# label -- but the logger never wrote them, so neither had ever been measured.
+# That is the booking-points shape again: a number computed, shown, and never
+# scored. Settling all five leagues is what made writing them worth anything.
 # Only the likely XI. The model returns 26-29 players a side, and `exp_min` is
 # minutes-when-featuring rather than minutes-per-fixture spread over the squad:
 # 22 Barcelona players clear 45, which cannot be a starting eleven. Ranking by
