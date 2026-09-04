@@ -142,6 +142,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--season", default=None, help="Season code like 2627 (auto from date)")
     ap.add_argument("--skip-understat", action="store_true", help="Skip the network-heavy Understat pulls")
+    ap.add_argument("--skip-players", action="store_true",
+                    help="Skip the slow FBref player-stats download")
     ap.add_argument("--skip-logging", action="store_true",
                     help="Skip logging predictions for the upcoming round")
     ap.add_argument("--full", action="store_true",
@@ -228,6 +230,17 @@ def main() -> None:
         for old in backups[:-10]:
             old.unlink(missing_ok=True)
         print(f"    prediction log backed up -> {dest.name} ({len(backups)} kept, max 10)", flush=True)
+
+    # Per-player results for the current season. Understat had not published
+    # 2026/27 while the player markets were already being logged, which would
+    # have left them unsettleable -- the booking-points failure again. FBref has
+    # it, so settlement no longer waits on one provider. Slow (it drives Chrome),
+    # which is why it lives in the weekly refresh and not in the logger.
+    if not args.skip_players:
+        run_step("7d/8 FBref player stats (settles the jug_* markets)",
+                 [PY, "scripts/fetch_fbref_player_stats.py"])
+    else:
+        print("\n=== 7d/8 FBref player stats SKIPPED ===", flush=True)
 
     # Rebuild the locally-advanced ClubElo before logging, so European
     # predictions use ratings carried forward to today's results rather than a

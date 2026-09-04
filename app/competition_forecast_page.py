@@ -208,6 +208,11 @@ def _is_in_progress(comp: str, season: str) -> bool:
 
 def _render_live(comp: str, season: str) -> None:
     """Forecast an in-progress season from where it actually stands."""
+    # imported here, not taken from the caller: `fc` is a local import inside
+    # render(), so referencing it from this function raised NameError and the
+    # button reported "no se pudo calcular" for every league
+    from mundialytics.statistical_core.competition import forecast_cache as fc
+
     key = f"cf_live_{comp}_{season}"
     snap = st.session_state.get(key)
     if snap is None:
