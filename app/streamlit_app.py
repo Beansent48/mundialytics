@@ -23,6 +23,7 @@ from mundialytics.statistical_core.engine_utils import (
     get_h2h, get_form, h2h_summary, bracket_html,
 )
 from mundialytics.ratings.elo import EloRater, EloConfig
+from mundialytics.identity.normalization import canonical_team_name
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Mundialytics", page_icon="⚽", layout="wide",
@@ -646,8 +647,54 @@ def _player_match_actuals() -> pd.DataFrame:
     m["equipo"] = np.where(m["team"] == m["home_team"], m["home_team_fd"],
                            np.where(m["team"] == m["away_team"], m["away_team_fd"], None))
     m = m.dropna(subset=["equipo", "fecha"])
-    return m[["fecha", "equipo", "player", "minutes", "goals", "shots",
-              "assists", "yellow_cards"]]
+    out = m[["fecha", "equipo", "player", "minutes", "goals", "shots",
+             "assists", "yellow_cards"]]
+    fb = _fbref_player_actuals()
+    if len(fb):
+        # FBref appended, Understat kept first: Understat is the source the model
+        # was fitted on, so its naming matches better where both have a match.
+        out = pd.concat([out, fb], ignore_index=True)
+        out = out.drop_duplicates(subset=["fecha", "equipo", "player"], keep="first")
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def _fbref_player_actuals() -> pd.DataFrame:
+    """Current-season player results from FBref, for seasons Understat lacks.
+
+    Understat had not published 2026/27 while the player markets were already
+    being logged, which would have left them unsettleable -- the booking-points
+    failure again. FBref does have it (scripts/fetch_fbref_player_stats.py), so
+    settlement no longer depends on a single provider publishing on time.
+    """
+    f = ROOT / "data/external/advanced/fbref/fbref_player_match_current.csv"
+    if not f.exists():
+        return pd.DataFrame()
+    try:
+        d = pd.read_csv(f, low_memory=False)
+    except Exception:
+        return pd.DataFrame()
+    if d.empty or "date" not in d.columns:
+        return pd.DataFrame()
+    d["fecha"] = pd.to_datetime(d["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    # FBref writes full club names ("Manchester United") where the foundation
+    # carries football-data's short forms ("man united"), so the normaliser alone
+    # resolved only 10 of 20 Premier League sides. The curated alias file closes
+    # the rest; without it half the settlements would silently find no player.
+    alias_f = ROOT / "data/curated/fixture_team_aliases.csv"
+    alias = {}
+    if alias_f.exists():
+        try:
+            alias = dict(pd.read_csv(alias_f).itertuples(index=False, name=None))
+        except Exception:
+            alias = {}
+    d["equipo"] = [alias.get(t, canonical_team_name(t)) for t in d["team"].astype(str)]
+    keep = ["fecha", "equipo", "player", "minutes", "goals", "shots",
+            "assists", "yellow_cards"]
+    for c in keep:
+        if c not in d.columns:
+            d[c] = pd.NA
+    return d.dropna(subset=["fecha", "equipo", "player"])[keep]
 
 
 @st.cache_data(show_spinner=False)
