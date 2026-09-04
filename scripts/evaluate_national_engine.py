@@ -57,7 +57,11 @@ def main() -> None:
     rows = []
     for r in test.itertuples():
         try:
-            p = eng.predict_match(r.home_team, r.away_team, neutral=False)
+            # pass the real competition: AttackDefenseModel keeps a per-competition
+            # mu and home advantage, and an unknown name silently falls to index 0
+            p = eng.predict_match(r.home_team, r.away_team,
+                                  competition=str(getattr(r, "competition", "") or ""),
+                                  neutral=bool(getattr(r, "neutral", 0) or 0))
         except Exception:
             continue
         rows.append((p.p_home_win, p.p_draw, p.p_away_win,
