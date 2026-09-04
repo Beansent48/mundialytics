@@ -234,7 +234,11 @@ Para mercados de umbral:
 P(final) = P(original) + (1 - P(original)) × P(entra_sustituto) × P(sustituto_cumple)
 ```
 
-## Capa 7: value betting
+## Capa 7: value betting (inactiva)
+
+Capa construida mientras la pregunta de apuestas seguía abierta. Se conserva
+porque el benchmark contra el cierre de Bet365 depende del de-vigging, pero no
+forma parte del producto: el motor es una herramienta de analítica. Ver `README.md`.
 
 ```text
 implied_probability = 1 / decimal_odds

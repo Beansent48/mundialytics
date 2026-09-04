@@ -225,7 +225,7 @@ docs/NEXT_VALIDATION_STEPS.md
 ## Suggested Opening Prompt For Future Chats
 
 ```text
-This ZIP is the current state of mundialytics_betting_engine.
+This ZIP is the current state of Mundialytics.
 Please read docs/PROJECT_CONTINUITY.md, docs/DECISIONS.md and docs/V0491_ENTITY_SQUAD_GUARDRAILS_SPEC.md first.
 Do not implement broad changes yet.
 Reconstruct the current state and recommend the smallest safe next step.
