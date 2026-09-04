@@ -86,12 +86,25 @@ def check_foundation_integrity(prev_rows: int | None) -> None:
           f"xG cov {df.get('home_xg', pd.Series(dtype=float)).notna().mean():.0%}", flush=True)
 
 
-def run_step(name: str, cmd: list[str]) -> bool:
+def run_step(name: str, cmd: list[str], optional: bool = False,
+             timeout: int | None = None) -> bool:
+    """Run one refresh step.
+
+    `optional` marks a step whose failure must not stop the refresh -- a second
+    data source, say. `timeout` caps a step that can hang rather than fail: the
+    FBref fetch once ran for minutes without writing a byte, which is exactly
+    the kind of stall that must not hold up the weekly run.
+    """
     print(f"\n=== {name} ===", flush=True)
     t0 = time.time()
-    r = subprocess.run(cmd, cwd=ROOT)
-    ok = r.returncode == 0
-    print(f"    {'OK' if ok else 'FAILED'} ({time.time()-t0:.0f}s)", flush=True)
+    try:
+        r = subprocess.run(cmd, cwd=ROOT, timeout=timeout)
+        ok = r.returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"    TIMEOUT tras {timeout}s", flush=True)
+        ok = False
+    tag = "OK" if ok else ("FAILED (opcional, se continua)" if optional else "FAILED")
+    print(f"    {tag} ({time.time()-t0:.0f}s)", flush=True)
     return ok
 
 
@@ -236,11 +249,19 @@ def main() -> None:
     # have left them unsettleable -- the booking-points failure again. FBref has
     # it, so settlement no longer waits on one provider. Slow (it drives Chrome),
     # which is why it lives in the weekly refresh and not in the logger.
+    # ESPN runs first and carries the load: FBref only ever yielded the Premier
+    # League before stalling, leaving 79% of the logged player predictions
+    # unsettleable. ESPN is a JSON API asked by date, covers all five leagues,
+    # and reports the full roster, so "played and did not score" settles as the
+    # miss it is. FBref stays as a second opinion and is allowed to fail.
     if not args.skip_players:
-        run_step("7d/8 FBref player stats (settles the jug_* markets)",
-                 [PY, "scripts/fetch_fbref_player_stats.py"])
+        run_step("7d/8 ESPN player stats (settles the jug_* markets)",
+                 [PY, "scripts/fetch_espn_match_events.py"])
+        run_step("7e/8 FBref player stats (segunda fuente, puede fallar)",
+                 [PY, "scripts/fetch_fbref_player_stats.py"],
+                 optional=True, timeout=600)
     else:
-        print("\n=== 7d/8 FBref player stats SKIPPED ===", flush=True)
+        print("\n=== 7d/8 player stats SKIPPED ===", flush=True)
 
     # Rebuild the locally-advanced ClubElo before logging, so European
     # predictions use ratings carried forward to today's results rather than a

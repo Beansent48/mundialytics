@@ -649,13 +649,54 @@ def _player_match_actuals() -> pd.DataFrame:
     m = m.dropna(subset=["equipo", "fecha"])
     out = m[["fecha", "equipo", "player", "minutes", "goals", "shots",
              "assists", "yellow_cards"]]
-    fb = _fbref_player_actuals()
-    if len(fb):
-        # FBref appended, Understat kept first: Understat is the source the model
-        # was fitted on, so its naming matches better where both have a match.
-        out = pd.concat([out, fb], ignore_index=True)
+    extra = [x for x in (_espn_player_actuals(), _fbref_player_actuals()) if len(x)]
+    if extra:
+        # Understat kept first: it is the source the model was fitted on, so its
+        # naming matches best where both have a match. ESPN comes before FBref
+        # for the current season because it covers all five leagues and says who
+        # actually played, which the FBref file does not.
+        out = pd.concat([out, *extra], ignore_index=True)
         out = out.drop_duplicates(subset=["fecha", "equipo", "player"], keep="first")
     return out
+
+
+@st.cache_data(show_spinner=False)
+def _espn_player_actuals() -> pd.DataFrame:
+    """Current-season player results from ESPN's public JSON, all five leagues.
+
+    FBref only ever yielded the Premier League before stalling, which left 79% of
+    the logged player predictions with nothing able to score them -- the
+    booking-points failure once more. ESPN is a JSON API asked by date, so there
+    is no season label to get wrong, and it carries the full roster.
+
+    That roster is the point. ESPN's event feed names only scorers and booked
+    players; settling from it alone would score a striker's market only in the
+    matches where he scored, and the hit rate would approach 100% by
+    construction.
+    """
+    f = ROOT / "data/external/advanced/espn/espn_player_match_current.csv"
+    if not f.exists():
+        return pd.DataFrame()
+    try:
+        d = pd.read_csv(f, low_memory=False)
+    except Exception:
+        return pd.DataFrame()
+    if d.empty or "date" not in d.columns:
+        return pd.DataFrame()
+    d["fecha"] = pd.to_datetime(d["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    # the connector already writes football-data names, via the same alias file
+    d["equipo"] = d["team"].astype(str)
+    for c in ("appearances", "goals", "shots", "assists", "yellow_cards"):
+        d[c] = pd.to_numeric(d.get(c), errors="coerce")
+    # only players who actually took the field. An unused substitute never had
+    # the chance, so settling him as "did not score" would hand the track record
+    # a free hit; dropped here, he falls through the evaluator's `act is None`
+    # branch and is skipped, the way a book voids the bet.
+    d = d[d["appearances"].fillna(0) > 0].copy()
+    d["minutes"] = pd.NA
+    keep = ["fecha", "equipo", "player", "minutes", "goals", "shots",
+            "assists", "yellow_cards"]
+    return d.dropna(subset=["fecha", "equipo", "player"])[keep]
 
 
 @st.cache_data(show_spinner=False)

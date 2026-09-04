@@ -241,9 +241,11 @@ def _render_live(comp: str, season: str) -> None:
         lead = stand.iloc[0]
         c = st.columns(3)
         c[0].metric("Líder", _title(lead["team"]), f"{int(lead['points'])} pts")
-        if "p_top4" in tp.columns:
-            fav = tp.nlargest(1, "p_top4").iloc[0]
-            c[1].metric("Más probable en Champions", _title(fav["team"]), f"{fav['p_top4']:.0%}")
+        if "p_champion" in tp.columns:
+            # the headline the cached page leads with, and the one a reader
+            # actually wants from a season in progress
+            fav = tp.nlargest(1, "p_champion").iloc[0]
+            c[1].metric("Favorito al título", _title(fav["team"]), f"{fav['p_champion']:.0%}")
         if "p_relegation" in tp.columns:
             rel = tp.nlargest(1, "p_relegation").iloc[0]
             c[2].metric("Más probable descenso", _title(rel["team"]), f"{rel['p_relegation']:.0%}")
@@ -254,8 +256,11 @@ def _render_live(comp: str, season: str) -> None:
     pct = [c for c in show.columns if c.startswith("p_")]
     for c in pct:
         show[c] = (show[c] * 100).round(1)
-    ren = {"team": "Equipo", "expected_points": "Puntos esp.", "p_top4": "Champions",
-           "p_relegation": "Descenso", "p_title": "Título"}
+    # the forecaster emits exp_points/p_champion, not expected_points/p_title:
+    # the old names matched nothing, so the table rendered raw column keys
+    ren = {"team": "Equipo", "exp_points": "Puntos esp.", "p_top4": "Champions",
+           "p_relegation": "Descenso", "p_champion": "Título", "p_top2": "Top 2",
+           "exp_rank": "Puesto esp."}
     show = show.rename(columns={k: v for k, v in ren.items() if k in show.columns})
     st.dataframe(show, hide_index=True, use_container_width=True,
                  column_config={ren[c]: st.column_config.NumberColumn(format="%.1f%%")
