@@ -774,7 +774,12 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
         conf = r.prob if pick_one else max(r.prob, 1 - r.prob)
         out.append({"mercado": {**MARKET_ES, **PLAYER_MARKETS_ES}.get(mk, mk), "ambito": r.ambito,
                     "lado": r.seleccion, "confianza": conf, "acierto": hit,
-                    "jornada": r.jornada, "season": r.season})
+                    "jornada": r.jornada, "season": r.season,
+                    # kept for the player panel: `confianza` is max(p, 1-p), which
+                    # loses the raw probability, and ranking needs both it and the
+                    # fixture to sort players within a match
+                    "es_jugador": mk.startswith("jug_"), "mercado_id": mk,
+                    "prob": float(r.prob), "partido": r.partido})
     return pd.DataFrame(out)
 
 
@@ -841,6 +846,55 @@ def render_props_section(home: str, away: str, pred) -> None:
             render_player_props_table(players, home, away, height=420)
             st.caption("Probabilidades condicionadas a que el jugador juegue. "
                        "Min esp. = minutos esperados si juega.")
+
+
+def render_player_track_record(ev_players: pd.DataFrame) -> None:
+    """Player markets judged on RANKING, which is the only fair way to read them.
+
+    Accuracy here is meaningless: 8.6% of starters score and the model never puts
+    anyone above 50%, so "no" is right ~92% of the time and says nothing about
+    skill. What the model is actually good at is ordering — measured over 6,327
+    settled player-matches its top pick scored 28.8% of the time, 3.4x a random
+    starter. So this panel reports how our shortlist fared, plus calibration.
+    """
+    if ev_players is None or ev_players.empty:
+        return
+    st.markdown("#### ⚽ Mercados de jugador")
+    st.caption("El acierto bruto no sirve aquí: solo el 8,6% de los titulares marca, así que "
+               "responder «no» acierta el 92% de las veces sin mérito alguno. Lo que se mide "
+               "es si acertamos **a quién**.")
+
+    sc = ev_players[ev_players["mercado_id"] == "jug_goleador"].copy()
+    if not sc.empty:
+        sc["rank"] = sc.groupby("partido")["prob"].rank(ascending=False, method="first")
+        # `acierto` records whether the SI/NO call was right; the event itself
+        # (did he score) is that call read back through the side it took
+        sc["marco"] = np.where(sc["lado"] == "SI", sc["acierto"], 1 - sc["acierto"])
+        rate = sc["marco"].mean()
+        c1, c2, c3 = st.columns(3)
+        t1 = sc[sc["rank"] <= 1]["marco"].mean() if (sc["rank"] <= 1).any() else float("nan")
+        t3 = sc[sc["rank"] <= 3]["marco"].mean() if (sc["rank"] <= 3).any() else float("nan")
+        c1.markdown(metric_card("Nuestro favorito marcó", f"{t1:.0%}" if t1 == t1 else "—"),
+                    unsafe_allow_html=True)
+        c2.markdown(metric_card("Del top-3, marcaron", f"{t3:.0%}" if t3 == t3 else "—"),
+                    unsafe_allow_html=True)
+        c3.markdown(metric_card("Titular cualquiera", f"{rate:.0%}"), unsafe_allow_html=True)
+        if rate > 0 and t1 == t1:
+            st.caption(f"Nuestro favorito marca **{t1/rate:.1f} veces más** que un titular "
+                       f"tomado al azar de la misma alineación.")
+
+    st.markdown("**Calibración por banda** — cuando decimos X%, ¿ocurre X%?")
+    d = ev_players.copy()
+    d["ocurre"] = np.where(d["lado"] == "SI", d["acierto"], 1 - d["acierto"])
+    d["banda"] = pd.cut(d["prob"], [0, .05, .10, .20, .35, 1.0],
+                        labels=["0-5%", "5-10%", "10-20%", "20-35%", "35%+"])
+    by_b = (d.groupby("banda", observed=True)
+            .agg(N=("ocurre", "size"), Anunciado=("prob", "mean"),
+                 Ocurrio=("ocurre", "mean")).reset_index())
+    by_b[["Anunciado", "Ocurrio"]] = (by_b[["Anunciado", "Ocurrio"]] * 100).round(1)
+    st.dataframe(by_b, hide_index=True, use_container_width=True,
+                 column_config={c: st.column_config.NumberColumn(format="%.1f%%")
+                                for c in ["Anunciado", "Ocurrio"]})
 
 
 def render_top_scorers(players: pd.DataFrame, home: str, away: str, n: int = 3) -> None:
@@ -1636,11 +1690,20 @@ elif page == "📈  Resultados":
         pc3.markdown(metric_card("Se resuelven", f"{pend['fecha'].min()} → {pend['fecha'].max()}"),
                      unsafe_allow_html=True)
 
-    ev = evaluate_prediction_log(len(df_clubs))
-    if ev.empty:
+    ev_all = evaluate_prediction_log(len(df_clubs))
+    # Player markets are split out on purpose. Their accuracy is dominated by the
+    # base rate: only 8.6% of starters score, the model never puts anyone above
+    # 50%, so answering "no" is right ~92% of the time. Leaving them in the
+    # headline would lift it from ~65% to ~80% with no better model. They are
+    # judged on ranking instead, in their own panel below.
+    is_pl = ev_all["es_jugador"] if "es_jugador" in ev_all.columns else pd.Series(dtype=bool)
+    ev_players = ev_all[is_pl] if len(is_pl) else ev_all.iloc[0:0]
+    ev = ev_all[~is_pl] if len(is_pl) else ev_all
+
+    if ev_all.empty:
         st.info("Predicciones ya registradas y esperando a que se jueguen los partidos. "
                 "En cuanto haya resultados aparecerá aquí el acierto real frente al anunciado.")
-    else:
+    if not ev.empty:
         n = len(ev)
         acc = ev["acierto"].mean()
         exp = ev["confianza"].mean()
@@ -1677,6 +1740,8 @@ elif page == "📈  Resultados":
             st.dataframe(by_s, hide_index=True, use_container_width=True,
                          column_config={c: st.column_config.NumberColumn(format="%.1f%%")
                                         for c in ["Acierto", "Esperado"]})
+
+    render_player_track_record(ev_players)
 
 elif page == "🥇  Premios Individuales":
     st.title("🥇  Premios Individuales")
