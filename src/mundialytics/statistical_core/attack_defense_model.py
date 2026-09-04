@@ -395,6 +395,12 @@ class AttackDefenseModel:
         for team in [ht, at]:
             if self.match_counts_.get(team, 0) < self.min_matches:
                 warnings.append(f"low_sample:{team}({self.match_counts_.get(team,0)})")
+        # An unrecognised competition silently borrows index 0's mu and home
+        # advantage, which for a national-team fit means every match is priced
+        # with the first competition's parameters. Surface it rather than let it
+        # pass: it moved international lambdas from 1.63 to 2.99 undetected.
+        if competition and competition not in self.league_index_ and self.league_index_:
+            warnings.append(f"unknown_competition:{competition}")
         league_idx = self.league_index_.get(competition or "", 0)
         lh, la = self._lam(hi, ai, league_idx, bool(int(neutral)))
         return lh, la, warnings
