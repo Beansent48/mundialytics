@@ -138,10 +138,10 @@ def load_live_league_state(
     there is nothing to simulate. Measured on 2026-09-04, all five leagues came
     back with 0 remaining fixtures — the forecast page could not forecast.
 
-    The fixtures come from fixturedownload (the same feed the pre-match logger
-    and the European layer already use) and team names go through
-    data/curated/fixture_team_aliases.csv. Fixtures whose clubs do not resolve
-    are dropped rather than guessed, and reported by the caller if it cares.
+    Fixtures come from ESPN, with fixturedownload behind it: the latter went
+    down for all five leagues on 2026-09-04 and took this page with it. Team
+    names go through data/curated/fixture_team_aliases.csv, and fixtures whose
+    clubs do not resolve are dropped rather than guessed.
 
     The backtest path is untouched: this is a separate function, so anything
     validated against `load_league_state_from_foundation` keeps its behaviour.
@@ -161,11 +161,30 @@ def load_live_league_state(
 
     slug = FD_LEAGUE_SLUGS.get(competition)
     remaining = pd.DataFrame(columns=FIXTURE_COLUMNS)
-    if slug:
+    alias_path = root / _ALIASES
+    alias = (dict(pd.read_csv(alias_path).itertuples(index=False, name=None))
+             if alias_path.exists() else {})
+
+    # ESPN first. fixturedownload stopped answering for all five leagues on
+    # 2026-09-04 and this page went with it, reporting "no matches remaining"
+    # for a league three rounds old. ESPN returns the whole season in one
+    # request and flags each fixture's status, so it is both sturdier and more
+    # current; fixturedownload stays behind it rather than being replaced.
+    try:
+        from mundialytics.providers.espn_fixtures import remaining_fixtures
+
+        fx = remaining_fixtures(competition, season, played=played,
+                                alias=alias, root=root)
+        if len(fx):
+            for c in FIXTURE_COLUMNS:
+                if c not in fx.columns:
+                    fx[c] = pd.NA
+            remaining = fx[FIXTURE_COLUMNS].reset_index(drop=True)
+    except Exception:
+        pass   # fall through to fixturedownload
+
+    if slug and remaining.empty:
         year = int(str(season)[:4])
-        alias_path = root / _ALIASES
-        alias = (dict(pd.read_csv(alias_path).itertuples(index=False, name=None))
-                 if alias_path.exists() else {})
         try:
             r = requests.get(f"https://fixturedownload.com/download/{slug}-{year}-UTC.csv",
                              timeout=30, headers={"User-Agent": "Mozilla/5.0"})

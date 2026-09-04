@@ -12102,3 +12102,54 @@ logged_at,season,jornada,partido,fecha,home,away,mercado,ambito,linea,prob,selec
 2026-09-04T10:33:46,2026-2027,5,sociedad vs ath madrid,2026-09-13,sociedad,ath madrid,jug_tiros,Álex Baena,1.5,0.3796,NO
 2026-09-04T10:33:46,2026-2027,5,sociedad vs ath madrid,2026-09-13,sociedad,ath madrid,jug_asistencia,Álex Baena,,0.187,NO
 2026-09-04T10:33:46,2026-2027,5,sociedad vs ath madrid,2026-09-13,sociedad,ath madrid,jug_amarilla,Álex Baena,,0.2501,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,1X2,Total,,0.4238,2
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,Goles,Total,2.5,0.5995,OVER
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,ht_1x2,Total,,0.3883,X
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,ht_goles,Total,0.5,0.7449,OVER
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,ht_goles,Total,1.5,0.3964,UNDER
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,ht_goles,Total,2.5,0.1584,UNDER
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,ht_ft,Total,,0.2485,2/2
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Moritz Nicolas,,0.0,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Moritz Nicolas,1.5,0.0,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Moritz Nicolas,,0.0039,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Moritz Nicolas,,0.0472,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Philipp Sander,,0.0561,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Philipp Sander,1.5,0.2092,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Philipp Sander,,0.0291,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Philipp Sander,,0.1435,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Nico Elvedi,,0.034,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Nico Elvedi,1.5,0.0771,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Nico Elvedi,,0.0261,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Nico Elvedi,,0.1143,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Joe Scally,,0.0436,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Joe Scally,1.5,0.1022,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Joe Scally,,0.0707,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Joe Scally,,0.1612,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Yannick Engelhardt,,0.0753,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Yannick Engelhardt,1.5,0.1832,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Yannick Engelhardt,,0.0689,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Yannick Engelhardt,,0.218,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Rocco Reitz,,0.0829,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Rocco Reitz,1.5,0.3736,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Rocco Reitz,,0.1049,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Rocco Reitz,,0.173,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Kevin Diks,,0.0965,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Kevin Diks,1.5,0.185,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Kevin Diks,,0.0254,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Kevin Diks,,0.1749,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Haris Tabakovic,,0.307,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Haris Tabakovic,1.5,0.5742,SI
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Haris Tabakovic,,0.0743,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Haris Tabakovic,,0.1419,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Jens Castrop,,0.1497,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Jens Castrop,1.5,0.3838,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Jens Castrop,,0.0679,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Jens Castrop,,0.1213,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Kevin Stöger,,0.1142,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Kevin Stöger,1.5,0.3642,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Kevin Stöger,,0.1547,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Kevin Stöger,,0.1818,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_goleador,Florian Neuhaus,,0.1081,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_tiros,Florian Neuhaus,1.5,0.4028,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_asistencia,Florian Neuhaus,,0.0914,NO
+2026-09-04T22:46:23,2026-2027,2,m gladbach vs elversberg,2026-09-05,m gladbach,elversberg,jug_amarilla,Florian Neuhaus,,0.1433,NO
