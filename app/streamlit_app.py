@@ -872,9 +872,23 @@ def evaluate_prediction_log(_df_clubs_len: int) -> pd.DataFrame:
         # UNDER pick is its complement.
         pick_one = mk in ("1X2", "ht_1x2", "ht_ft")
         conf = r.prob if pick_one else max(r.prob, 1 - r.prob)
-        out.append({"mercado": {**MARKET_ES, **PLAYER_MARKETS_ES}.get(mk, mk), "ambito": r.ambito,
+        label = {**MARKET_ES, **PLAYER_MARKETS_ES}.get(mk, mk)
+        linea = str(getattr(r, "linea", "")).strip()
+        has_line = bool(linea) and linea.lower() != "nan"
+        # Player shot markets are logged at two lines (1.5 and 2.5), and the
+        # results table groups by this label: pooled, they became one bucket
+        # whose numbers belonged to neither. Team markets stay pooled on purpose
+        # -- spelling out every corner and shot line would turn that page into a
+        # published price ladder.
+        if has_line and mk.startswith("jug_"):
+            try:
+                label = f"{label} >{float(linea):g}"
+            except ValueError:
+                pass
+        out.append({"mercado": label, "ambito": r.ambito,
                     "lado": r.seleccion, "confianza": conf, "acierto": hit,
                     "jornada": r.jornada, "season": r.season,
+                    "linea": linea if has_line else "",
                     # kept for the player panel: `confianza` is max(p, 1-p), which
                     # loses the raw probability, and ranking needs both it and the
                     # fixture to sort players within a match
