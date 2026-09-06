@@ -1,0 +1,528 @@
+@import "tailwindcss";
+
+/*
+ * Mundialytics design system.
+ *
+ * Two decisions the rest of the app inherits:
+ *
+ * 1. Nothing hard-codes a colour. Every surface, border and text tone is a
+ *    token defined once per theme, so light and dark stay in step and a palette
+ *    change is one file. The Streamlit app drifted precisely because pages
+ *    picked their own hexes.
+ * 2. The brand accent (violet) is deliberately outside the semantic set.
+ *    Green means "it went well", red "it did not", blue and red mean home and
+ *    away — those are data encodings and must never double as branding, or a
+ *    button starts looking like a result.
+ */
+
+@theme {
+  /* Editorial display + neutral UI: the pairing is what keeps a data product
+     from reading as an admin panel. Serif only at display sizes. */
+  --font-display: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Light (default) ─────────────────────────────────────────────────────── */
+:root {
+  --bg: #fbfbfd;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f5f8;
+  --surface-3: #eaecf1;
+  --border: #e2e5ec;
+  --border-strong: #cdd2dd;
+
+  --text: #0c0e14;
+  --text-muted: #5a6274;
+  --text-dim: #868d9d;
+
+  --brand: #6d3fff;
+  --brand-hover: #5a2ff0;
+  --brand-contrast: #ffffff;
+  --brand-ghost: rgba(109, 63, 255, 0.09);
+  --brand-ring: rgba(109, 63, 255, 0.32);
+
+  --positive: #00875a;
+  --warning: #b45309;
+  --negative: #d1293d;
+
+  --home: #1e5fd6;
+  --draw: #6b7280;
+  --away: #d1293d;
+
+  --shadow-sm: 0 1px 2px rgba(12, 14, 20, 0.05);
+  --shadow-md: 0 4px 16px rgba(12, 14, 20, 0.07);
+  --shadow-lg: 0 18px 48px rgba(12, 14, 20, 0.12);
+
+  --grid-line: rgba(12, 14, 20, 0.06);
+
+  color-scheme: light;
+}
+
+/* ── Dark ────────────────────────────────────────────────────────────────── */
+.dark {
+  --bg: #08090c;
+  --bg-elevated: #0e1015;
+  --surface: #101319;
+  --surface-2: #171b23;
+  --surface-3: #1f242e;
+  --border: #232833;
+  --border-strong: #333a48;
+
+  --text: #f2f4f8;
+  --text-muted: #99a1b3;
+  --text-dim: #6b7385;
+
+  --brand: #8b5cff;
+  --brand-hover: #9d75ff;
+  --brand-contrast: #0a0b0f;
+  --brand-ghost: rgba(139, 92, 255, 0.14);
+  --brand-ring: rgba(139, 92, 255, 0.4);
+
+  --positive: #1fd18a;
+  --warning: #f5a524;
+  --negative: #ff5d6c;
+
+  --home: #4d8dff;
+  --draw: #7b8394;
+  --away: #ff5d6c;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  --grid-line: rgba(255, 255, 255, 0.06);
+
+  color-scheme: dark;
+}
+
+/* Expose the tokens to Tailwind so `bg-surface`, `text-muted` and friends work
+   in markup instead of every component writing var(--…) by hand. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-brand-ghost: var(--brand-ghost);
+
+  --color-positive: var(--positive);
+  --color-warning: var(--warning);
+  --color-negative: var(--negative);
+
+  --color-home: var(--home);
+  --color-draw: var(--draw);
+  --color-away: var(--away);
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    /* every figure in this app is a number in a column: line them up */
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: var(--brand-ghost);
+    color: var(--text);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Anyone who has asked their system to calm down gets a calm app. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ── Utilities the design leans on ───────────────────────────────────────── */
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* A hairline that fades at both ends — used to separate sections without the
+   hard stop of a full-width rule. */
+@utility rule-fade {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border-strong) 18%,
+    var(--border-strong) 82%,
+    transparent
+  );
+}
+
+@utility text-gradient {
+  background: linear-gradient(120deg, var(--text) 30%, var(--brand) 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The faint grid behind the hero: structure without decoration. */
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* ── Reveal-on-scroll ────────────────────────────────────────────────────── */
+/* Visible by default. Only an element the client has actually taken charge of
+   ever carries a data-reveal state, so nothing can be hidden by a script that
+   did not run. */
+@layer components {
+  .mv-reveal {
+    transition:
+      opacity 0.62s var(--ease-out-quint),
+      transform 0.62s var(--ease-out-quint);
+  }
+
+  .mv-reveal[data-reveal="hidden"] {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  .mv-reveal[data-reveal="shown"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* A bar that grows to its own width. The width lives in a custom property so
+     the markup carries the real value and CSS decides whether to animate to it —
+     with no JavaScript the bar is simply drawn at full length. */
+  .mv-bar-grow {
+    width: var(--w);
+    transition: width 0.9s var(--ease-out-quint);
+  }
+
+  [data-reveal="hidden"] .mv-bar-grow {
+    width: 0;
+  }
+}
+
+/* ── Player cards ────────────────────────────────────────────────────────── */
+/* Four tiers by overall rating. The reader learns the ladder in one glance and
+   never has to compare two numbers again — which is the whole point of a card
+   over a table row. Colours are literal here on purpose: a card's tier must not
+   change with the theme, or a gold card in dark mode would be a different thing
+   from a gold card in light. */
+@layer components {
+  .mv-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* A button is shrink-to-fit even when it is a block-level flex container,
+       so without this a long name made its card wider than its neighbours. */
+    width: 100%;
+    border-radius: 16px;
+    /* A shield rather than a rectangle: the bottom tapers to a point, which is
+       what makes the thing read as a collectible card instead of a tile. The
+       extra bottom padding keeps the stats clear of the taper. */
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 17px),
+      50% 100%,
+      0 calc(100% - 17px)
+    );
+    padding: 11px 11px 24px;
+    isolation: isolate;
+    overflow: hidden;
+    color: #12141c;
+    /* clip-path cuts box-shadows off, so depth has to come from a filter,
+       which follows the silhouette. */
+    transition:
+      transform 0.25s var(--ease-out-quint),
+      filter 0.25s var(--ease-out-quint);
+  }
+
+  .mv-card::after {
+    /* a soft sheen across the top corner, the thing that stops a gradient
+       rectangle from reading as a coloured box */
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.42),
+      rgba(255, 255, 255, 0) 46%
+    );
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .mv-card:hover {
+    transform: translateY(-3px);
+    filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.4));
+  }
+
+  /* The slot currently being filled. A ring would be a box-shadow and would be
+     clipped away, so the cue is a glow that traces the shield itself. */
+  .mv-card-selected,
+  .mv-card-selected:hover {
+    filter: drop-shadow(0 0 5px var(--brand)) drop-shadow(0 0 2px var(--brand));
+  }
+
+  /* The rim: an inner highlight along the top edge, which survives the clip
+     where a border would have been cut open along the diagonals. */
+  .mv-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .mv-card-elite {
+    background: linear-gradient(160deg, #b79bff, #6d3fff 58%, #3c1d9e);
+    color: #ffffff;
+  }
+  .mv-card-gold {
+    background: linear-gradient(160deg, #ffe08a, #e0a52e 58%, #a97016);
+  }
+  .mv-card-silver {
+    background: linear-gradient(160deg, #eef1f6, #b8c0cf 58%, #8a93a5);
+  }
+  .mv-card-bronze {
+    background: linear-gradient(160deg, #e6b98d, #b9793f 58%, #8a5424);
+  }
+
+  /* An empty slot keeps the silhouette so the pitch reads as eleven cards from
+     the first frame — a ghost, not a dashed box. */
+  .mv-card-empty {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.62);
+  }
+  .mv-card-empty::after,
+  .mv-card-empty::before {
+    display: none;
+  }
+  .mv-card-empty:hover {
+    background: rgba(255, 255, 255, 0.13);
+    color: #ffffff;
+    transform: translateY(-2px);
+    filter: none;
+  }
+  .mv-card-empty.mv-card-selected,
+  .mv-card-empty.mv-card-selected:hover {
+    background: color-mix(in srgb, var(--brand) 34%, transparent);
+    color: #ffffff;
+  }
+}
+
+/* ── The aura behind a premium card ──────────────────────────────────────── */
+/* It cannot live inside .mv-card: that box is clipped to the shield and hides
+   anything that spills. So the card sits in a positioned wrapper and the aura
+   is a sibling painted behind it — which also means future special editions get
+   the effect for free by setting --aura to their own colour. */
+@layer components {
+  .mv-aura {
+    position: absolute;
+    inset: -22%;
+    z-index: 0;
+    --aura: #8b5cff;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--aura) 88%, transparent),
+      color-mix(in srgb, var(--aura) 34%, transparent) 45%,
+      transparent 70%
+    );
+    filter: blur(15px);
+    pointer-events: none;
+    /* resting state — the burst hands over to it, so they must agree */
+    opacity: 0.34;
+    animation:
+      mv-burst 0.8s var(--ease-out-quint) var(--deal-delay, 0ms) backwards,
+      mv-breathe 3.8s ease-in-out calc(var(--deal-delay, 0ms) + 0.8s) infinite;
+  }
+}
+
+/* A flare as the card lands, settling into a glow that never quite stops. */
+@keyframes mv-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  38% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 0.34;
+    transform: scale(1);
+  }
+}
+
+@keyframes mv-breathe {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.58;
+    transform: scale(1.06);
+  }
+}
+
+/* Cards deal in one at a time, so they arrive one at a time. */
+@keyframes mv-deal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* `backwards`, not `both`: the card must be invisible through its stagger
+   delay, but a filling animation keeps its final transform applied forever and
+   would then win over :hover, killing the lift. */
+@utility animate-deal {
+  animation: mv-deal 0.45s var(--ease-spring) backwards;
+}
+
+/* ── Live match ──────────────────────────────────────────────────────────── */
+@keyframes mv-goal-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.09);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* Fits inside the clock's hold on a goal minute, so the shout is gone by the
+   time the match restarts. */
+@utility animate-goal {
+  animation: mv-goal-flash 1.15s var(--ease-spring) both;
+}
+
+@keyframes mv-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-event {
+  animation: mv-slide-in 0.35s var(--ease-out-quint) backwards;
+}
+
+@keyframes mv-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@utility animate-live-dot {
+  animation: mv-pulse 1.3s ease-in-out infinite;
+}
+
+/* ── The pitch ───────────────────────────────────────────────────────────── */
+@layer components {
+  .mv-pitch {
+    position: relative;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background:
+      /* the mown stripes, then the turf itself */
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.035) 0 8%,
+        transparent 8% 16%
+      ),
+      linear-gradient(170deg, #14532d, #0d3d21 55%, #0a2f19);
+    overflow: hidden;
+  }
+
+  /* Centre circle and halfway line, drawn rather than imported. */
+  .mv-pitch::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 34%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border: 1.5px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+  }
+  .mv-pitch::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1.5px;
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
