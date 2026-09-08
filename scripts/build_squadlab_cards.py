@@ -86,6 +86,25 @@ CURATED_PRIMES = ROOT / "data/curated/prime_players.csv"
 PROFILES = ROOT / "data/processed/player_profiles_with_positions.csv"
 DEFENSE_FBREF = ROOT / "data/processed/player_defense_fbref.csv"
 ATTACK_FBREF = ROOT / "data/processed/player_attack_fbref.csv"
+
+_STATS_BIRTH: dict | None = None
+
+
+def stats_birth() -> dict:
+    """player name -> birth year, from the attacking file (which covers every
+    measured player). Used to store a birth year on every index candidate so a
+    lookup can tell two same-named players apart. Cached; built once."""
+    global _STATS_BIRTH
+    if _STATS_BIRTH is None:
+        _STATS_BIRTH = {}
+        if ATTACK_FBREF.exists():
+            import pandas as _pd
+            a = _pd.read_csv(ATTACK_FBREF, usecols=lambda c: c in {"player", "birth_year"})
+            if "birth_year" in a.columns:
+                b = _pd.to_numeric(a["birth_year"], errors="coerce")
+                _STATS_BIRTH = {p: (float(y) if _pd.notna(y) else None)
+                                for p, y in zip(a["player"], b)}
+    return _STATS_BIRTH
 UNDERSTAT_PM = ROOT / "data/external/advanced/understat/understat_player_match.csv"
 
 # A prime is a great season, not a fluke: blending the season rating back toward
@@ -601,6 +620,16 @@ def creation_index() -> tuple:
 # their creation from BUILD-UP instead.
 BUILDUP_ROLES = {"Central stopper", "Central de salida", "Lateral defensivo",
                  "Destructor", "Pivote organizador"}
+# A possession BONUS for the playmaker roles — added on top, only for positive
+# possession, so it LIFTS a deep controller (Pedri, Kimmich, Frenkie: elite at
+# retention + short dribbling, which the assist numbers miss) without penalising
+# a great chance-creator whose possession is merely average. A wasteful dribbler
+# (Cherki, ~0 possession) and a poor retainer (Baena, negative) get nothing. It
+# is a bonus, not a blend: mixing it into creation would drag DOWN a player whose
+# creation already exceeds his possession, which is the wrong direction.
+# See possession_level in the attacking builder.
+POSS_BONUS = {"Creador": 0.40, "Pivote organizador": 0.45,
+              "Box-to-box": 0.30, "Mediapunta": 0.18}
 
 
 def buildup_index() -> tuple:
@@ -677,7 +706,8 @@ def _fbref_index(d: pd.DataFrame, zcol: str, squad_pos: NameIndex | None = None)
         pct = getattr(r, "pct_pos", np.nan)
         if not np.isfinite(pct):
             continue
-        idx.add(r.player, (float(pct), n90, season), rank=rank)
+        idx.add(r.player, (float(pct), n90, season), rank=rank,
+                birth=stats_birth().get(r.player))
     return idx, len(d)
 
 
@@ -847,14 +877,16 @@ ROLE_AXIS_WEIGHT = {                     # (attack, defense, creation)
     # the card was 72% creation. Modern wingers score: roughly half and half.
     "Extremo":            (0.42, 0.06, 0.52),
     "Extremo interior":   (0.55, 0.03, 0.42),
-    # a little more weight on control (defence) across the midfield roles: a
-    # pure creator with a monster assist season used to top the line while
-    # complete midfielders sat below, because defending counted for almost
-    # nothing. Now that 25/26 measures their duels and tackles, it should.
-    "Mediapunta":         (0.32, 0.16, 0.52),
-    "Creador":            (0.10, 0.16, 0.74),
-    "Box-to-box":         (0.30, 0.38, 0.32),
-    "Pivote organizador": (0.08, 0.38, 0.54),
+    # Of the midfield roles only the Destructor is judged mainly on defence.
+    # The playmakers are judged on creation + POSSESSION craft (retention and
+    # short dribbling — see POSS_IN_CREA), which is what a deep controller like
+    # Pedri or Rodri is actually elite at and the assist numbers miss. Box-to-box
+    # and the Pivote get a little defence ("un poco"); Creador and Mediapunta
+    # almost none.
+    "Mediapunta":         (0.33, 0.05, 0.62),
+    "Creador":            (0.09, 0.05, 0.86),
+    "Box-to-box":         (0.34, 0.26, 0.40),
+    "Pivote organizador": (0.10, 0.22, 0.68),
     "Destructor":         (0.06, 0.86, 0.08),
     "Central de salida":  (0.05, 0.60, 0.35),
     "Central stopper":    (0.03, 0.90, 0.07),
@@ -1155,11 +1187,12 @@ def _level_index(path, col: str) -> NameIndex:
     d = pd.read_csv(path)
     if col not in d.columns:
         return idx
+    birth = stats_birth()
     for r in d.itertuples(index=False):
         v = getattr(r, col)
         n = float(getattr(r, "n90", 0) or 0)
         if pd.notna(v):
-            idx.add(r.player, (float(v), n), rank=n)
+            idx.add(r.player, (float(v), n), rank=n, birth=birth.get(r.player))
     return idx
 
 
@@ -1181,9 +1214,10 @@ def buildup_level_index() -> NameIndex:
         z += np.nan_to_num(zz.to_numpy()) * w
     q["bl_z"] = (z - z.mean()) / (z.std() or 1.0)
     idx = NameIndex()
+    birth = stats_birth()
     for r in q.itertuples(index=False):
         n = float(getattr(r, "fbq_90s", 0) or 0)
-        idx.add(r.player, (float(r.bl_z), n), rank=n)
+        idx.add(r.player, (float(r.bl_z), n), rank=n, birth=birth.get(r.player))
     return idx
 
 
@@ -1226,6 +1260,16 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
                   fb_att=None, fb_crea=None, fb_lvl=None, fb_build=None) -> pd.DataFrame:
     squads, model, roles = src["squads"], src["model"], src["roles"]
     elo_map = club_elo_map(squads, src["elo"])
+    # birth year of each current-squad player, so a lookup can separate two
+    # same-named players (see NameIndex). Invariant across club moves — this is
+    # what keeps a namesake from inheriting a transferred player's stats.
+    if "birth_year" in squads.columns:
+        _by = pd.to_numeric(squads["birth_year"], errors="coerce")
+        sbirth = {p: (float(y) if pd.notna(y) else None)
+                  for p, y in zip(squads["player"], _by)}
+    else:
+        sbirth = {}
+    bz = lambda who: sbirth.get(who)  # noqa: E731
 
     role_idx = NameIndex()
     for r in roles.itertuples(index=False):
@@ -1341,9 +1385,9 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
     # the size the temporal fit gave it: 4.4 rating points per standard
     # deviation, within position, and only for forwards and midfielders — see
     # ATT_LEVEL_POSITIONS for why a defender must not be moved by it.
-    fa = [fb_axis(fb_att.lookup(who)) if fb_att is not None else None
+    fa = [fb_axis(fb_att.lookup(who, birth=bz(who))) if fb_att is not None else None
           for who in squads["player"]]
-    fl = [fb_axis(fb_lvl.lookup(who)) if fb_lvl is not None else None
+    fl = [fb_axis(fb_lvl.lookup(who, birth=bz(who))) if fb_lvl is not None else None
           for who in squads["player"]]
     ns = [samples.get(getattr(p, "player", ""), (0.0, 0.0)) if p is not None else (0.0, 0.0)
           for p in prof_hit]
@@ -1379,7 +1423,7 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
         "matches": matches,
         "source": np.where(known.notna(), source, "proyectado"),
     })
-    fb = [fb_axis(fb_def.lookup(who)) if fb_def is not None else None
+    fb = [fb_axis(fb_def.lookup(who, birth=bz(who))) if fb_def is not None else None
           for who in squads["player"]]
     # blend the club's level into the defense AXIS (which the simulator reads),
     # by the same DEF_CLUB_W that lifts the overall — both must agree, or the
@@ -1395,9 +1439,9 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
                 and np.isfinite(club_pct.loc[idx])):
             p, n = hit
             fb[i] = ((1 - DEF_CLUB_W) * p + DEF_CLUB_W * float(club_pct.loc[idx]), n)
-    fc = [fb_axis(fb_crea.lookup(who)) if fb_crea is not None else None
+    fc = [fb_axis(fb_crea.lookup(who, birth=bz(who))) if fb_crea is not None else None
           for who in squads["player"]]
-    fbu = [fb_axis(fb_build.lookup(who)) if fb_build is not None else None
+    fbu = [fb_axis(fb_build.lookup(who, birth=bz(who))) if fb_build is not None else None
            for who in squads["player"]]
     axes = [axes_for_card(fits, str(pos), rl, float(o), p, n[0], n[1], f, a, cc, bu)
             for p, pos, rl, o, n, f, a, cc, bu in zip(prof_hit, out["position"], out["role"],
@@ -1413,6 +1457,7 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
     crea_lvl = _level_index(ATTACK_FBREF, "crea_level_z")
     def_lvl = _level_index(DEFENSE_FBREF, "def_level_z")
     build_lvl = buildup_level_index()
+    poss_lvl = _level_index(ATTACK_FBREF, "poss_level_z")
     career = pd.Series([float(x) for x in out["overall"]], index=squads.index)
     strength, mcred = [], []
     gk_mask = pd.Series(list(out["position"]), index=squads.index) == "Goalkeeper"
@@ -1440,14 +1485,16 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
             gv = gk_str.loc[squads.index[len(strength)]]
             strength.append(float(gv) if np.isfinite(gv) else None)
             mcred.append(0.9); continue
-        av = att_lvl.lookup(who)
-        cv = crea_lvl.lookup(who)
-        dv = def_lvl.lookup(who)
+        bh = bz(who)
+        av = att_lvl.lookup(who, birth=bh)
+        cv = crea_lvl.lookup(who, birth=bh)
+        dv = def_lvl.lookup(who, birth=bh)
         if str(ps) == "Defender" and dv is not None and np.isfinite(dv[0]):
             cz = float(def_club_z.loc[squads.index[len(strength)]])
             dv = ((1 - DEF_CLUB_W) * dv[0] + DEF_CLUB_W * cz, dv[1])
-        bv = build_lvl.lookup(who)
+        bv = build_lvl.lookup(who, birth=bh)
         crea_sig = bv if (str(rl) in BUILDUP_ROLES and bv is not None) else cv
+        pv = poss_lvl.lookup(who, birth=bh)
         wa, wd, wc = (ROLE_AXIS_WEIGHT.get(str(rl))
                       or POS_AXIS_WEIGHT.get(str(ps), (0.4, 0.3, 0.3)))
         num = den = n90 = 0.0
@@ -1457,7 +1504,14 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
         if den < 1e-9:
             strength.append(None); mcred.append(0.0)
         else:
-            strength.append(num / den)
+            base = num / den
+            # possession bonus for the playmaker roles: added on top, only when
+            # positive, so it lifts a retainer without dragging down a creator
+            pb = POSS_BONUS.get(str(rl), 0.0)
+            if pb > 0.0 and pv is not None and np.isfinite(pv[0]):
+                base += pb * max(pv[0], 0.0)
+                n90 = max(n90, pv[1])
+            strength.append(base)
             mcred.append(min(n90 / (n90 + STRENGTH_CRED_90S), 1.0))
     # z-score of the clean strength within each position (measured only), then
     # the absolute curve. Small samples are shrunk toward the mean by mcred.

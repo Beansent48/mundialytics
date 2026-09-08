@@ -199,7 +199,11 @@ def build(rosters: pd.DataFrame, tallies: pd.DataFrame,
     else:
         covered = set(rosters["team"])
         missing = tallies[~tallies["team"].isin(covered)]
-        base = rosters[["competition", "team", "player", "position"]].copy()
+        rcols = ["competition", "team", "player", "position"]
+        for c in ("espn_athlete_id", "age"):     # carry ESPN's stable id + age
+            if c in rosters.columns:
+                rcols.append(c)
+        base = rosters[rcols].copy()
         if not missing.empty:
             print(f"  sin plantilla ESPN, se usan los partidos: {', '.join(sorted(set(missing['team'])))}")
             base = pd.concat([base, missing[["competition", "team", "player"]].assign(position="")],
@@ -232,8 +236,20 @@ def build(rosters: pd.DataFrame, tallies: pd.DataFrame,
         out.loc[wrong, "pos_group"] = seen[wrong]
     out["full_key"] = out["player"].map(full_key)
     out["short_key"] = out["player"].map(short_key)
+    # A stable identity for the player, so a name collision or a club move never
+    # confuses him with someone else. ESPN's athlete id is unique on the squad
+    # side; birth year (from his age at the fetch) is invariant across clubs and
+    # matches the year the stats sources carry — together they let the card
+    # builder pick the right one of two same-named players. See NameIndex.
+    if "espn_athlete_id" not in out.columns:
+        out["espn_athlete_id"] = ""
+    out["espn_athlete_id"] = out["espn_athlete_id"].fillna("").astype(str)
+    start_year = int(str(season)[:4]) if str(season)[:4].isdigit() else 0
+    age = pd.to_numeric(out.get("age"), errors="coerce")
+    out["birth_year"] = (start_year - age).round() if start_year else pd.NA
 
     cols = ["season", "competition", "team", "player", "full_key", "short_key",
+            "espn_athlete_id", "birth_year",
             "position", "pos_group", "team_matches", "squad_matches", "squad_share",
             "apps", "starts", "goals", "shots", "sot", "assists",
             "yellow_cards", "red_cards", "last_date"]
