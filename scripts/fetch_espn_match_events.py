@@ -157,6 +157,10 @@ def match_players(code: str, game: dict, canon) -> list[dict]:
                 continue
             row = {"event_id": game["event_id"], "competition": game["competition"],
                    "date": game["date"], "team": team, "player": who,
+                   # ESPN's per-match position ("G", "CD-L", "AM", "F"...). It is
+                   # the only positional signal in the current-season data, and
+                   # the current-squad table needs it to fill an XI by role.
+                   "position": ((p.get("position") or {}).get("abbreviation") or ""),
                    "starter": bool(p.get("starter")),
                    "subbed_in": bool(p.get("subbedIn"))}
             for k, col in STATS.items():

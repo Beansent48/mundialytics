@@ -260,6 +260,41 @@ def main() -> None:
         run_step("7e/8 FBref player stats (segunda fuente, puede fallar)",
                  [PY, "scripts/fetch_fbref_player_stats.py"],
                  optional=True, timeout=600)
+        # Who is at each club THIS WEEK. Without it the squads come from
+        # appearance history, which for a promoted club is its last top-flight
+        # season: Hull's 2026/27 forwards were its 2016/17 ones. Feeds both the
+        # player props and SquadLab's real-club elevens.
+        run_step("7f/8 plantillas actuales (props + SquadLab)",
+                 [PY, "scripts/build_current_squads.py"], timeout=900)
+        # FBref's published season tables, via Kaggle's open endpoint. The only
+        # real defensive measurement we have for most players — StatsBomb's is
+        # zero for 62% of defenders. Optional: it only refreshes once a season.
+        run_step("7g/8 FBref (Kaggle) + valoracion defensiva",
+                 [PY, "scripts/download_fbref_kaggle.py"], optional=True, timeout=900)
+        run_step("7h/8 defensa medida por jugador",
+                 [PY, "scripts/build_player_defense_fbref.py"], optional=True, timeout=300)
+        # Its attacking twin, and the one whose weights survived an out-of-sample
+        # test: 23/24 features against 24/25 goals + assists per 90, R2 +0.53.
+        # Also emits the creation score (assists/90, R2 +0.29).
+        run_step("7i/8 ataque y creacion medidos por jugador",
+                 [PY, "scripts/build_player_attack_fbref.py"], optional=True, timeout=300)
+        # Before anything is rebuilt on top of them: duplicate keys, broken
+        # joins, placeholder columns. Every serious defect in this pipeline has
+        # been silent, and this is the thing that looks.
+        run_step("7j/8 auditoria de datos de jugador",
+                 [PY, "scripts/audit_player_data.py"], optional=True, timeout=300)
+        # The ratings CONSUME the FBref measurements above — the defensive
+        # blocks read duel and aerial quality, the build-up blocks read passing —
+        # so leaving this out of the weekly run froze every player's role and
+        # career level while the data underneath them refreshed. Slow (minutes)
+        # and optional: a failure here leaves the previous ratings in place.
+        run_step("7k/8 ratings unificados (roles + nivel de carrera)",
+                 [PY, "scripts/build_unified_player_ratings.py"],
+                 optional=True, timeout=1800)
+        # The draft deals from these. Rebuilt last so a signing gets a card the
+        # same week he gets a squad place.
+        run_step("7l/8 cartas de SquadLab", [PY, "scripts/build_squadlab_cards.py"],
+                 optional=True, timeout=900)
     else:
         print("\n=== 7d/8 player stats SKIPPED ===", flush=True)
 
@@ -296,6 +331,8 @@ def main() -> None:
         ("team xG", TEAM_MATCH, "date"),
         ("player-match", PLAYER_CSV, None),
         ("shots", SHOTS_CSV, None),
+        ("plantillas", ROOT / "data/processed/current_squads.csv", None),
+        ("cartas", ROOT / "data/processed/squadlab_cards.csv", None),
     ]:
         if p.exists():
             df = pd.read_csv(p, low_memory=False)
