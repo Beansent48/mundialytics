@@ -109,18 +109,30 @@ def load_strength_model() -> PlayerStrengthModel:
 
 
 def render_player_card(p, compact: bool = False) -> str:
-    """HTML card for a player."""
+    """HTML card for a player.
+
+    An ICONO is simply a player no big-five club has today — retired, or gone to
+    a league we do not track. The pool deliberately keeps them (that is the
+    point of a sandbox), so the card says which era it is offering rather than
+    letting a 2011 Barcelona side pass for this season's. Rarity and draw odds
+    are a separate, later decision; this only names the set.
+    """
     off_bar = int(p.offensive_strength * 0.9)
     def_bar = int(p.defensive_strength * 0.9)
     ov_color = "#16a34a" if p.overall >= 70 else ("#2563eb" if p.overall >= 50 else "#9ca3af")
+    icon = getattr(p, "is_icon", False)
+    icon_tag = ('<span style="font-size:9px;font-weight:700;letter-spacing:.5px;'
+                'color:#b45309;background:#fbbf2433;border:1px solid #fbbf2455;'
+                'border-radius:4px;padding:1px 4px;margin-left:6px">ICONO</span>') if icon else ""
+    where = (p.current_team or p.team).title() if not icon else p.team.title()
     if compact:
         return (
             f'<div style="background:var(--secondary-background-color);border-radius:8px;padding:8px 10px;">'
             f'<div style="display:flex;justify-content:space-between;align-items:center">'
-            f'<span style="font-weight:500;font-size:12px">{p.player.split()[0]}</span>'
+            f'<span style="font-weight:500;font-size:12px">{p.player.split()[0]}{icon_tag}</span>'
             f'<span style="font-weight:700;color:{ov_color};font-size:14px">{p.overall:.0f}</span>'
             f'</div>'
-            f'<div style="font-size:10px;color:#9ca3af">{p.team.title()} · {p.position[:3]}</div>'
+            f'<div style="font-size:10px;color:#9ca3af">{where} · {p.position[:3]}</div>'
             f'</div>'
         )
     return (
@@ -128,8 +140,8 @@ def render_player_card(p, compact: bool = False) -> str:
         f'margin-bottom:8px">'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
         f'<div>'
-        f'<div style="font-weight:500;font-size:13px">{p.player}</div>'
-        f'<div style="font-size:11px;color:#9ca3af">{p.team.title()} · {p.competition}</div>'
+        f'<div style="font-weight:500;font-size:13px">{p.player}{icon_tag}</div>'
+        f'<div style="font-size:11px;color:#9ca3af">{where} · {p.competition}</div>'
         f'</div>'
         f'<div style="font-size:22px;font-weight:700;color:{ov_color}">{p.overall:.0f}</div>'
         f'</div>'
@@ -205,28 +217,15 @@ def _build_season_orchestrator(
 
 
 def build_real_team_rosters(model: PlayerStrengthModel, real_teams: list[str]) -> dict[str, list]:
-    """Best XI (1-4-3-3 shape) per real club from the player pool, so the whole
-    league gets player-level events. Real clubs KEEP their players even if the
-    user drafted them — the drafted version is a distinct identity (see
-    clone_for_squad). Clubs with too little coverage are skipped (their matches
-    simply keep scoreline-only detail, as before)."""
-    by_team: dict[str, list] = {}
-    for p in model.profiles_.values():
-        by_team.setdefault(canonical_name(p.team), []).append(p)
-    slots = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
-    out: dict[str, list] = {}
-    for team in real_teams:
-        pool = by_team.get(canonical_name(team), [])
-        if not pool:
-            continue
-        xi: list = []
-        for pos, n in slots.items():
-            cands = sorted([p for p in pool if p.position == pos],
-                           key=lambda p: -p.overall)[:n]
-            xi += cands
-        if len(xi) >= 8:          # enough to attribute events meaningfully
-            out[team] = xi
-    return out
+    """Best XI (1-4-3-3 shape) per real club, from today's squads.
+
+    Delegates to the serving helper the API already uses: two front ends that
+    disagree about who plays for Barcelona would narrate two different seasons.
+    See mundialytics.serving.squad_roster for why the club a profile is filed
+    under is not the club its player is at.
+    """
+    from mundialytics.serving.squad_roster import real_team_rosters
+    return real_team_rosters(model, real_teams)
 
 
 def render_standings_table(table_df: pd.DataFrame, squad_team_name: str = SQUAD_TEAM_NAME,
@@ -527,96 +526,21 @@ def _strip_clone(name: str) -> str:
 
 
 def _disp(name: str | None) -> str:
-    """Short display name; a drafted clone shows its real name plus the mark so
-    it's visibly distinct from the original still playing at his old club."""
+    """Short display name, keeping whatever mark the card appended.
+
+    Three marks are in play — " ✦" for a drafted clone, " ★" for an icon and
+    " 15/16" for a prime — and all three are the tail of the string, which is
+    exactly what `display_name` keeps when it shortens. Every one of them came
+    back AS the name until it was split off first.
+    """
     if not name:
         return ""
+    from mundialytics.statistical_core.squadlab.cards import split_card_mark
+
     raw = str(name)
-    if raw.endswith(SQUAD_CLONE_MARK):
-        return _display_name_raw(_strip_clone(raw)) + SQUAD_CLONE_MARK
-    return _display_name_raw(raw)
-
-# Card tiers by our own overall rating. `variant` allows future special editions
-# (award cards, memorable-match cards) to reuse the same renderer.
-CARD_TIERS = {
-    "elite":  {"bg": ("#1b1147", "#3b1d6e"), "ink": "#ffd75e", "line": "#ffd75e", "sub": "#e9d8ff"},
-    "gold":   {"bg": ("#6b5411", "#c9a227"), "ink": "#fff6d0", "line": "#ffe9a3", "sub": "#f3e3ae"},
-    "silver": {"bg": ("#3b4450", "#8c98a6"), "ink": "#ffffff", "line": "#dfe6ee", "sub": "#e3e9f0"},
-    "bronze": {"bg": ("#4a2f1b", "#a97142"), "ink": "#ffeeda", "line": "#f0cba5", "sub": "#f0d7bd"},
-}
-
-
-def _card_tier(overall: float, variant: str | None = None) -> dict:
-    if variant and variant in CARD_TIERS:
-        return CARD_TIERS[variant]
-    if overall >= 90:
-        return CARD_TIERS["elite"]
-    if overall >= 85:
-        return CARD_TIERS["gold"]
-    if overall >= 78:
-        return CARD_TIERS["silver"]
-    return CARD_TIERS["bronze"]
-
-
-def player_card_svg(p, selected: bool = False, variant: str | None = None,
-                    width: int = 150) -> str:
-    """FUT-style player card using OUR ratings only (overall + role + ATA/DEF),
-    never FIFA-style pace/shooting/passing splits."""
-    w, h = 150, 214
-    t = _card_tier(p.overall, variant)
-    uid = abs(hash((p.player, variant or "", selected))) % 10**7
-    is_gk = p.position == "Goalkeeper"
-    # GKs: our defensive axis for them lives in gk_strength
-    off = p.offensive_strength
-    dfn = p.gk_strength if (is_gk and getattr(p, "gk_strength", 0)) else p.defensive_strength
-    glow = ('filter="url(#glow%d)"' % uid) if selected else ""
-    s = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" '
-         f'style="width:100%;max-width:{width}px;display:block;margin:0 auto">',
-         '<defs>',
-         f'<linearGradient id="g{uid}" x1="0" y1="0" x2="0.4" y2="1">'
-         f'<stop offset="0%" stop-color="{t["bg"][1]}"/>'
-         f'<stop offset="100%" stop-color="{t["bg"][0]}"/></linearGradient>',
-         f'<filter id="glow{uid}" x="-30%" y="-30%" width="160%" height="160%">'
-         f'<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#3b82f6" flood-opacity="0.95"/>'
-         f'</filter>', '</defs>']
-    # card body (hexagon-ish FUT silhouette via rounded rect + notched top)
-    s.append(f'<path d="M8 14 Q8 4 20 4 L130 4 Q142 4 142 14 L142 176 '
-             f'Q142 190 128 196 L79 210 Q75 211 71 210 L22 196 Q8 190 8 176 Z" '
-             f'fill="url(#g{uid})" stroke="{t["line"]}" stroke-width="{3 if selected else 1.5}" '
-             f'{glow}/>')
-    # overall + position + role (left column)
-    s.append(f'<text x="30" y="46" text-anchor="middle" font-size="30" font-weight="800" '
-             f'fill="{t["ink"]}">{p.overall:.0f}</text>')
-    s.append(f'<text x="30" y="62" text-anchor="middle" font-size="11" font-weight="700" '
-             f'fill="{t["sub"]}">{POS_ABBR.get(p.position, "—")}</text>')
-    role = (getattr(p, "role", "") or "").upper()[:9]
-    if role:
-        s.append(f'<text x="30" y="77" text-anchor="middle" font-size="7.5" font-weight="600" '
-                 f'fill="{t["sub"]}" opacity="0.85">{role}</text>')
-    s.append(f'<line x1="52" y1="26" x2="52" y2="78" stroke="{t["line"]}" stroke-width="1" opacity=".5"/>')
-    # crest-ish emblem (no photos available -> typographic monogram)
-    s.append(f'<circle cx="99" cy="52" r="26" fill="#00000033" stroke="{t["line"]}" '
-             f'stroke-width="1" opacity=".8"/>')
-    s.append(f'<text x="99" y="62" text-anchor="middle" font-size="24" font-weight="800" '
-             f'fill="{t["ink"]}" opacity=".92">{_disp(p.player)[:1].upper()}</text>')
-    # name
-    s.append(f'<text x="75" y="112" text-anchor="middle" font-size="13" font-weight="800" '
-             f'fill="{t["ink"]}" letter-spacing="0.5">{_disp(p.player)[:14].upper()}</text>')
-    s.append(f'<line x1="28" y1="122" x2="122" y2="122" stroke="{t["line"]}" stroke-width="1" opacity=".55"/>')
-    # OUR two stats only
-    s.append(f'<text x="52" y="146" text-anchor="middle" font-size="18" font-weight="800" '
-             f'fill="{t["ink"]}">{off:.0f}</text>')
-    s.append(f'<text x="52" y="159" text-anchor="middle" font-size="8" font-weight="700" '
-             f'fill="{t["sub"]}">ATAQUE</text>')
-    s.append(f'<text x="98" y="146" text-anchor="middle" font-size="18" font-weight="800" '
-             f'fill="{t["ink"]}">{dfn:.0f}</text>')
-    s.append(f'<text x="98" y="159" text-anchor="middle" font-size="8" font-weight="700" '
-             f'fill="{t["sub"]}">{"PARADAS" if is_gk else "DEFENSA"}</text>')
-    # team
-    s.append(f'<text x="75" y="181" text-anchor="middle" font-size="8.5" font-weight="600" '
-             f'fill="{t["sub"]}" opacity=".9">{str(p.team).title()[:18]}</text>')
-    s.append('</svg>')
-    return "".join(s)
+    clone = SQUAD_CLONE_MARK if raw.endswith(SQUAD_CLONE_MARK) else ""
+    base, mark = split_card_mark(_strip_clone(raw))
+    return _display_name_raw(base) + mark + clone
 
 
 def _rating_color(r: float) -> str:
@@ -748,264 +672,6 @@ def pitch_svg(picks: dict, coords: dict) -> str:
                        f'{_disp(profile.player)[:12]}</text>')
     svg.append('</svg>')
     return "".join(svg)
-
-
-def seeded_candidates(pool: list, pos: str, seed_str: str, excluded: set,
-                      current: str | None, model: PlayerStrengthModel,
-                      n: int = 5, shortlist_size: int = 15) -> list:
-    """Pick a random-but-stable sample of n candidates for one slot.
-
-    Drawing from a wider shortlist (top `shortlist_size` by overall) and
-    seeding the RNG per slot/reroll means each position slot — including
-    siblings like Defender #1..#4 — gets a different set of 5 instead of
-    always showing the same top-5 overall players.
-    """
-    cands = [p for p in pool if p.position == pos and p.player not in excluded and p.matches >= 3]
-    cands = sorted(cands, key=lambda p: -p.overall)[:shortlist_size]
-    if len(cands) <= n:
-        sample = cands
-    else:
-        seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
-        sample = random.Random(seed).sample(cands, n)
-    sample = sorted(sample, key=lambda p: -p.overall)
-    if current:
-        cp = model.get(current)
-        if cp and cp.player not in [s.player for s in sample]:
-            sample = [cp] + sample[:n - 1]
-    return sample
-
-
-def next_empty_slot(coords: dict, picks: dict) -> str | None:
-    for pos in POSITIONS_ORDER:
-        for slot in range(len(coords.get(pos, []))):
-            key = f"{pos}_{slot}"
-            if key not in picks:
-                return key
-    return None
-
-
-def render_draft_mode(model: PlayerStrengthModel, df_clubs: pd.DataFrame, engine=None):
-    st.markdown("### 🎮 Draft de temporada")
-    st.caption("Elige una competición: tu club sustituye al colista actual. Cada jugador fichado deja "
-              "de estar disponible para su equipo de origen — sin duplicados. Pulsa una posición para "
-              "ver candidatos.")
-
-    col_comp, col_form = st.columns([2, 1])
-    with col_comp:
-        comp_d = st.selectbox("Competición", DRAFT_COMPETITIONS, key="draft_comp_v2")
-    with col_form:
-        formation_name = st.selectbox("Formación", list(FORMATIONS.keys()), key="draft_formation")
-    coords = FORMATIONS[formation_name]
-
-    # Reset draft state on competition or formation change
-    active_key = (comp_d, formation_name)
-    if st.session_state.get("draft_active_comp") != active_key:
-        st.session_state.draft_picks = {}
-        st.session_state.draft_excluded = set()
-        st.session_state.draft_active_slot = None
-        st.session_state.draft_reroll = {}
-        st.session_state.draft_token = {}
-        st.session_state.draft_active_comp = active_key
-    st.session_state.setdefault("draft_token", {})
-
-    comp_match_id = MATCH_COMP_MAP[comp_d]
-    seasons = sorted(df_clubs.loc[df_clubs["competition"] == comp_match_id, "season"].unique(), reverse=True)
-    if not seasons:
-        st.warning("Sin datos de calendario para esta competición.")
-        return
-    season_d = seasons[0]
-    table = compute_standings(df_clubs, comp_match_id, season_d)
-    if table.empty:
-        st.warning("Sin partidos disputados todavía esta temporada.")
-        return
-
-    last_row = table.iloc[-1]
-    last_team = last_row["team"]
-    st.info(f"🔻 Tu club sustituye a **{last_team.title()}**, colista de {comp_d} {season_d} "
-           f"({int(last_row['pts'])} pts en {int(last_row['played'])} partidos).")
-
-    player_comp = PLAYER_COMP_MAP[comp_d]
-    pool = [p for p in model.profiles_.values() if p.competition == player_comp]
-    if not pool:
-        st.warning(f"No hay jugadores con perfil para {comp_d} en los datos disponibles.")
-        return
-
-    picks_resolved = {k: model.get(v) for k, v in st.session_state.draft_picks.items() if model.get(v)}
-
-    col_pitch, col_pick = st.columns([2, 3])
-
-    with col_pitch:
-        st.markdown(pitch_svg(picks_resolved, coords), unsafe_allow_html=True)
-        n_picked = len(picks_resolved)
-        st.markdown(f"<div style='text-align:center;font-weight:600;margin-top:6px'>"
-                   f"{n_picked}/11 fichados</div>", unsafe_allow_html=True)
-        if picks_resolved:
-            strength = model.team_strength(list(picks_resolved.values()))
-            st.plotly_chart(team_strength_visual(strength, "Tu equipo"), use_container_width=True)
-        if n_picked == 11:
-            st.success("Plantilla completa. Simula la temporada más abajo.")
-            if st.button("🔄 Reiniciar draft", key="draft_reset"):
-                st.session_state.draft_picks = {}
-                st.session_state.draft_excluded = set()
-                st.session_state.draft_active_slot = None
-                st.session_state.draft_reroll = {}
-                for k in ("draft_orch_key", "draft_orchestrator", "draft_season_result",
-                         "draft_playback_matchday", "draft_watched_matchdays",
-                         "draft_playback_done", "draft_mc_holder"):
-                    st.session_state.pop(k, None)
-                st.rerun()
-
-    with col_pick:
-        st.caption("El número en cada candidato es su **valoración global (0-100)**: una nota absoluta de "
-                  "ataque y defensa calculada a partir de sus estadísticas reales por partido (goles, "
-                  "asistencias, xG, entradas, presiones...), no un ranking relativo a otros jugadores.")
-
-        st.markdown("**Elige una posición:**")
-        for pos in POSITIONS_ORDER:
-            pos_coords = coords.get(pos, [])
-            if not pos_coords:
-                continue
-            st.markdown(f"<div style='font-size:11px;color:#9ca3af;margin-top:6px'>{pos}</div>",
-                       unsafe_allow_html=True)
-            slot_cols = st.columns(len(pos_coords))
-            for slot, sc in enumerate(slot_cols):
-                key = f"{pos}_{slot}"
-                current = st.session_state.draft_picks.get(key)
-                is_active = st.session_state.draft_active_slot == key
-                label = (_disp(current)[:10] if current else f"#{slot + 1}")
-                if sc.button(("🟢 " if is_active else ("✅ " if current else "")) + label,
-                           key=f"slotbtn_{comp_d}_{formation_name}_{key}",
-                           use_container_width=True):
-                    st.session_state.draft_active_slot = None if is_active else key
-                    if not is_active:   # opening a slot -> fresh random candidate draw
-                        st.session_state.draft_token[key] = random.randrange(2**31)
-                    st.rerun()
-
-        active_slot = st.session_state.draft_active_slot
-        if active_slot:
-            pos = active_slot.rsplit("_", 1)[0]
-            current = st.session_state.draft_picks.get(active_slot)
-            # genuine per-view randomness: a token generated when the slot is
-            # opened (and bumped on reroll), not a seed tied to slot identity
-            token = st.session_state.draft_token.setdefault(active_slot, random.randrange(2**31))
-            seed_str = f"{token}"
-            candidates = seeded_candidates(pool, pos, seed_str, st.session_state.draft_excluded,
-                                          current, model)
-
-            st.markdown("---")
-            st.markdown(f"<div style='text-align:center;font-size:1.1rem;font-weight:800;"
-                        f"letter-spacing:.06em;color:#d7e3f4'>ELIGE UN JUGADOR</div>"
-                        f"<div style='text-align:center;font-size:.75rem;color:#8b9bb4;"
-                        f"margin-bottom:6px'>{pos} · slot #{int(active_slot.rsplit('_',1)[1]) + 1}</div>",
-                        unsafe_allow_html=True)
-            if not candidates:
-                st.caption("Sin candidatos disponibles en esta competición.")
-            else:
-                cand_cols = st.columns(len(candidates))
-                for cc, cand in zip(cand_cols, candidates):
-                    is_current = current == cand.player
-                    cc.markdown(player_card_svg(cand, selected=is_current), unsafe_allow_html=True)
-                    if cc.button("Elegido" if is_current else "Elegir",
-                                key=f"pick_{comp_d}_{formation_name}_{active_slot}_{cand.player}",
-                                disabled=is_current):
-                        if current:
-                            st.session_state.draft_excluded.discard(current)
-                        st.session_state.draft_picks[active_slot] = cand.player
-                        st.session_state.draft_excluded.add(cand.player)
-                        st.session_state.draft_active_slot = next_empty_slot(coords, st.session_state.draft_picks)
-                        st.rerun()
-                if st.button("🎲 Ver otros 5 candidatos", key=f"reroll_{comp_d}_{formation_name}_{active_slot}"):
-                    st.session_state.draft_token[active_slot] = random.randrange(2**31)
-                    st.rerun()
-        else:
-            st.caption("👆 Pulsa una posición arriba para ver sus 5 candidatos.")
-
-    if len(picks_resolved) < 11:
-        return
-
-    st.markdown("---")
-    st.markdown("### 🏆 Temporada en directo")
-    if engine is None:
-        st.warning("Motor de predicción no disponible; no se puede simular la temporada.")
-        return
-
-    squad_11 = list(picks_resolved.values())
-    real_opponents = [canonical_name(t) for t in table["team"].tolist() if t != last_team]
-    squad_key = (comp_d, formation_name, tuple(sorted(st.session_state.draft_picks.items())))
-
-    if st.session_state.get("draft_orch_key") != squad_key:
-        st.session_state.draft_orch_key = squad_key
-        st.session_state.draft_orchestrator = _build_season_orchestrator(
-            model, engine, squad_11, real_opponents, competition=comp_match_id,
-        )
-        for k in ("draft_season_result", "draft_playback_matchday", "draft_watched_matchdays",
-                 "draft_playback_done", "draft_mc_holder"):
-            st.session_state.pop(k, None)
-
-    orchestrator: SeasonOrchestrator = st.session_state.draft_orchestrator
-
-    if "draft_season_result" not in st.session_state:
-        st.caption("Juega tu jornada a jornada, en directo — mientras tanto calculamos "
-                  f"{MC_N_SIMS:,} simulaciones Monte Carlo en segundo plano.")
-        if st.button("🎬 Empezar temporada en directo", key="draft_start_live", use_container_width=True):
-            with st.spinner("Preparando la temporada..."):
-                st.session_state.draft_season_result = orchestrator.play_once(narrative=True)
-            st.session_state.draft_playback_matchday = 1
-            st.session_state.draft_watched_matchdays = set()
-            st.session_state.draft_playback_done = False
-            st.session_state.draft_mc_holder = start_monte_carlo_background(orchestrator, MC_N_SIMS)
-            st.rerun()
-        return
-
-    season_result: SeasonResult = st.session_state.draft_season_result
-    total_matchdays = max(m.matchday for m in season_result.matches)
-
-    if not st.session_state.get("draft_playback_done", False):
-        matchday = st.session_state.draft_playback_matchday
-        st.markdown(f"#### 🗓️ Jornada {matchday} de {total_matchdays}")
-
-        matchday_matches = [m for m in season_result.matches if m.matchday == matchday]
-        squad_match = next(m for m in matchday_matches if m.home == SQUAD_TEAM_NAME or m.away == SQUAD_TEAM_NAME)
-
-        already_watched = matchday in st.session_state.draft_watched_matchdays
-        if not already_watched:
-            home_label = "⭐ " + squad_match.home if squad_match.home == SQUAD_TEAM_NAME else squad_match.home.title()
-            away_label = "⭐ " + squad_match.away if squad_match.away == SQUAD_TEAM_NAME else squad_match.away.title()
-            st.markdown(f"**{home_label} vs {away_label}**")
-            wc1, wc2 = st.columns([2, 1])
-            play_clicked = wc1.button("▶️ Reproducir partido en directo", key=f"draft_play_{matchday}",
-                                      use_container_width=True)
-            skip_anim = wc2.button("⏭️ Saltar animación", key=f"draft_skip_anim_{matchday}",
-                                   use_container_width=True)
-            if play_clicked:
-                play_live_match(squad_match, SQUAD_TEAM_NAME, picks_resolved, coords)
-                st.session_state.draft_watched_matchdays.add(matchday)
-                already_watched = True
-            elif skip_anim:
-                st.session_state.draft_watched_matchdays.add(matchday)
-                already_watched = True
-
-        if already_watched:
-            render_matchday_summary(season_result, matchday, SQUAD_TEAM_NAME)
-            nb1, nb2 = st.columns([2, 1])
-            if matchday < total_matchdays:
-                if nb1.button("▶️ Siguiente jornada", key=f"draft_next_{matchday}", use_container_width=True):
-                    st.session_state.draft_playback_matchday += 1
-                    st.rerun()
-            else:
-                if nb1.button("🏁 Ver resumen final de temporada", key="draft_finish", use_container_width=True):
-                    st.session_state.draft_playback_done = True
-                    st.rerun()
-            if nb2.button("⏭️ Saltar al resultado final", key=f"draft_skip_all_{matchday}", use_container_width=True):
-                st.session_state.draft_playback_done = True
-                st.rerun()
-
-    if st.session_state.get("draft_playback_done", False):
-        st.markdown("---")
-        render_season_result(season_result)
-
-    st.markdown("---")
-    render_monte_carlo_status(st.session_state.get("draft_mc_holder"), MC_N_SIMS)
 
 
 HIST_CSV = ROOT / "data/processed/historical_teams.csv"
@@ -1321,14 +987,12 @@ def render(engine=None, df_clubs: pd.DataFrame | None = None):
                   "data/processed/player_profiles_with_positions.csv existe.")
         return
 
-    mode = st.radio("Modo", ["🎮 Draft — temporada FM-style", "🔬 Sandbox — equipo libre",
+    mode = st.radio("Modo", ["🎮 Champions Draft", "🔬 Sandbox — equipo libre",
                              "🏛️ Champions histórica"], horizontal=True)
 
     if "Draft" in mode:
-        if df_clubs is None:
-            st.warning("Datos de calendario no disponibles para calcular el colista.")
-            return
-        render_draft_mode(sq_model, df_clubs, engine)
+        import squadlab_draft
+        squadlab_draft.render()
     elif "Champions" in mode:
         render_historic_champions()
     else:

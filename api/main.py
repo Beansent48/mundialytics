@@ -42,6 +42,13 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
+    # ...and any other local port, because the dev server does not always get
+    # 3000: a second session holding it pushes Next.js onto 3001 and every
+    # browser call then failed CORS while server-side calls kept working, which
+    # looks like a broken app rather than a busy port. The regex echoes the
+    # caller's own origin, so allow_credentials still holds (a bare "*" would
+    # not). Production is same-origin and unaffected.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     # POST is here for /squadlab/season, which carries the user's chosen eleven
     # in its body. Listing only GET silently blocked it in the browser while
