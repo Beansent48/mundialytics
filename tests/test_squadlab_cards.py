@@ -21,6 +21,10 @@ import build_squadlab_cards as C_BUILD  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 CARDS = ROOT / "data/processed/squadlab_cards.csv"
+_CL_CSV = ROOT / "data/external/uefa/raw_champions-league_2026.csv"
+_needs_cl = pytest.mark.skipif(
+    not _CL_CSV.exists(), reason="Champions League CSV not in repo (gitignored)"
+)
 
 
 def _cards() -> pd.DataFrame:
@@ -404,6 +408,7 @@ def test_the_pitch_has_a_spot_for_every_slot():
 
 
 # ── the Champions field ────────────────────────────────────────────────────────
+@_needs_cl
 def test_the_champions_field_is_thirty_six_teams_of_eight_games():
     """35 teams is not a Champions League: the league phase and the whole
     bracket are built on the field being exactly 36."""
@@ -415,6 +420,7 @@ def test_the_champions_field_is_thirty_six_teams_of_eight_games():
     assert set(played.unique()) == {8}, played[played != 8].to_dict()
 
 
+@_needs_cl
 def test_the_squad_replaces_the_weakest_side_and_inherits_its_draw():
     from mundialytics.statistical_core.squadlab.champions import (
         ChampionsRun, load_field, weakest_team,
@@ -432,6 +438,7 @@ def test_the_squad_replaces_the_weakest_side_and_inherits_its_draw():
     assert len(mine) == 8
 
 
+@_needs_cl
 def test_a_full_run_produces_a_champion_and_your_own_matches():
     from mundialytics.statistical_core.squadlab.champions import ChampionsRun, load_field
 
