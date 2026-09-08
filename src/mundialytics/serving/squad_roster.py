@@ -70,11 +70,11 @@ def _pools_from_current_squads(model, squads) -> dict[str, list]:
             prof, kind = idx.lookup_detail(who)
             if prof is None:
                 continue
-            # A short-key match dropped a middle name to get here, so it has to
-            # agree about the position too. Without this Alavés' goalkeeper
-            # Adrián Rodríguez becomes the retired forward Adrián López
-            # Rodríguez — and then keeps goal.
-            if kind == "short" and pos in XI_SLOTS and prof.position != pos:
+            # A short-key or containment match dropped name parts to get here,
+            # so it has to agree about the position too. Without this Alavés'
+            # goalkeeper Adrián Rodríguez becomes the retired forward Adrián
+            # López Rodríguez — and then keeps goal.
+            if kind != "full" and pos in XI_SLOTS and prof.position != pos:
                 continue
             # slot him where he plays NOW; the profile's own position is a
             # career summary and goes stale with the rest of it
