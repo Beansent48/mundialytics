@@ -90,7 +90,7 @@ LEAGUE_W = 0.24
 # later. Blended instead with the recent season weighted far more; a player with
 # only an old season keeps it but his current form (added in the card layer) is
 # what then decides whether he still rates.
-SEASON_RECENCY = {"2526": 1.0, "2425": 0.40, "2324": 0.15}
+SEASON_RECENCY = {"2526": 1.0, "2425": 0.25, "2324": 0.08}
 BLEND_RATE_COLS = ["npxg_p90", "xag_p90", "sca_p90", "gca_p90", "npxg_per_shot",
                    "finishing_p90", "goals_p90", "kp_p90", "prog_passes_p90",
                    "assists_p90", "ga_p90"]
@@ -177,6 +177,7 @@ def load_2425() -> pd.DataFrame:
     return pd.DataFrame({
         "player": d["Player"], "club": d["Squad"], "league": d["Comp"], "season": "2425",
         "position": d["Pos"].map(_pos), "n90": n90,
+        "birth_year": pd.to_numeric(d["Born"], errors="coerce"),
         "npxg_p90": npxg / n90.clip(lower=0.5),
         "xag_p90": pd.to_numeric(d["xAG"], errors="coerce") / n90.clip(lower=0.5),
         "sca_p90": pd.to_numeric(d["SCA90"], errors="coerce"),
@@ -190,6 +191,11 @@ def load_2425() -> pd.DataFrame:
         "prog_passes_p90": pd.to_numeric(d["PrgP"], errors="coerce") / n90.clip(lower=0.5),
         "assists_p90": pd.to_numeric(d["Ast"], errors="coerce") / n90.clip(lower=0.5),
         "ga_p90": ((goals - pens) + pd.to_numeric(d["Ast"], errors="coerce")) / n90.clip(lower=0.5),
+        # possession craft: keeping the ball and beating a man — see possession_level
+        "pass_pct": pd.to_numeric(d["Cmp%"], errors="coerce"),
+        "dribble_pct": pd.to_numeric(d["Succ%"], errors="coerce"),
+        "dribble_att": pd.to_numeric(d["Att_stats_possession"], errors="coerce"),
+        "dispossessed_p90": pd.to_numeric(d["Dis"], errors="coerce") / n90.clip(lower=0.5),
     })
 
 
@@ -210,6 +216,7 @@ def load_2324() -> pd.DataFrame:
     return pd.DataFrame({
         "player": sh["player"], "club": sh["club"], "league": sh["league"], "season": "2324",
         "position": sh["position"].map(_pos), "n90": n90,
+        "birth_year": np.nan,          # 23/24 dump carries only age; recent seasons cover it
         "npxg_p90": npxg / n90.clip(lower=0.5),
         "xag_p90": sh["player"].map(xag) / n90.clip(lower=0.5),
         "sca_p90": sh["player"].map(sca),
@@ -221,6 +228,12 @@ def load_2324() -> pd.DataFrame:
         "prog_passes_p90": sh["player"].map(dict(zip(pa["player"], pd.to_numeric(pa["prog_passes"], errors="coerce")))) / n90.clip(lower=0.5),
         "assists_p90": sh["player"].map(ast) / n90.clip(lower=0.5),
         "ga_p90": ((goals - pens) + sh["player"].map(ast)) / n90.clip(lower=0.5),
+        # 23/24 has pass completion but no take-on table here; the recent seasons
+        # carry the dribble half (this is the least-weighted season anyway)
+        "pass_pct": sh["player"].map(dict(zip(pa["player"], pd.to_numeric(pa["passes_pct"], errors="coerce")))),
+        "dribble_pct": np.nan,
+        "dribble_att": np.nan,
+        "dispossessed_p90": np.nan,
     })
 
 
@@ -268,6 +281,7 @@ def load_2526() -> pd.DataFrame:
         "player": d["player"], "club": d["team"],
         "league": d["league"].map(LEAGUE_2526).fillna(d["league"]),
         "season": "2526", "position": d["pos_"].map(_pos), "n90": d["_n90u"],
+        "birth_year": pd.to_numeric(d["born_"], errors="coerce"),
         "npxg_p90": npxg / den,
         "xag_p90": pd.to_numeric(d["xa_under"], errors="coerce") / den,
         "sca_p90": np.nan,          # no SCA here -> the 24/25 FBref season carries it
@@ -279,6 +293,11 @@ def load_2526() -> pd.DataFrame:
         "prog_passes_p90": np.nan,  # no PrgP here -> the 24/25 FBref season carries it
         "assists_p90": ast / den,
         "ga_p90": (npg + ast) / den,
+        # possession craft from SofaScore (percentages need no denominator)
+        "pass_pct": pd.to_numeric(d["accuratePassesPercentage"], errors="coerce"),
+        "dribble_pct": pd.to_numeric(d["successfulDribblesPercentage"], errors="coerce"),
+        "dribble_att": pd.to_numeric(d["totalContest"], errors="coerce"),
+        "dispossessed_p90": pd.to_numeric(d["dispossessed"], errors="coerce") / den,
     })
 
 
@@ -338,6 +357,44 @@ def blend_level(full: pd.DataFrame, sig_col: str) -> pd.DataFrame:
             "n90": float(np.nansum(gg["swn"].to_numpy(float))),
             "league": gg["league"].iloc[-1], "position": gg["position"].iloc[-1]})
     return pd.DataFrame(rows)
+
+
+# Possession craft — keeping the ball and beating a man with a short dribble.
+# This is what a deep playmaker (Pedri, Rodri, Frenkie de Jong) is elite at and
+# the chance-creation numbers miss entirely: their value is retention and
+# progression, not assists. Quality over volume — dribble SUCCESS rate, shrunk
+# by attempts so a two-of-two does not read as elite, never dribbles attempted,
+# or Cherki's wasteful high-volume dribbling (48% success) would score here too.
+POSS_SIGNALS = {"pass_pct": (0.45, True), "dribble_pct": (0.35, True),
+                "dispossessed_p90": (0.20, False)}
+POSS_SHRINK_DRIBBLE = 20.0
+
+
+def possession_level(full: pd.DataFrame) -> pd.Series:
+    """Per-player possession/control level (player -> z), standardised per season
+    then recency-blended, on the same scale as att_level_z."""
+    f = full.copy()
+    if "dribble_pct" in f.columns:                 # shrink the rate by attempts
+        n = pd.to_numeric(f.get("dribble_att"), errors="coerce").fillna(0.0)
+        prior = f.groupby(["season", "position"])["dribble_pct"].transform("mean")
+        cr = n / (n + POSS_SHRINK_DRIBBLE)
+        f["dribble_pct"] = cr * f["dribble_pct"].fillna(prior) + (1 - cr) * prior
+    num = pd.Series(0.0, index=f.index)
+    den = pd.Series(0.0, index=f.index)
+    key = [f["season"], f["position"]]
+    for stat, (w, hb) in POSS_SIGNALS.items():
+        if stat not in f.columns:
+            continue
+        z = f.groupby(key)[stat].transform(lambda s: (s - s.mean()) / (s.std() if s.std() else 1.0))
+        z = z if hb else -z
+        m = z.notna().astype(float)
+        num = num + z.fillna(0.0) * w * m
+        den = den + w * m
+    f["_poss"] = num / den.replace(0.0, np.nan)
+    bl = blend_level(f, "_poss")
+    zc = (bl["lvl"] - bl["lvl"].mean()) / (bl["lvl"].std() or 1.0)
+    cr = bl["n90"] / (bl["n90"] + CRED_90S)
+    return pd.Series(dict(zip(bl["player"], np.clip(zc.fillna(0.0) * cr, -Z_CLIP, Z_CLIP))))
 
 
 def fit_weights(a: pd.DataFrame, b: pd.DataFrame, features=None,
@@ -513,8 +570,19 @@ def build() -> pd.DataFrame:
         d["crea_z"] = np.nan
         d["crea_level_z"] = np.nan
 
-    cols = ["player", "club", "league", "season", "position", "n90", "att_z",
-            "att_level_z", "att_league_z", "crea_z", "crea_level_z", "league_elo", "att_signals"] + FEATURES + [
+    # birth year (invariant per player) — the disambiguator the card matcher uses
+    # to tell two same-named players apart. Taken from whichever season has it.
+    bmap = full.dropna(subset=["birth_year"]).groupby("player")["birth_year"].first()
+    d["birth_year"] = d["player"].map(bmap)
+
+    # ── possession / control level (Pedri, Rodri: retention + short dribbling) ──
+    d["poss_level_z"] = d["player"].map(possession_level(full)).fillna(0.0)
+    print(f"  nivel de posesión (pase + regate exitoso): "
+          f"{(d['poss_level_z'] != 0).sum():,} jugadores")
+
+    cols = ["player", "club", "league", "season", "position", "n90", "birth_year", "att_z",
+            "att_level_z", "att_league_z", "crea_z", "crea_level_z", "poss_level_z",
+            "league_elo", "att_signals"] + FEATURES + [
             c for c in CREA_FEATURES if c not in FEATURES] + ["assists_p90", "goals_p90", "ga_p90"]
     return d[cols].round(3).reset_index(drop=True)
 

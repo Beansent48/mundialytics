@@ -230,24 +230,42 @@ class NameIndex:
         self._short: dict[str, list[tuple[float, int, object]]] = {}
         self._by_token: dict[str, list[tuple[frozenset, float, object]]] = {}
 
-    def add(self, name: object, value: object, rank: float = 0.0) -> None:
+    def add(self, name: object, value: object, rank: float = 0.0,
+            birth: float | None = None) -> None:
         """`rank` breaks ties — pass recency (or sample size) so the live
-        player beats a namesake who stopped playing years ago."""
+        player beats a namesake who stopped playing years ago. `birth` is the
+        player's birth year: when the caller knows the birth year of the man it
+        is looking for, it separates two namesakes that rank alone cannot."""
         fk, sk, n = full_key(name), short_key(name), _n_parts(name)
         if fk:
-            self._full.setdefault(fk, []).append((rank, n, value))
+            self._full.setdefault(fk, []).append((rank, n, value, birth))
         if sk:
-            self._short.setdefault(sk, []).append((rank, n, value))
+            self._short.setdefault(sk, []).append((rank, n, value, birth))
         parts = name_parts(name)
         if len(parts) >= MIN_SHARED_TOKENS:
             for t in set(parts):
                 self._by_token.setdefault(t, []).append((parts, rank, value))
 
-    def lookup(self, name: object, confirm=None):
+    def lookup(self, name: object, confirm=None, birth: float | None = None):
         """Best historical record for `name`, or None. See `lookup_detail`."""
-        return self.lookup_detail(name, confirm)[0]
+        return self.lookup_detail(name, confirm, birth)[0]
 
-    def lookup_detail(self, name: object, confirm=None) -> tuple[object, str]:
+    @staticmethod
+    def _prefer_birth(hits: list, birth: float | None) -> list:
+        """Keep only the candidates whose birth year matches (±1), if any do.
+
+        A birthday falls either side of the season boundary, so age->year can be
+        off by one; ±1 absorbs that while still separating two players born years
+        apart. Falls back to all hits when none carries a birth year or none
+        matches, so this can only help, never lose a real match."""
+        if birth is None:
+            return hits
+        near = [h for h in hits if len(h) > 3 and h[3] is not None
+                and abs(float(h[3]) - float(birth)) <= 1]
+        return near or hits
+
+    def lookup_detail(self, name: object, confirm=None,
+                      birth: float | None = None) -> tuple[object, str]:
         """As `lookup`, plus which key matched: "full", "short", or "".
 
         Callers use it to hold the short key to a higher standard. It is the
@@ -260,14 +278,17 @@ class NameIndex:
         hits = self._full.get(full_key(name))
         if hits:
             # keyed, never a bare max: the third element is the caller's own
-            # object and comparing two of them raises rather than tie-breaks
-            return max(hits, key=lambda h: h[0])[2], "full"
+            # object and comparing two of them raises rather than tie-breaks.
+            # Birth year separates two same-named players before rank decides.
+            cand = self._prefer_birth(hits, birth)
+            return max(cand, key=lambda h: h[0])[2], "full"
         hits = self._short.get(short_key(name))
         if hits:
             want = _n_parts(name)
             near = [h for h in hits if abs(h[1] - want) <= MAX_DROPPED_NAME_PARTS]
             if near:
-                # closest in length first, then the caller's rank
+                # closest in length first, then birth year, then the caller's rank
+                near = self._prefer_birth(near, birth)
                 return max(near, key=lambda h: (-abs(h[1] - want), h[0]))[2], "short"
         hit = self._contained(name)
         if hit is not None:
