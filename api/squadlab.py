@@ -28,6 +28,13 @@ SQUAD_TEAM_NAME = "Your XI"
 POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 SLOTS = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
 
+# How many of each card kind the shortlist carries, per position. The catalogue
+# holds 138 primes and 62 icons against 2,811 current players, but sorting the
+# lot by rating floats every special to the top and a draft becomes "take the
+# eleven legends" — the shortlist has to carry the scarcity the pack odds carry
+# in the Streamlit draft.
+POOL_MIX = {"actual": 34, "prime": 4, "icono": 2}
+
 # The player-profile file and the results file spell competitions differently.
 PLAYER_COMP = {
     "LaLiga": "La Liga",
@@ -47,21 +54,92 @@ def strength_model():
     return model
 
 
+def _card_entry(c) -> dict:
+    """One card in the shape the client draws.
+
+    `player` is the CARD id, not the man's name: a player has up to three cards
+    (this season's, a prime season, an icon) and the client has to be able to
+    post back which one it drafted.
+    """
+    return {
+        "player": c.card_id,
+        "display": c.display,
+        "team": c.club if c.kind != "actual" else c.club.title(),
+        "position": c.position,
+        "role": c.role,
+        "kind": c.kind,
+        "season": c.season_label or None,
+        "overall": round(float(c.overall), 1),
+        # A keeper has one rating, shot-stopping, and the client reads it out of
+        # the attack slot (see player-card.tsx). The other two axes are not
+        # small for him, they do not exist.
+        "attack": round(float(c.gk if c.position == "Goalkeeper" else c.attack), 1),
+        "defense": None if c.position == "Goalkeeper" else round(float(c.defense), 1),
+        "creation": None if c.position == "Goalkeeper" else round(float(c.creation), 1),
+        "measured": bool(c.n_def > 0),
+        "matches": int(c.matches),
+    }
+
+
 def pool(competition_id: str, limit_per_position: int = 40) -> dict:
-    """The players available to draft, by position, best first.
+    """The cards available to draft, by position, best first.
+
+    Reads the card catalogue rather than the rating model. The model files every
+    player under the club he is REMEMBERED for and knows one version of him, so
+    the draft used to offer Messi at Barcelona and nothing else; the catalogue is
+    built from this week's squads and carries the primes and the icons too. See
+    scripts/build_squadlab_cards.py.
 
     The whole shortlist goes to the client in one response rather than five
     candidates at a time: rerolling a slot then costs nothing, and the draft
     stops feeling like a form.
     """
+    from mundialytics.statistical_core.squadlab.cards import cards_from_frame, load_cards
+
+    df = load_cards()
+    if df.empty:                      # catalogue not built: fall back to the model
+        return _pool_from_profiles(competition_id, limit_per_position)
+
+    comp = PLAYER_COMP.get(competition_id, competition_id)
+    # Primes and icons belong to no current league, and excluding them from a
+    # league draft would remove the two card types worth chasing.
+    keep = (df["kind"] != "actual") | (df["league"].isin({comp, competition_id}))
+    by_pos: dict[str, list[dict]] = {p: [] for p in POSITIONS}
+    for pos in POSITIONS:
+        at_pos = df[keep & (df["position"] == pos)]
+        picked: list[dict] = []
+        for kind, n in POOL_MIX.items():
+            grp = at_pos[at_pos["kind"] == kind]
+            if grp.empty:
+                continue
+            if kind == "actual":
+                # the best current players in the league, straightforwardly
+                chosen = grp.nlargest(n, "overall")
+            else:
+                # a stable sample rather than the top n: otherwise every league
+                # in every session is offered the same two icons, and the rarest
+                # cards in the game turn into fixtures of the furniture
+                chosen = grp.nlargest(min(len(grp), n * 6), "overall")
+                chosen = _stable_sample(chosen, f"{competition_id}|{pos}|{kind}", n)
+            picked += [_card_entry(c) for c in cards_from_frame(chosen)]
+        by_pos[pos] = sorted(picked, key=lambda x: -x["overall"])[:limit_per_position]
+    return {"slots": SLOTS, "positions": POSITIONS, "players": by_pos}
+
+
+def _stable_sample(df: pd.DataFrame, seed: str, n: int) -> pd.DataFrame:
+    if len(df) <= n:
+        return df
+    seed_int = int(hashlib.md5(seed.encode()).hexdigest(), 16) % (2**32)
+    return df.sample(n=n, random_state=seed_int)
+
+
+def _pool_from_profiles(competition_id: str, limit_per_position: int) -> dict:
+    """The pre-catalogue pool, kept so a missing CSV degrades instead of 503s."""
     model = strength_model()
     comp = PLAYER_COMP.get(competition_id, competition_id)
-
     by_pos: dict[str, list[dict]] = {p: [] for p in POSITIONS}
     for name, prof in model.profiles_.items():
-        if prof.position not in by_pos:
-            continue
-        if getattr(prof, "matches", 0) < 3:
+        if prof.position not in by_pos or getattr(prof, "matches", 0) < 3:
             continue
         if competition_id and getattr(prof, "competition", None) not in (comp, None):
             continue
@@ -70,24 +148,17 @@ def pool(competition_id: str, limit_per_position: int = 40) -> dict:
             "display": _display(name),
             "team": str(getattr(prof, "team", "") or "").title(),
             "position": prof.position,
+            "role": getattr(prof, "role", ""),
+            "kind": "actual",
+            "season": None,
             "overall": round(float(prof.overall), 1),
-            # The profile's own axis names. `attack_index`/`defense_index` never
-            # existed, so every card was drawn with two empty bars.
-            # A keeper's attacking axis is meaningless (it is the neutral 50 for
-            # every outfielder too), so the card shows shot-stopping instead.
-            "attack": round(
-                float(
-                    prof.gk_strength
-                    if prof.position == "Goalkeeper"
-                    else prof.offensive_strength
-                ),
-                1,
-            ),
+            "attack": round(float(prof.gk_strength if prof.position == "Goalkeeper"
+                                  else prof.offensive_strength), 1),
             "defense": round(float(prof.defensive_strength), 1),
             "creation": round(float(prof.creation_strength), 1),
+            "measured": True,
             "matches": int(getattr(prof, "matches", 0)),
         })
-
     for p in by_pos:
         by_pos[p] = sorted(by_pos[p], key=lambda x: -x["overall"])[:limit_per_position]
     return {"slots": SLOTS, "positions": POSITIONS, "players": by_pos}
@@ -102,14 +173,18 @@ def _display(name: str) -> str:
     by the `isSquad` flag, so the name does not need to encode it.
     """
     from mundialytics.serving.squad_roster import strip_clone
+    from mundialytics.statistical_core.squadlab.cards import split_card_mark
 
-    clean = strip_clone(name)
+    # A prime and an icon carry their own mark for the same reason a clone does:
+    # they are separate identities in the scorer race. Shortening eats it —
+    # "Suárez 15/16" came back as "15/16" — so it is put back afterwards.
+    base, mark = split_card_mark(strip_clone(name))
     try:
         from mundialytics.identity.display_names import display_name
 
-        return display_name(clean)
+        return display_name(base) + mark
     except Exception:
-        return clean
+        return base + mark
 
 
 def seeded_sample(candidates: list[dict], seed: str, n: int = 5) -> list[dict]:
@@ -166,8 +241,7 @@ def play_season(engine, df_clubs: pd.DataFrame, competition_id: str,
     )
 
     model = strength_model()
-    squad = [model.get(n) for n in squad_names]
-    squad = [p for p in squad if p is not None]
+    squad = resolve_squad(model, squad_names)
     if len(squad) < 11:
         raise ValueError("The squad needs eleven players the model knows")
 
@@ -194,6 +268,32 @@ def play_season(engine, df_clubs: pd.DataFrame, competition_id: str,
     mc = orch.run_monte_carlo(n_sims=n_sims)
 
     return _shape_season(season, mc, replaced)
+
+
+def resolve_squad(model, names: list[str]):
+    """Card ids (or, for an old client, player names) -> playable profiles.
+
+    A profile built from a card carries the MEASURED axes, not the ones printed
+    on its face: the scorer weights and the squad-to-lambda bridge were fitted
+    against the measured scale, and handing them card-face numbers would flatten
+    the gap between a striker and a full-back. See squadlab/cards.py.
+    """
+    from mundialytics.statistical_core.squadlab.cards import cards_from_frame, load_cards
+
+    df = load_cards()
+    by_id = {}
+    if not df.empty:
+        by_id = {c.card_id: c for c in cards_from_frame(df)}
+    out = []
+    for n in names:
+        card = by_id.get(str(n))
+        if card is not None:
+            out.append(card.to_profile())
+            continue
+        prof = model.get(n)             # a name, from a client older than the catalogue
+        if prof is not None:
+            out.append(prof)
+    return out
 
 
 def _shape_season(season, mc: pd.DataFrame, replaced: str | None) -> dict:
