@@ -57,3 +57,36 @@ Carlos Arturo Bacca Ahumada,Carlos Bacca,paternal surname; Ahumada is maternal
 Eric-Sylvain Bilal Abidal,Eric Abidal,common short form
 Gerard Moreno Balaguero,Gerard Moreno,paternal surname; Balaguero is maternal
 Philippe Coutinho Correia,Philippe Coutinho,drop maternal surname
+Kylian Mbappe-Lottin,Mbappé,Understat spells the maternal surname into the paternal one
+Kylian Mbappé Lottin,Mbappé,same player as the hyphenated Understat spelling
+Ricardo Izecson dos Santos Leite,Kaká,known universally by his nickname
+Ronaldo Luíz Nazário de Lima,Ronaldo,the original Ronaldo; last word is a particle surname
+Gnégnéri Yaya Touré,Yaya Touré,given name is part of the football name
+Javier Alejandro Mascherano,Mascherano,paternal surname
+Marcelo Vieira da Silva Júnior,Marcelo,known by given name
+Samuel Eto''o Fils,Eto'o,doubled apostrophe is a CSV artefact of the source
+Didier Yves Drogba Tébily,Drogba,paternal surname is Drogba
+Edinson Roberto Cavani Gómez,Cavani,paternal surname
+Sergio Leonel Agüero del Castillo,Agüero,paternal surname
+Radamel Falcao García Zárate,Falcao,known by his given name
+Ángel Fabián Di María Hernández,Di María,paternal surname with particle
+Alexis Alejandro Sánchez Sánchez,Alexis Sánchez,repeated surname
+Ronaldo de Assis Moreira,Ronaldinho,nickname
+Andrés Iniesta Luján,Iniesta,paternal surname
+Xavier Hernández Creus,Xavi,known by his nickname
+Sergio Busquets i Burgos,Busquets,paternal surname
+Carles Puyol i Saforcada,Puyol,paternal surname
+Gerard Piqué Bernabéu,Piqué,paternal surname
+Sergio Ramos García,Sergio Ramos,paternal surname
+Iker Casillas Fernández,Casillas,paternal surname
+Raúl González Blanco,Raúl,known by his given name
+David Villa Sánchez,David Villa,paternal surname
+Gonzalo Gerardo Higuaín,Higuaín,
+Carlos Alberto Tevez,Tevez,
+Diego Forlán Corazo,Forlán,
+Diego Armando Maradona,Maradona,
+Cristiano Ronaldo dos Santos Aveiro,Cristiano Ronaldo,
+Wayne Mark Rooney,Rooney,
+Franck Bilal Ribéry,Ribéry,
+Gareth Frank Bale,Bale,
+Cristiano Ronaldo,Cristiano Ronaldo,the modern pipeline stores the short form; the icon "Ronaldo" is Nazario
