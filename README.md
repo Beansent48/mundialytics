@@ -78,7 +78,7 @@ that have Bet365 odds attached. Regenerate with
 ```
 football-data.co.uk ─┐
 Understat / StatsBomb ├─→ canonical match schema ─→ features ─→ models ─→ markets
-ClubElo / FBref      ─┘      (entity resolution)        │          │
+ClubElo / FBref / ESPN ┘     (entity resolution)        │          │
                                                         │          ├─ 1X2 / O-U / BTTS
                               internal Elo ─────────────┤          ├─ half-time markets
                               walk-forward form ────────┤          ├─ team props
@@ -288,7 +288,7 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
-pytest tests/                    # 159 pass on a clean checkout
+pytest tests/                    # 165 pass on a clean checkout
 streamlit run app/streamlit_app.py
 ```
 
@@ -317,7 +317,7 @@ src/mundialytics/
 └── simulation/         tournament Monte Carlo
 
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  159 tests green on a clean checkout; 32 more
+tests/                  165 tests green on a clean checkout; 39 more
                         skip unless the local dataset is built
 docs/                   design docs and full version history
 ```
@@ -326,7 +326,14 @@ docs/                   design docs and full version history
 
 Research project, run in **paper mode** — no money has ever been staked on it.
 Everything comes from free public sources: football-data.co.uk (results and
-odds), Understat and StatsBomb Open Data (xG and events), ClubElo, FBref.
+odds), Understat and StatsBomb Open Data (xG and events), ClubElo, FBref, and
+ESPN's public JSON (current-season fixtures and per-player match stats).
+
+No source is trusted alone. Every one of them has failed at some point — an API
+returning 502 for days, a season never published, a scraper stalling mid-fetch,
+a fixture host going dark — so the fixture calendar and the player-settlement
+layer each read from two providers, and cross-source agreement is a test rather
+than an assumption.
 
 Full version-by-version history: [`docs/README_FULL.md`](docs/README_FULL.md)
 and [`CHANGELOG.md`](CHANGELOG.md). Design decisions:

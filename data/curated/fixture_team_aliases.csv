@@ -17,12 +17,14 @@ Borussia Mönchengladbach,m gladbach
 Bournemouth,bournemouth
 Brentford,brentford
 Brighton,brighton
+Brighton & Hove Albion,brighton
 CA Osasuna,osasuna
 Cagliari,cagliari
 Celta,celta
 Chelsea,chelsea
 Como,como
 Coventry,coventry
+Coventry City,coventry
 Crystal Palace,crystal palace
 Deportivo Alavés,alaves
 Eintracht Frankfurt,ein frankfurt
@@ -42,24 +44,31 @@ Getafe CF,getafe
 Hamburger SV,hamburg
 Havre Athletic Club,le havre
 Hull,hull
+Hull City,hull
 Internazionale,inter
 Ipswich,ipswich
+Ipswich Town,ipswich
 Juventus,juventus
 LOSC Lille,lille
 Lazio,lazio
 Le Mans FC,le mans
 Lecce,lecce
 Leeds,leeds
+Leeds United,leeds
 Levante UD,levante
 Liverpool,liverpool
 Man City,man city
 Man Utd,man united
+Manchester City,man city
+Manchester United,man united
 Milan,milan
 Monza,monza
 Málaga CF,malaga
 Napoli,napoli
 Newcastle,newcastle
+Newcastle United,newcastle
 Nott'm Forest,nott m forest
+Nottingham Forest,nott m forest
 OGC Nice,nice
 Olympique Lyonnais,lyon
 Olympique de Marseille,marseille
@@ -78,6 +87,7 @@ Real Madrid,real madrid
 Real Sociedad,sociedad
 Roma,roma
 SC Paderborn 07,paderborn
+SV Elversberg,elversberg
 SV Werder Bremen,werder bremen
 Sassuolo,sassuolo
 Sevilla FC,sevilla
@@ -88,9 +98,24 @@ Stade Rennais FC,rennes
 Sunderland,sunderland
 TSG Hoffenheim,hoffenheim
 Torino,torino
+Tottenham Hotspur,tottenham
 Toulouse FC,toulouse
 Udinese,udinese
 Valencia CF,valencia
 Venezia,venezia
 VfB Stuttgart,stuttgart
 Villarreal CF,villarreal
+AC Milan,milan
+AFC Bournemouth,bournemouth
+AS Roma,roma
+Atlético Madrid,ath madrid
+Bayer Leverkusen,leverkusen
+Celta Vigo,celta
+Deportivo,la coruna
+Espanyol,espanol
+FC Cologne,fc koln
+Hamburg SV,hamburg
+Le Havre AC,le havre
+Racing Santander,santander
+SC Freiburg,freiburg
+Stade Rennais,rennes

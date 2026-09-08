@@ -268,3 +268,42 @@ def build_timeline(bundle: dict) -> list[dict]:
                 "p_relegation": rec["p_relegation"], "exp_points": rec["exp_points"],
             })
     return rows
+
+
+def build_live_snapshot(competition: str, season: str, foundation: pd.DataFrame,
+                        n_sims: int = 10_000, root: str | Path = ".") -> dict:
+    """Forecast the season IN PROGRESS from where it actually stands.
+
+    `build_bundle` cuts a COMPLETED season at a series of matchdays, which is
+    exactly right as a backtest and wrong live: the foundation holds only played
+    matches, so every cut on an in-progress season leaves 0 remaining. Measured
+    on LaLiga 2026/27 (3 rounds played) the bundle reported `current_matchday`
+    **37 of 38** and forecast nothing at all.
+
+    This takes the real remaining calendar from the live loader instead, so the
+    question it answers is the one worth asking in September: from here, who
+    wins it. Same snapshot shape as `_build_snapshot`, so the page renders it
+    unchanged.
+    """
+    from mundialytics.statistical_core.competition.cutoff import load_live_league_state
+
+    state = load_live_league_state(competition, season, foundation=foundation, root=root)
+    if state.n_remaining == 0:
+        raise ValueError(f"{competition} {season}: sin partidos restantes; "
+                         "usa build_bundle para una temporada terminada")
+    engine = train_engine_before_cutoff(state, foundation)
+    lam = fixture_lambdas(engine, state)
+    forecast = simulate_rest_of_season(lam, state, n_sims=n_sims)
+    per_round = max(len(state.teams) // 2, 1)
+    return {
+        "matchday": len(state.played) // per_round,
+        "live": True,
+        "fingerprint": _fingerprint(state),
+        "n_remaining": state.n_remaining,
+        "standings": state.standings.to_dict("records"),
+        "fixtures": {
+            "played": _played_records(state),
+            "remaining": _remaining_predictions(engine, state),
+        },
+        "forecast": _forecast_dict(forecast),
+    }
