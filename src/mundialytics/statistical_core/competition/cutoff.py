@@ -116,3 +116,113 @@ def load_league_state_from_foundation(
         played=played.copy(),
         remaining=remaining,
     )
+
+
+# ── live loader: the "sibling" the module docstring anticipated ──────────────
+FD_LEAGUE_SLUGS = {"Premier League": "epl", "LaLiga": "la-liga", "Serie A": "serie-a",
+                   "Bundesliga": "bundesliga", "Ligue 1": "ligue-1"}
+_ALIASES = Path("data/curated/fixture_team_aliases.csv")
+
+
+def load_live_league_state(
+    competition: str,
+    season: str,
+    foundation: pd.DataFrame | str | Path | None = None,
+    root: str | Path = ".",
+) -> LeagueState:
+    """LeagueState for the season IN PROGRESS: played from us, remaining from the calendar.
+
+    The cutoff loader above splits one season's foundation rows in two, which is
+    exactly right for a backtest but useless live: the foundation only ever holds
+    PLAYED matches, so for the current season it returns `remaining` empty and
+    there is nothing to simulate. Measured on 2026-09-04, all five leagues came
+    back with 0 remaining fixtures — the forecast page could not forecast.
+
+    Fixtures come from ESPN, with fixturedownload behind it: the latter went
+    down for all five leagues on 2026-09-04 and took this page with it. Team
+    names go through data/curated/fixture_team_aliases.csv, and fixtures whose
+    clubs do not resolve are dropped rather than guessed.
+
+    The backtest path is untouched: this is a separate function, so anything
+    validated against `load_league_state_from_foundation` keeps its behaviour.
+    """
+    import io
+
+    import requests
+
+    root = Path(root)
+    if foundation is None:
+        foundation = root / _DEFAULT_FOUNDATION
+    df = pd.read_csv(foundation, low_memory=False) if not isinstance(foundation, pd.DataFrame) \
+        else foundation
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    played = df[(df["competition"] == competition) & (df["season"] == season)].copy()
+
+    slug = FD_LEAGUE_SLUGS.get(competition)
+    remaining = pd.DataFrame(columns=FIXTURE_COLUMNS)
+    alias_path = root / _ALIASES
+    alias = (dict(pd.read_csv(alias_path).itertuples(index=False, name=None))
+             if alias_path.exists() else {})
+
+    # ESPN first. fixturedownload stopped answering for all five leagues on
+    # 2026-09-04 and this page went with it, reporting "no matches remaining"
+    # for a league three rounds old. ESPN returns the whole season in one
+    # request and flags each fixture's status, so it is both sturdier and more
+    # current; fixturedownload stays behind it rather than being replaced.
+    try:
+        from mundialytics.providers.espn_fixtures import remaining_fixtures
+
+        fx = remaining_fixtures(competition, season, played=played,
+                                alias=alias, root=root)
+        if len(fx):
+            for c in FIXTURE_COLUMNS:
+                if c not in fx.columns:
+                    fx[c] = pd.NA
+            remaining = fx[FIXTURE_COLUMNS].reset_index(drop=True)
+    except Exception:
+        pass   # fall through to fixturedownload
+
+    if slug and remaining.empty:
+        year = int(str(season)[:4])
+        try:
+            r = requests.get(f"https://fixturedownload.com/download/{slug}-{year}-UTC.csv",
+                             timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200 and len(r.text) > 500:
+                r.encoding = "utf-8"
+                fx = pd.read_csv(io.StringIO(r.text))
+                fx["date"] = pd.to_datetime(fx["Date"], dayfirst=True, errors="coerce")
+                unplayed = ~fx["Result"].astype(str).str.contains(r"\d+\s*-\s*\d+", regex=True)
+                fx = fx[unplayed].copy()
+                fx["home_team"] = fx["Home Team"].map(alias)
+                fx["away_team"] = fx["Away Team"].map(alias)
+                fx = fx.dropna(subset=["home_team", "away_team", "date"])
+                fx["competition"] = competition
+                fx["season"] = season
+                fx["match_id"] = ["fd_live_%s_%05d" % (slug, i) for i in range(len(fx))]
+                # Drop anything we already hold a result for. fixturedownload
+                # lags football-data by a few days, so it still lists recently
+                # played fixtures as unplayed: without this the Premier League
+                # came out at 394 fixtures for a 380-match season, and the
+                # simulator would have re-simulated matches already decided.
+                if len(played):
+                    done = {(canonical_name(h), canonical_name(a))
+                            for h, a in zip(played["home_team"], played["away_team"])}
+                    keep = [(canonical_name(h), canonical_name(a)) not in done
+                            for h, a in zip(fx["home_team"], fx["away_team"])]
+                    fx = fx[keep]
+                remaining = fx[FIXTURE_COLUMNS].reset_index(drop=True)
+        except Exception:
+            pass   # offline -> empty remaining, same as before, never a crash
+
+    teams = sorted({canonical_name(t) for t in
+                    set(played.get("home_team", [])) | set(played.get("away_team", []))
+                    | set(remaining.get("home_team", [])) | set(remaining.get("away_team", []))})
+    return LeagueState(
+        competition=competition,
+        season=season,
+        cutoff_date=None,          # the split came from a live feed, not a date
+        teams=teams,
+        played=played.copy(),
+        remaining=remaining,
+    )

@@ -180,27 +180,161 @@ def make_resolver(elo_names) -> "callable":
     return resolver
 
 
+ESPN_UEFA_CODES = {"champions": "uefa.champions", "europa": "uefa.europa",
+                   "conference": "uefa.europa.conf"}
+# ESPN names the stage on each event (season.slug); these are the fragments that
+# map onto the labels parse_fixturedownload already understands
+_ESPN_KO_STAGES = [("play-off", "Play-off"), ("playoff", "Play-off"),
+                   ("round-of-16", "R16"), ("round of 16", "R16"),
+                   ("quarter", "QF"), ("semi", "SF"), ("final", "Final")]
+
+
+def fetch_espn_uefa(competition: str, year: int) -> pd.DataFrame | None:
+    """UEFA fixtures from ESPN, written in fixturedownload's own CSV shape.
+
+    Deliberately not a new format: emitting the same four columns means
+    parse_fixturedownload, the app and the simulator stay untouched, and the
+    only thing that changed is where the rows came from.
+
+    ESPN gives no round number, so the league phase is numbered by counting each
+    club's own fixtures (8 in the Champions and Europa, 6 in the Conference).
+    The knockout stage is named from `season.slug`, which ESPN does provide.
+    """
+    import json
+    import urllib.request
+
+    code = ESPN_UEFA_CODES.get(competition)
+    if not code:
+        return None
+    url = (f"https://site.api.espn.com/apis/site/v2/sports/soccer/{code}"
+           f"/scoreboard?dates={year}0701-{year + 1}0630&limit=1000")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=45) as fh:
+            data = json.load(fh)
+    except Exception:
+        return None
+
+    rows = []
+    for ev in data.get("events", []) or []:
+        try:
+            c = ev["competitions"][0]
+        except (KeyError, IndexError):
+            continue
+        home = next((x for x in c.get("competitors", []) if x.get("homeAway") == "home"), None)
+        away = next((x for x in c.get("competitors", []) if x.get("homeAway") == "away"), None)
+        if home is None or away is None:
+            continue
+        done = bool(c.get("status", {}).get("type", {}).get("completed"))
+        slug = str((ev.get("season") or {}).get("slug", "")).lower()
+        stage = next((lab for frag, lab in _ESPN_KO_STAGES if frag in slug), None)
+        rows.append({
+            "date": pd.to_datetime(ev.get("date"), errors="coerce", utc=True),
+            "stage": stage,                       # None => league phase
+            "Home Team": home["team"]["displayName"],
+            "Away Team": away["team"]["displayName"],
+            "Result": (f"{home.get('score')} - {away.get('score')}"
+                       if done and home.get("score") is not None else ""),
+        })
+    if not rows:
+        return None
+
+    return shape_uefa_rows(rows)
+
+
+def shape_uefa_rows(rows: list[dict]) -> pd.DataFrame | None:
+    """Turn raw ESPN events into fixturedownload's CSV shape.
+
+    Kept separate from the fetch so the round numbering, the leg numbering and
+    above all the date FORMAT can be tested without a network call -- the date
+    is where this quietly went wrong once.
+
+    Each row wants: date (datetime), stage (None for the league phase),
+    Home Team, Away Team, Result.
+    """
+    if not rows:
+        return None
+    df = pd.DataFrame(rows).dropna(subset=["date"]).sort_values("date")
+    df = df.reset_index(drop=True)
+    if df.empty:
+        return None
+    lg, ko = df["stage"].isna(), df["stage"].notna()
+    # object dtype up front: this column holds round NUMBERS for the league phase
+    # and round LABELS ("QF Game 2") for the knockout. Letting the numeric side
+    # create it first makes it float64, and assigning the labels then raises --
+    # which real data never showed, because the bracket is not drawn until
+    # February and that branch simply never ran.
+    df["Round Number"] = pd.Series([pd.NA] * len(df), dtype="object")
+
+    # league phase: a club's nth match of the Swiss stage
+    seen: dict[str, int] = {}
+    nums = []
+    for h, a in zip(df.loc[lg, "Home Team"], df.loc[lg, "Away Team"]):
+        nh = seen[h] = seen.get(h, 0) + 1
+        na = seen[a] = seen.get(a, 0) + 1
+        nums.append(min(nh, na))
+    df.loc[lg, "Round Number"] = nums
+
+    # knockout: the same pairing appears twice, earlier date first
+    if ko.any():
+        legs: dict[tuple, int] = {}
+        out = []
+        sub = df[ko]
+        for stage, h, a in zip(sub["stage"], sub["Home Team"], sub["Away Team"]):
+            key = (stage, *sorted((str(h), str(a))))   # tie, regardless of who is home
+            legs[key] = legs.get(key, 0) + 1
+            out.append(f"{stage} Game {legs[key]}")
+        df.loc[ko, "Round Number"] = out
+
+    # DD/MM/YYYY HH:MM, exactly as fixturedownload writes it. Every consumer
+    # parses this column with dayfirst=True, so emitting ISO here silently
+    # reinterprets any date whose day is 12 or under: the December matchday
+    # (09/12) came back as 9 September and was logged as an upcoming fixture,
+    # while the real matchday 1 on 08/09 was read as 8 August and dropped for
+    # being in the past. Matching the source's format is what makes this a
+    # drop-in rather than an almost-drop-in.
+    df["Date"] = df["date"].dt.strftime("%d/%m/%Y %H:%M")
+    return df[["Round Number", "Date", "Home Team", "Away Team", "Result"]]
+
+
 def fetch_season_fixtures(root: str | Path, competition: str, year: int) -> pd.DataFrame | None:
-    """Current-season fixture/result CSV from fixturedownload (cached; tolerant)."""
+    """Current-season fixture/result CSV for one UEFA competition.
+
+    ESPN first, then fixturedownload, then whatever is on disk. The cache used to
+    come first, which was the wrong order once fixturedownload went dark on
+    2026-09-04: results stop arriving and the page keeps serving a stale bracket
+    that looks perfectly healthy. A cache is a fallback, not a source.
+    """
     import requests
 
     from io import StringIO
 
     slug = FD_SLUG[competition]
     cache = Path(root) / f"data/external/uefa/raw_{slug}_{year}.csv"
-    if cache.exists() and cache.stat().st_size > 500:
-        return pd.read_csv(cache)
+
+    espn = fetch_espn_uefa(competition, year)
+    if espn is not None and len(espn):
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            espn.to_csv(cache, index=False, encoding="utf-8")
+        except Exception:
+            pass       # serving the data matters more than caching it
+        return espn
+
     try:
         r = requests.get(f"https://fixturedownload.com/download/{slug}-{year}-UTC.csv",
                          timeout=30, headers={"User-Agent": "Mozilla/5.0"})
         r.encoding = "utf-8"
-        if r.status_code != 200 or len(r.text) < 500:
-            return None
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(r.text, encoding="utf-8")
-        return pd.read_csv(StringIO(r.text))
+        if r.status_code == 200 and len(r.text) >= 500:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(r.text, encoding="utf-8")
+            return pd.read_csv(StringIO(r.text))
     except Exception:
-        return None
+        pass
+
+    if cache.exists() and cache.stat().st_size > 500:
+        return pd.read_csv(cache)
+    return None
 
 
 def parse_fixturedownload(raw: pd.DataFrame, resolver) -> tuple[pd.DataFrame, pd.DataFrame]:

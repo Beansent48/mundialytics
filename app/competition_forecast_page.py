@@ -18,12 +18,17 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import mv_ui
+from mv_ui import chart
+
 ROOT = Path(__file__).resolve().parents[1]
 FOUNDATION = ROOT / "data/processed/foundation_big5_multi_season.csv"
 CACHE_DIR = ROOT / "data/processed/competition_cache"
 
 LEAGUES = ["LaLiga", "Premier League", "Serie A", "Bundesliga", "Ligue 1"]
-SERIES_HEX = ["#2a78d6", "#4a3aa7", "#e34948", "#1baf7a", "#eda100", "#e87ba4"]
+# one palette for the whole app — this page used to run its own, so the same
+# team was a different blue here than on every other screen
+SERIES_HEX = mv_ui.SERIES
 
 
 @st.cache_data(show_spinner=False)
@@ -60,14 +65,15 @@ def _prob_bar(snap: dict) -> None:
     tp["team"] = tp["team"].map(_title)
     tp = tp.sort_values("p_champion", ascending=True)
     fig = go.Figure(go.Bar(
-        x=(tp["p_champion"] * 100).round(1), y=tp["team"], orientation="h", marker_color="#2a78d6",
+        x=(tp["p_champion"] * 100).round(1), y=tp["team"], orientation="h",
+        marker_color=mv_ui.C["blue"],
         text=[f"{v:.0f}%" if v >= 1 else "" for v in tp["p_champion"] * 100], textposition="outside",
         hovertemplate="%{y}: %{x:.1f}%<extra>Campeón</extra>",
     ))
     fig.update_layout(height=max(28 * len(tp), 200), margin=dict(l=8, r=8, t=8, b=8),
                       xaxis_title="Probabilidad de ser campeón (%)", yaxis_title=None,
                       plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
+    chart(fig)
 
 
 def _position_heatmap(snap: dict) -> None:
@@ -76,12 +82,15 @@ def _position_heatmap(snap: dict) -> None:
     z = [[round(v * 100, 1) for v in row] for row in pm["values"]]
     if not z:
         return
-    fig = go.Figure(go.Heatmap(z=z, x=pm["positions"], y=teams, colorscale="Blues", zmin=0,
-                               hovertemplate="%{y} — %{x}º: %{z:.1f}%<extra></extra>", colorbar=dict(title="%")))
+    fig = go.Figure(go.Heatmap(z=z, x=pm["positions"], y=teams, colorscale=mv_ui.HEAT, zmin=0,
+                               xgap=1, ygap=1,
+                               hovertemplate="%{y} — %{x}º: %{z:.1f}%<extra></extra>",
+                               colorbar=dict(title="%", outlinewidth=0,
+                                             tickfont=dict(color=mv_ui.C["dim"], size=10))))
     fig.update_layout(height=max(26 * len(teams), 300), margin=dict(l=8, r=8, t=8, b=8),
                       xaxis_title="Posición final", yaxis=dict(autorange="reversed"),
                       plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
+    chart(fig)
 
 
 def _evolution_chart(bundle: dict, highlight_md: int) -> None:
@@ -98,12 +107,12 @@ def _evolution_chart(bundle: dict, highlight_md: int) -> None:
         fig.add_trace(go.Scatter(x=sub["matchday"], y=(sub["p_champion"] * 100).round(1),
                                  mode="lines+markers", name=_title(team),
                                  line=dict(color=SERIES_HEX[i % len(SERIES_HEX)], width=2)))
-    fig.add_vline(x=highlight_md, line_dash="dot", line_color="#9ca3af")
+    fig.add_vline(x=highlight_md, line_dash="dot", line_color=mv_ui.C["dim"])
     fig.update_layout(height=340, margin=dict(l=8, r=8, t=8, b=8), xaxis_title="Jornada",
                       yaxis_title="Prob. de campeón (%)", yaxis_range=[0, 100],
                       legend=dict(orientation="h", y=-0.2),
                       plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
+    chart(fig)
 
 
 def _upcoming_fixtures(snap: dict, n: int = 12) -> None:
@@ -111,16 +120,14 @@ def _upcoming_fixtures(snap: dict, n: int = 12) -> None:
     if rem.empty:
         st.caption("Sin partidos pendientes.")
         return
+    # same fixture row as the Jornada page — one component, one look
     for r in rem.head(n).itertuples(index=False):
-        c1, c2, c3 = st.columns([3, 4, 3])
-        c1.markdown(f"<div style='text-align:right;font-weight:600'>{_title(r.home_team)}</div>", unsafe_allow_html=True)
-        c2.markdown(
-            f"<div style='text-align:center;font-size:.85rem;color:#9ca3af'>"
-            f"<b style='color:#16a34a'>{r.p_home*100:.0f}%</b> &nbsp;·&nbsp; {r.p_draw*100:.0f}% &nbsp;·&nbsp; "
-            f"<b style='color:#dc2626'>{r.p_away*100:.0f}%</b><br>"
-            f"<span style='font-size:.72rem'>λ {r.lambda_home:.2f} – {r.lambda_away:.2f}</span></div>",
+        st.markdown(
+            mv_ui.fixture_row(_title(r.home_team), _title(r.away_team),
+                              date=getattr(r, "date", None),
+                              probs=(r.p_home, r.p_draw, r.p_away),
+                              note=f"λ {r.lambda_home:.2f} – {r.lambda_away:.2f}"),
             unsafe_allow_html=True)
-        c3.markdown(f"<div style='text-align:left;font-weight:600'>{_title(r.away_team)}</div>", unsafe_allow_html=True)
 
 
 # ── Entry point ─────────────────────────────────────────────────────────────────
@@ -136,17 +143,28 @@ def render() -> None:
     comp = c1.selectbox("Competición", LEAGUES, key="cf_comp")
     season = c2.selectbox("Temporada", _seasons_for(comp), key="cf_season")
 
+    # A season still being played cannot be read from the bundle: build_bundle
+    # cuts a COMPLETED season at a series of matchdays, and the foundation holds
+    # only played matches, so every cut on an in-progress season leaves nothing
+    # to forecast. LaLiga 2026/27 came back as "matchday 37 of 38" after three
+    # rounds. The live path takes the real remaining calendar instead.
+    if _is_in_progress(comp, season):
+        _render_live(comp, season)
+        return
+
     bundle = fc.load_bundle(comp, season, cache_dir=CACHE_DIR)
 
     if bundle is None or bundle.get("meta", {}).get("schema") != fc.BUNDLE_SCHEMA:
-        st.info(f"No hay pronóstico cacheado para **{comp} {season}**. "
-                "Genéralo (se guardará para próximas visitas — la lectura luego es instantánea).")
-        if st.button("🔄 Generar pronóstico de temporada", type="primary"):
-            with st.spinner(f"Simulando {comp} {season} jornada a jornada… (una sola vez)"):
+        # built on first sight rather than on a button: the result is written to
+        # CACHE_DIR, so this cost is paid once per season, ever
+        with st.spinner(f"Generando el pronóstico de {comp} {season} jornada a jornada… "
+                        "(una sola vez; luego la lectura es instantánea)"):
+            try:
                 bundle = fc.get_or_build(comp, season, _foundation(), timeline_step=5,
                                          n_sims=10000, cache_dir=CACHE_DIR)
-            st.rerun()
-        return
+            except Exception as exc:
+                st.warning(f"No se pudo generar el pronóstico: {str(exc)[:140]}")
+                return
 
     mds = fc.available_matchdays(bundle)
     default_md = bundle["meta"].get("current_matchday", max(mds))
@@ -156,7 +174,7 @@ def render() -> None:
         st.caption(f"Mostrando la jornada cacheada más cercana: **{used_md}**.")
 
     meta = bundle["meta"]
-    st.caption(f"{meta['n_sims']:,} simulaciones · {meta['model_note']}")
+    st.caption(f"{mv_ui.num(meta['n_sims'])} simulaciones · {meta['model_note']}")
 
     tp = pd.DataFrame(snap["forecast"]["team_probs"])
     lead = pd.DataFrame(snap["standings"]).iloc[0]
@@ -172,7 +190,8 @@ def render() -> None:
     with tabs[0]:
         _prob_bar(snap)
     with tabs[1]:
-        st.caption("Cada fila es un equipo; cada columna, una posición final. Más oscuro = más probable.")
+        st.caption("Cada fila es un equipo; cada columna, una posición final. "
+                   "Más azul = más probable.")
         _position_heatmap(snap)
     with tabs[2]:
         st.caption("Probabilidad de título jornada a jornada (leakage-free en cada punto). La línea punteada marca la jornada seleccionada.")
@@ -181,3 +200,111 @@ def render() -> None:
         _upcoming_fixtures(snap)
     with tabs[4]:
         _render_standings(snap)
+
+
+def _is_in_progress(comp: str, season: str) -> bool:
+    """True when this league-season still has matches to play.
+
+    Judged on the calendar rather than the clock: a season is in progress when
+    the foundation holds fewer matches than a full double round-robin.
+    """
+    df = _foundation()
+    sub = df[(df["competition"] == comp) & (df["season"] == season)]
+    if sub.empty:
+        return False
+    teams = len(set(sub["home_team"]) | set(sub["away_team"]))
+    return len(sub) < teams * (teams - 1)
+
+
+def _live_cache_path(comp: str, season: str) -> Path:
+    slug = f"{comp}_{season}".lower().replace(" ", "-").replace("/", "-")
+    return CACHE_DIR / f"live_{slug}.json"
+
+
+def _live_snapshot(comp: str, season: str) -> dict | None:
+    """The live forecast for a season in progress, read from disk when it is current.
+
+    The page used to open on a button because the simulation costs ~20s. A page
+    that shows nothing until you ask it to work is not a page, so the snapshot is
+    written to disk and re-read; it is recomputed only when new results have
+    landed, which the played-match count detects. First visit after a matchday
+    pays once, every visit after it is instant.
+    """
+    import json
+
+    from mundialytics.statistical_core.competition import forecast_cache as fc
+
+    found = _foundation()
+    n_played = int(((found["competition"] == comp) & (found["season"] == season)).sum())
+    path = _live_cache_path(comp, season)
+    if path.exists():
+        try:
+            cached = json.loads(path.read_text(encoding="utf-8"))
+            if cached.get("_n_played") == n_played:
+                return cached
+        except Exception:
+            pass
+
+    with st.spinner(f"Simulando lo que queda de {comp} {season}… (se guarda para "
+                    "las próximas visitas)"):
+        try:
+            snap = fc.build_live_snapshot(comp, season, found, n_sims=10000, root=ROOT)
+        except ValueError as exc:
+            st.warning(str(exc))
+            return None
+        except Exception as exc:
+            st.warning(f"No se pudo calcular: {str(exc)[:140]}")
+            return None
+    snap["_n_played"] = n_played
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(snap, default=str), encoding="utf-8")
+    except OSError:
+        pass
+    return snap
+
+
+def _render_live(comp: str, season: str) -> None:
+    """Forecast an in-progress season from where it actually stands."""
+    # imported here, not taken from the caller: `fc` is a local import inside
+    # render(), so referencing it from this function raised NameError and the
+    # button reported "no se pudo calcular" for every league
+    from mundialytics.statistical_core.competition import forecast_cache as fc
+
+    snap = _live_snapshot(comp, season)
+    if snap is None:
+        return
+
+    tp = pd.DataFrame(snap["forecast"]["team_probs"])
+    st.caption(f"Jornada **{snap['matchday']}** · quedan **{snap['n_remaining']}** partidos "
+               "· 10.000 simulaciones desde el estado real")
+
+    stand = pd.DataFrame(snap["standings"])
+    if not stand.empty:
+        lead = stand.iloc[0]
+        c = st.columns(3)
+        c[0].metric("Líder", _title(lead["team"]), f"{int(lead['points'])} pts")
+        if "p_champion" in tp.columns:
+            # the headline the cached page leads with, and the one a reader
+            # actually wants from a season in progress
+            fav = tp.nlargest(1, "p_champion").iloc[0]
+            c[1].metric("Favorito al título", _title(fav["team"]), f"{fav['p_champion']:.0%}")
+        if "p_relegation" in tp.columns:
+            rel = tp.nlargest(1, "p_relegation").iloc[0]
+            c[2].metric("Más probable descenso", _title(rel["team"]), f"{rel['p_relegation']:.0%}")
+
+    show = tp.copy()
+    if "team" in show.columns:
+        show["team"] = show["team"].map(_title)
+    pct = [c for c in show.columns if c.startswith("p_")]
+    for c in pct:
+        show[c] = (show[c] * 100).round(1)
+    # the forecaster emits exp_points/p_champion, not expected_points/p_title:
+    # the old names matched nothing, so the table rendered raw column keys
+    ren = {"team": "Equipo", "exp_points": "Puntos esp.", "p_top4": "Champions",
+           "p_relegation": "Descenso", "p_champion": "Título", "p_top2": "Top 2",
+           "exp_rank": "Puesto esp."}
+    show = show.rename(columns={k: v for k, v in ren.items() if k in show.columns})
+    st.dataframe(show, hide_index=True, use_container_width=True,
+                 column_config={ren[c]: st.column_config.NumberColumn(format="%.1f%%")
+                                for c in pct if c in ren})

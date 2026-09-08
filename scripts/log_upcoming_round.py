@@ -47,8 +47,50 @@ SLUGS = {"epl": "Premier League", "la-liga": "LaLiga", "serie-a": "Serie A",
          "bundesliga": "Bundesliga", "ligue-1": "Ligue 1"}
 
 
+def fetch_fixtures_espn(year: int) -> pd.DataFrame:
+    """Forward fixtures from ESPN, in the shape fetch_fixtures returns.
+
+    fixturedownload stopped answering for all five leagues on 2026-09-04, which
+    silently took the whole pre-kickoff log with it: no fixtures, no
+    predictions, and the track record simply stops growing without anything
+    looking broken. ESPN answers the season in one request per league.
+
+    It publishes no round number, so `jornada` is each club's own count of
+    fixtures -- see providers/espn_fixtures. That can sit one off the official
+    round when a match has been rearranged; it is a grouping label, and the
+    fixtures themselves are exact.
+    """
+    from mundialytics.providers.espn_fixtures import fetch_season_fixtures
+
+    season = f"{year}-{year + 1}"
+    rows = []
+    for comp in SLUGS.values():
+        fx = fetch_season_fixtures(comp, season, root=ROOT)
+        if fx.empty:
+            print(f"  {comp}: ESPN sin datos")
+            continue
+        out = pd.DataFrame({
+            "date": fx["date"], "competition": comp,
+            "jornada": fx["matchday"], "home": fx["home_team"],
+            "away": fx["away_team"], "played": fx["completed"].astype(bool),
+        })
+        print(f"  {comp}: {len(out)} partidos ({int(out.played.sum())} jugados)")
+        rows.append(out)
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+
 def fetch_fixtures(year: int) -> pd.DataFrame:
-    """Forward fixture list for the five domestic leagues."""
+    """Forward fixture list for the five domestic leagues.
+
+    ESPN first, fixturedownload behind it: see fetch_fixtures_espn for why.
+    """
+    try:
+        fx = fetch_fixtures_espn(year)
+        if len(fx):
+            return fx
+    except Exception as exc:
+        print(f"  ESPN fallo ({str(exc)[:60]}), probando fixturedownload")
+
     alias = dict(pd.read_csv(ALIASES).itertuples(index=False, name=None))
     rows = []
     for slug, comp in SLUGS.items():
@@ -89,10 +131,17 @@ def fetch_fixtures(year: int) -> pd.DataFrame:
 # where the call carries information; dropped: 2+ goals and shots over 2.5.
 PLAYER_MARKETS = {
     "p_anytime_scorer":  ("jug_goleador", ""),
+    "p_2plus_goals":     ("jug_2goles", ""),
     "p_shots_over_1_5":  ("jug_tiros", 1.5),
+    "p_shots_over_2_5":  ("jug_tiros", 2.5),
     "p_assist":          ("jug_asistencia", ""),
     "p_yellow":          ("jug_amarilla", ""),
 }
+# 2+ goals and shots over 2.5 were priced by the model and understood by the
+# evaluator -- which already carries a `jug_2goles` branch and a "2+ goles"
+# label -- but the logger never wrote them, so neither had ever been measured.
+# That is the booking-points shape again: a number computed, shown, and never
+# scored. Settling all five leagues is what made writing them worth anything.
 # Only the likely XI. The model returns 26-29 players a side, and `exp_min` is
 # minutes-when-featuring rather than minutes-per-fixture spread over the squad:
 # 22 Barcelona players clear 45, which cannot be a starting eleven. Ranking by
@@ -382,6 +431,25 @@ def main() -> None:
 
     PRED_LOG.parent.mkdir(parents=True, exist_ok=True)
     old = pd.read_csv(PRED_LOG) if PRED_LOG.exists() else pd.DataFrame()
+
+    # `jornada` is part of the dedupe key but is now DERIVED (ESPN publishes no
+    # round number), and a derived round can move: a postponement changes a
+    # club's running count, so the same fixture could come back a round later
+    # and slip past the key, duplicating every row for it. A fixture already in
+    # the log therefore keeps the round it was logged with. Same failure shape
+    # as the linea=""/NaN bug below, caught before it could happen: four LaLiga
+    # fixtures already disagreed by one.
+    if len(old) and {"partido", "jornada"} <= set(old.columns):
+        seen = (old.dropna(subset=["partido"])
+                   .drop_duplicates("partido").set_index("partido")["jornada"])
+        moved = [p for p, j in zip(new["partido"], new["jornada"])
+                 if p in seen.index and seen[p] != j]
+        if moved:
+            print(f"  {len(set(moved))} partidos ya registrados con otra jornada; "
+                  "se conserva la original para no duplicar")
+        new["jornada"] = [seen[p] if p in seen.index else j
+                          for p, j in zip(new["partido"], new["jornada"])]
+
     comb = pd.concat([old, new], ignore_index=True) if len(old) else new
     # 1X2 rows carry linea="", which round-trips through CSV as NaN. Casting
     # straight to str would turn those into "nan" for the stored rows and "" for
