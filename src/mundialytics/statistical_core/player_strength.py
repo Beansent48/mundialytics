@@ -477,6 +477,13 @@ class PlayerStrengthProfile:
     overall: float = 0.0
     role: str = ""              # unified role label (e.g. "Creador", "Destructor")
     role_overall: float = 0.0   # role-based BASE overall (from player_ratings_roles.csv)
+    # Where he plays TODAY, from data/processed/current_squads.csv. `team` above
+    # is the club he is remembered for and stays that way — Messi is a Barcelona
+    # profile forever. `is_icon` is simply "nobody in the big five has him now",
+    # which is the set the ICON cards are drawn from: retired players and anyone
+    # who has left the leagues we track. Nothing is dropped on account of it.
+    current_team: str = ""
+    is_icon: bool = False
     xg_per_match: float = 0.0
     goals_per_match: float = 0.0
     assists_per_match: float = 0.0
@@ -705,7 +712,17 @@ class PlayerStrengthModel:
         # for both gk_strength and overall for goalkeepers; only keepers
         # with zero rows in goalkeeper_match_stats.csv fall back to 50.0.
         gk_scores = _build_gk_scores()
-        df["gk_score"] = df["player"].str.lower().map(gk_scores).fillna(50.0)
+        # NOT a bare `.lower()`: the two files spell the same keeper differently
+        # ("marc andré ter stegen" against "Marc-André ter Stegen") and the join
+        # missed 29% of keepers, who then took the 50.0 default and read as
+        # ordinary. ter Stegen scores 70.2 and was landing on the fallback.
+        from mundialytics.identity.current_squads import NameIndex as _NI
+        _gk_idx = _NI()
+        for _n, _v in gk_scores.items():
+            _gk_idx.add(_n, float(_v), rank=float(_v))
+        df["gk_score"] = [
+            (lambda h: 50.0 if h is None else float(h))(_gk_idx.lookup(w))
+            for w in df["player"]]
         is_gk = df["position_group"] == "Goalkeeper"
         df.loc[is_gk, "overall"] = df.loc[is_gk, "gk_score"]
         # Also drives the "Defensa" display slot for keepers — showing the
@@ -743,7 +760,30 @@ class PlayerStrengthModel:
                 raw_stats={c: float(row.get(c, 0)) for c in stat_cols if c in row.index},
             )
         self._apply_role_ratings()
+        self._apply_current_squads()
         return self
+
+    def _apply_current_squads(self, squads=None) -> None:
+        """Tag each profile with the club he plays for now, if any.
+
+        Purely additive: no rating, position or team changes, so team_strength()
+        and every calibration fitted on these profiles are untouched. It exists
+        so the product can tell a current player from a legend — SquadLab fields
+        the former as a real club's eleven and keeps the latter in the pool as
+        ICON material. No-ops silently when the squad table has not been built.
+        """
+        from mundialytics.identity.current_squads import NameIndex, load_current_squads
+
+        cs = load_current_squads() if squads is None else squads
+        if cs is None or getattr(cs, "empty", True):
+            return
+        idx = NameIndex()
+        for team, who in zip(cs["team"], cs["player"]):
+            idx.add(who, str(team), rank=0.0)
+        for prof in self.profiles_.values():
+            hit = idx.lookup(prof.player)
+            prof.current_team = hit or ""
+            prof.is_icon = hit is None
 
     def _apply_role_ratings(self, path: str | Path | None = None) -> None:
         """Attach the unified cross-era role label + role-based BASE overall
