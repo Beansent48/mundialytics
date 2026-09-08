@@ -1299,16 +1299,19 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
         return lambda pr: str(getattr(pr, "position", "")) == str(pos)
 
     for who, pos in zip(squads["player"], squads["pos_group"]):
-        r, kind = role_idx.lookup_detail(who, _same_pos(pos))
-        p, pkind = prof_idx.lookup_detail(who, _same_pos_prof(pos))
+        bh = bz(who)
+        r, kind = role_idx.lookup_detail(who, _same_pos(pos), birth=bh)
+        p, pkind = prof_idx.lookup_detail(who, _same_pos_prof(pos), birth=bh)
         # a short-key match dropped a name part to get here; make it agree on
         # position before it lends a rating (see identity.current_squads)
         if (p is not None and pkind not in ("full", "confirmed")
                 and pos in POS_ORDER and p.position != pos):
             p = None
         prof_hit.append(p)
-        role_ok = r is not None and (kind in ("full", "confirmed") or pos not in POS_ORDER
-                                     or _role_pos(str(r.role)) in (pos, ""))
+        # the role's position FAMILY must match the squad's, on every match kind
+        # — a full-name hit on a namesake in the wrong position (Celta's defender
+        # Alonso onto Marcos Alonso) must not lend a midfielder role or rating
+        role_ok = r is not None and _pos_compatible(_role_pos(str(r.role)), str(pos))
         role = str(r.role) if role_ok else ""
         # a rating sitting exactly on its curve's bottom anchor is not a low
         # rating, it is the absence of one — over half the file is there
@@ -1334,14 +1337,16 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
                 getattr(p, "role", ""), p.overall):
             known.append(float(p.overall))
             source.append("perfil")
-            role_lbl.append(str(getattr(p, "role", "")))
+            role_lbl.append(_compat_role(getattr(p, "role", ""), str(pos)))
             matches.append(int(p.matches or 0))
         else:
             known.append(np.nan)
             source.append("")
             # the role label survives even when the rating does not: it still
-            # shapes the axes, and it is the only thing the old row carried
-            role_lbl.append(role or str(getattr(p, "role", "")) if p is not None else role)
+            # shapes the axes, and it is the only thing the old row carried — but
+            # only if its position family matches, never a namesake's
+            pr = _compat_role(getattr(p, "role", ""), str(pos)) if p is not None else ""
+            role_lbl.append(role or pr)
             matches.append(int(r.matches or 0) if role_ok else 0)
     print(f"  ratings pegados al suelo de su curva (tratados como ausentes): {n_floor:,}")
     print(f"  porteros recuperados por indice de nombres: {n_gk_fixed:,}")
@@ -1358,16 +1363,20 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
                 role_lbl[i] = "Portero"
                 n_given += 1
             continue
-        hit = role_idx_measured.lookup(who)
-        if not hit:
+        hit = role_idx_measured.lookup(who, birth=bz(who))
+        # the measured role still has to belong to his position family, or the
+        # repick would undo the gate above (a midfielder handed "Lateral
+        # ofensivo", a defender "Falso 9")
+        cand = _compat_role(hit, str(pos)) if hit else ""
+        if not cand:
             continue
         if not role_lbl[i]:
             # no rating means no role; his own numbers can still say what kind
             # of player he is
-            role_lbl[i] = str(hit)
+            role_lbl[i] = cand
             n_given += 1
-        elif n[1] <= 0 and str(hit) != role_lbl[i]:
-            role_lbl[i] = str(hit)
+        elif n[1] <= 0 and cand != role_lbl[i]:
+            role_lbl[i] = cand
             n_repick += 1
     print(f"  roles reasignados desde la medicion (perfil ciego): {n_repick:,}")
     print(f"  roles asignados a cartas que no tenian: {n_given:,}")
@@ -1595,12 +1604,35 @@ _ROLE_POS = {
     "Destructor": "Midfielder", "Pivote organizador": "Midfielder",
     "Creador": "Midfielder", "Box-to-box": "Midfielder", "Mediapunta": "Midfielder",
     "Extremo": "Forward", "Extremo interior": "Forward", "Killer": "Forward",
-    "Target man": "Forward", "Delantero completo": "Forward",
+    "Target man": "Forward", "Delantero completo": "Forward", "Falso 9": "Forward",
+    "Mediocentro": "Midfielder", "Interior": "Midfielder",
 }
 
 
 def _role_pos(role: str) -> str:
     return _ROLE_POS.get(role, "")
+
+
+# Coarse position families for gating a role against the squad's position:
+# keeper and defender each stand alone, midfielder and forward share (the
+# winger/attacking-mid boundary is genuinely fuzzy). A role from a different
+# family is a mismatch — a defender must never wear "Pivote organizador"
+# because a namesake in the ratings file (Marcos Alonso, a left back mislabelled
+# a pivot, 516 matches) outranks him on the shared key.
+_POS_FAMILY = {"Goalkeeper": "gk", "Defender": "def", "Midfielder": "out", "Forward": "out"}
+
+
+def _pos_compatible(role_pos: str, squad_pos: str) -> bool:
+    if not role_pos or squad_pos not in POS_ORDER:
+        return True
+    return _POS_FAMILY.get(role_pos) == _POS_FAMILY.get(squad_pos)
+
+
+def _compat_role(role: object, squad_pos: str) -> str:
+    """A role only if its family matches the squad position, else blank —
+    so a wrong-position match lends neither its label nor its axis weights."""
+    role = str(role or "")
+    return role if _pos_compatible(_role_pos(role), squad_pos) else ""
 
 
 def season_teams() -> dict:
