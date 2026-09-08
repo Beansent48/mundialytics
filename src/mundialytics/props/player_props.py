@@ -30,6 +30,14 @@ from mundialytics.enrichment.understat_team_aliases import to_foundation_name
 
 K_MIN = 900.0
 K_RECENT = 450.0
+# How stale the appearance-derived roster may be before a team is served no
+# players at all. That roster is "whoever featured in this club's last ten
+# games", which carries no notion of WHEN those games were: a club promoted
+# after years away came back with the squad it last had in the top flight —
+# Hull's 2026/27 attack was its 2016/17 one, Harry Maguire included. Just over
+# a season keeps a club that spent last year in the second tier and drops one
+# gone longer; an empty shortlist is the honest answer for a squad we cannot see.
+ROSTER_MAX_AGE_DAYS = 400.0
 SHOTS_DISP = 1.3
 PEN_CONV = 0.78  # measured penalty conversion in our shots data
 STATS = ["xg", "goals", "shots", "xa", "assists", "yellow_cards", "npxg", "npgoals"]
@@ -71,15 +79,30 @@ class PlayerPropsModel:
     _pri: pd.DataFrame | None = field(default=None, init=False, repr=False)
     _glob: dict = field(default_factory=dict, init=False, repr=False)
     _pos_min: dict = field(default_factory=dict, init=False, repr=False)
+    _team_last_date: dict = field(default_factory=dict, init=False, repr=False)
+    _stale_rosters: dict = field(default_factory=dict, init=False, repr=False)
+    _current_squad_teams: set = field(default_factory=set, init=False, repr=False)
+    _squad_unmatched: dict = field(default_factory=dict, init=False, repr=False)
+    _squads_fp: str = field(default="", init=False, repr=False)
+    _data_max_date: object = field(default=None, init=False, repr=False)
 
     def fit(self, pm: pd.DataFrame, shots: pd.DataFrame | None = None,
-            shots_path: "str | Path | None" = None) -> "PlayerPropsModel":
+            shots_path: "str | Path | None" = None,
+            current_squads: "pd.DataFrame | str | Path | None" = None,
+            roster_max_age_days: float = ROSTER_MAX_AGE_DAYS) -> "PlayerPropsModel":
         """`pm`: understat player-match rows (player_id, player, team, game_id, date,
         position, minutes + base stats). All history is training; state = as of
         last game. `shots`/`shots_path`: understat shot events — penalties carry
         situation=NaN (soccerdata quirk) and power the pen-taker split of the
         goal mu (anytime 5/5 folds). Without them the model falls back exactly
-        to the xG-based mu."""
+        to the xG-based mu.
+
+        `current_squads`: today's squad lists (see
+        mundialytics.identity.current_squads). Pass it when SERVING — it decides
+        who is in each roster, and nothing else. Rates, minutes and the whole
+        probability recipe are untouched, so a backtest that omits it reproduces
+        the validated model exactly. `roster_max_age_days` caps how old the
+        fallback roster may be; see _guard_stale_rosters."""
         pm = pm.copy()
         pm["date"] = pd.to_datetime(pm["date"], errors="coerce")
         pm = pm.dropna(subset=["date"])
@@ -145,6 +168,8 @@ class PlayerPropsModel:
         pm2 = pm.merge(tg[["team", "game_id", "tgn"]], on=["team", "game_id"])
         recent = pm2[pm2["tgn"] > pm2["team"].map(last_tgn) - 10]
         self._rosters = recent.groupby("team")["player_id"].agg(lambda s: sorted(set(s))).to_dict()
+        self._data_max_date = pm["date"].max()
+        self._team_last_date = tg.groupby("team")["date"].max().to_dict()
         # foundation-name lookup for the Understat teams we know
         self._fd_to_us = {to_foundation_name(t): t for t in self._rosters}
         # per-team attacking baseline: mean team xG over its last 19 games (players summed)
@@ -152,7 +177,88 @@ class PlayerPropsModel:
         txg = txg.reset_index().sort_values(["team", "date"])
         self._team_xg_base = txg.groupby("team")["xg"].apply(lambda s: float(s.tail(19).mean())).to_dict()
         self._glob_xg = float(txg["xg"].mean())
+
+        self._guard_stale_rosters(roster_max_age_days)
+        self._apply_current_squads(current_squads)
         return self
+
+    def _guard_stale_rosters(self, max_age_days: float) -> None:
+        """Drop rosters whose last game is too far behind the rest of the data.
+
+        Measured against the data's own end, not today's date, so a backtest
+        fold judges staleness by its own clock. A team still playing sits at
+        zero days and is never touched."""
+        self._stale_rosters = {}
+        if not max_age_days or self._data_max_date is None:
+            return
+        cutoff = pd.Timestamp(self._data_max_date) - pd.Timedelta(days=float(max_age_days))
+        for team, last in list(self._team_last_date.items()):
+            if pd.notna(last) and pd.Timestamp(last) < cutoff and team in self._rosters:
+                self._stale_rosters[team] = pd.Timestamp(last)
+                del self._rosters[team]
+
+    def _apply_current_squads(self, current_squads) -> None:
+        """Replace the appearance-derived rosters with today's actual squads.
+
+        Each squad member is matched back to his own history by name, so a
+        player carries his rates to the club he now plays for — something the
+        appearance roster could not express at all, since it only ever knew him
+        at the club he was at when the data stopped. A squad member with no
+        big-five history is left out rather than handed invented rates: the
+        shortlist gets shorter, which is the truthful reading of "this player
+        has never been measured here"."""
+        from mundialytics.identity.current_squads import (
+            NameIndex, load_current_squads, squads_fingerprint,
+        )
+
+        self._current_squad_teams = set()
+        self._squad_unmatched = {}
+        self._squads_fp = ""
+        if current_squads is None:
+            return
+        cs = (current_squads if isinstance(current_squads, pd.DataFrame)
+              else load_current_squads(current_squads))
+        if cs is None or cs.empty or self._players is None:
+            return
+        # stamped on the model so a consumer reading a cached fit can tell
+        # whether the squads have moved on since it was built
+        self._squads_fp = squads_fingerprint(cs)
+
+        idx = NameIndex()
+        for pid, row in self._players.iterrows():
+            last = row.get("last_date")
+            rank = pd.Timestamp(last).timestamp() if pd.notna(last) else 0.0
+            idx.add(row["player"], pid, rank=rank)
+
+        if "pos_group" not in cs.columns:
+            cs = cs.assign(pos_group="Unknown")
+        for team, grp in cs.groupby("team"):
+            ids, missing = [], []
+            for who, squad_pos in zip(grp["player"], grp["pos_group"]):
+                pid, kind = idx.lookup_detail(who)
+                if pid is None:
+                    missing.append(str(who))
+                    continue
+                # A short-key or containment match got here by dropping name
+                # parts, which is how a goalkeeper ends up wearing a striker's
+                # history. The position vocabularies only line up on the keeper,
+                # so that is the one contradiction worth refusing.
+                if kind != "full":
+                    was_gk = str(self._players.at[pid, "pgroup"]) == "GK"
+                    if was_gk != (str(squad_pos) == "Goalkeeper"):
+                        missing.append(str(who))
+                        continue
+                ids.append(pid)
+            if not ids:
+                continue
+            # keep the Understat spelling when we know the club, so the pen rate
+            # and the attacking baseline keyed on it still resolve
+            key = self._fd_to_us.get(team, team)
+            self._rosters[key] = sorted(set(ids))
+            self._fd_to_us[team] = key
+            self._current_squad_teams.add(key)
+            self._squad_unmatched[key] = missing
+            self._stale_rosters.pop(key, None)
 
     def _resolve_team(self, team: str) -> str | None:
         if team in self._rosters:

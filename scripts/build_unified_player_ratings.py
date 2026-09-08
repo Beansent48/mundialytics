@@ -32,6 +32,8 @@ LOCAL={'crosses_per_match':[(0,35),(0.4,45),(0.75,53),(1.49,68),(2.07,80),(2.54,
  'passes_into_box_per_match':[(0,35),(0.3,45),(0.67,53),(1.32,66),(2.16,80),(2.50,86),(3.57,95)],
  'passes_into_final_third_per_match':[(0,35),(1.5,47),(2.82,55),(4.43,68),(5.91,80),(6.61,86),(10.68,96)],
  'through_balls_per_match':[(0,40),(0.15,48),(0.29,55),(0.48,66),(0.78,78),(1.18,88),(1.98,96)]}
+SB_S: dict = {}
+MOD_S: dict = {}
 ANCH_SB={**ps.ANCHOR_CURVES,**LOCAL}; DQ=ps.DEFENSE_CREATION_STATS|set(LOCAL)
 NDEF={'duel_win_rate':0.5,'pass_completion':0.75,'pass_completion_under_pressure':0.75,'aerial_win_rate':0.5}
 GOL={'goals_per_match':0.62,'finishing_per_shot':0.08,'xg_per_match':0.30}
@@ -45,7 +47,14 @@ BND={'crosses_per_match':0.28,'cut_backs_per_match':0.14,'assists_per_match':0.3
 # are volume-confounded (a busy defender on a weak team racks them up), so they
 # get low weight -- else journeymen (Mittelstädt) match Piqué/Van Dijk.
 DEFG={'duel_win_rate':0.42,'dribbled_past_per_match':0.24,'interceptions_per_match':0.16,'blocks_per_match':0.09,'clearances_per_match':0.09}
-DDEST={'interceptions_per_match':0.40,'blocks_per_match':0.18,'duel_win_rate':0.22,'clearances_per_match':0.10,'dribbled_past_per_match':0.10}
+# REBALANCED 2026-09-07. This was 68% volume (interceptions .40 + blocks .18 +
+# clearances .10) while DEFG right above it — same author, same file — says
+# volume is confounded and weights duel quality at .42. The destroyer blend
+# never got that fix, and it is 86% of a Destructor's rating: Ndidi, Kondogbia
+# and Mittelstädt scored like Kanté because they all make a lot of tackles.
+# Now 55% quality / 45% volume — between DEFG's 66/34 and the old 32/68,
+# because a destroyer genuinely does intercept for a living.
+DDEST={'duel_win_rate':0.33,'dribbled_past_per_match':0.22,'interceptions_per_match':0.27,'blocks_per_match':0.12,'clearances_per_match':0.06}
 AER={'aerial_win_rate':0.60,'aerials_won_per_match':0.40}
 ROL_SB={
  'Central de salida':('Central',(0.05,0.35,0.60),{'A':[(GOL,1)],'O':[(PROG,0.6),(COMP,0.4)],'D':[(DEFG,0.75),(AER,0.25)]}),
@@ -88,42 +97,240 @@ def score_sb(df, shrink=True):
     def sc(s): return S[s] if s in S else np.full(len(df),50.0)
     def bl(w): return sum(sc(s)*ww for s,ww in w.items())/sum(w.values())
     def mx(pt): return sum(bl(b)*w for b,w in pt)/sum(w for _,w in pt)
+    SB_S.clear(); SB_S.update({c: pd.to_numeric(df[c], errors='coerce').to_numpy()
+                               for c in set().union(*(d for _,cw,cm in ROL_SB.values()
+                                   for blk in cm.values() for d,_ in blk)) if c in df.columns})
     return {n:(cw[0]*mx(cm['A'])+cw[1]*mx(cm['O'])+cw[2]*mx(cm['D']))/sum(cw) for n,(bk,cw,cm) in ROL_SB.items()}
+
+# ── which role a player belongs to ────────────────────────────────────────────
+# THE RULE IS "WHERE HE STANDS OUT", and getting that right took three goes.
+#
+#   1. `argmax(raw)` — the original. Picks where he SCORES highest, which is not
+#      the same thing: a blend loading on stats everybody has produces high
+#      scores for everybody. Five of sixteen roles collapsed to nothing (Pivote
+#      organizador 1.3% of players, Extremo interior 0.9%, Delantero completo
+#      0.3%) while four swallowed 55%.
+#   2. `argmax(z within the role's population)` — worse. Being an outlier
+#      against a small, odd population is easy, so it herded everyone into the
+#      rare roles: De Bruyne came out a Falso 9 and Cristiano a Target man.
+#   3. SHAPE MATCHING, below. A role is a weighting of statistics; a player is a
+#      profile of statistics. He belongs to the role that emphasises the things
+#      he is actually good at — the cosine between the role's flattened weight
+#      vector and his own z-profile. Level does not enter it, which is right:
+#      the role says WHAT KIND of player he is, and the rating says how good.
+#   4. And the ROLE MUST NOT SET THE SCORE. Attempt 3 chose the role by shape
+#      and then scored the player under that role's blend — which meant a label
+#      change was a rating change: Cristiano, shape-matched to "Delantero
+#      completo", lost 8.7 points because that blend wants creation he does not
+#      have. The two questions are separate and are now answered separately:
+#      the LABEL is the role whose emphasis matches his profile, the SCORE is
+#      still the best he reaches over the roles his position allows. What kind
+#      of player he is, and how good he is.
+#      AND IT ONLY WORKS WHERE THE ROLES ARE ACTUALLY DIFFERENT. Flattened to
+#      stat vectors and compared with each other, the six FORWARD roles are the
+#      same formula wearing different names: Killer and Extremo interior are
+#      0.97 alike, Delantero completo and Extremo interior 0.99, and the average
+#      between any two forward roles is 0.79. Nothing can classify into
+#      categories that overlap that much, which is why five attempts kept
+#      producing Haaland the winger and Kane the false nine. The midfield roles
+#      are genuinely distinct (Destructor vs Mediapunta 0.13, vs Creador 0.16,
+#      average 0.51) and shape matching worked there from the start. The forward
+#      six were REDRAWN (see KILLA/TGTA/WIDEO/CUTO/F9O below) until they meant
+#      six different things — 0.79 -> 0.59 average, 0.99 -> 0.88 maximum — and
+#      shape now decides the label for every position.
+def role_weights(rol: dict) -> dict:
+    """Each role's nested A/O/D blend flattened to one stat -> weight vector."""
+    out = {}
+    for name, (_bk, cw, cm) in rol.items():
+        w, tot_c = {}, float(sum(cw))
+        for i, blk in enumerate(("A", "O", "D")):
+            parts = cm.get(blk) or []
+            tot_p = float(sum(x for _, x in parts)) or 1.0
+            for d, pw in parts:
+                tot_s = float(sum(d.values())) or 1.0
+                for stat, sv in d.items():
+                    w[stat] = w.get(stat, 0.0) + (cw[i] / tot_c) * (pw / tot_p) * (sv / tot_s)
+        out[name] = w
+    return out
+
+
+def shape_fit(S: dict, roles: dict, n: int, group=None) -> dict:
+    """Cosine between each role's weight vector and the player's z-profile.
+
+    Standardised WITHIN HIS POSITION, which matters more than it looks. Against
+    the whole population every forward reads "good at attacking things", so his
+    profile vector points at the forward-vs-defender axis and matches whichever
+    blend is most balanced — Haaland came out a "Delantero completo" and Mbappé
+    and Lautaro "Falso 9". Among strikers only, Haaland is far above on goals
+    and below on creation, and that points at Killer, which is what he is.
+    """
+    # xG chain and xG buildup count every possession the player touched that
+    # ended in a shot. They belong in the SCORE — being part of a good attack is
+    # worth something — but not in the SHAPE, because they describe his team,
+    # not his kind. With them in, every striker at a strong club reads as
+    # creative and matches the balanced blends: Haaland a "Delantero completo",
+    # Mbappé, Kane and Lautaro all "Falso 9".
+    TEAM_CONTEXT = {"xg_chain_p90", "xg_buildup_p90"}
+    stats = sorted(({s for w in roles.values() for s in w} & set(S)) - TEAM_CONTEXT)
+    if not stats:
+        return {name: np.zeros(n) for name in roles}
+    grp = np.asarray(group) if group is not None else np.zeros(n)
+    cols = []
+    for st in stats:
+        v = np.asarray(S[st], dtype=float)
+        z = np.zeros(n)
+        for g in np.unique(grp):
+            m = grp == g
+            sub = v[m]
+            ok = np.isfinite(sub)
+            mu = float(np.nanmean(sub)) if ok.sum() > 20 else float(np.nanmean(v))
+            sd = float(np.nanstd(sub)) if ok.sum() > 20 else float(np.nanstd(v))
+            z[m] = (sub - mu) / (sd if sd > 1e-6 else 1.0)
+        cols.append(z)
+    Z = np.nan_to_num(np.column_stack(cols))
+    # CENTRED, and this is the whole trick. A plain cosine rewards the role
+    # whose weights are most spread out, because an elite player is above
+    # average on nearly every axis and so points at whichever blend is most
+    # balanced — Haaland kept coming out a "Delantero completo" and Kane a
+    # "Falso 9". Subtracting each player's own mean z leaves only what he is
+    # RELATIVELY strong at: Haaland's goals stay far positive while his creation
+    # goes negative, and that points at Killer, which is what he is. The role
+    # vectors are centred the same way so the comparison is like for like.
+    Z = Z - Z.mean(axis=1, keepdims=True)
+    zn = np.linalg.norm(Z, axis=1)
+    out = {}
+    for name, w in roles.items():
+        vec = np.array([w.get(st, 0.0) for st in stats], dtype=float)
+        vec = vec - vec.mean()
+        vn = np.linalg.norm(vec) or 1.0
+        out[name] = (Z @ vec) / (np.maximum(zn, 1e-9) * vn)
+    return out
+
 
 def bestfit_sb(df, raws):
     gpos=df['granular_position'].fillna('').to_numpy() if 'granular_position' in df.columns else np.array(['']*len(df))
     four=df['position'].fillna('Unknown').to_numpy()
-    bl=np.array(['-']*len(df),dtype=object); bs=np.full(len(df),-1.0)
+    elig={}
     for name in ROL_SB:
         gb=[b for b,rs in CAND.items() if name in rs]; fb=[b for b,rs in FOUR.items() if name in rs]
-        cand=np.isin(gpos,gb)|((gpos=='')&np.isin(four,fb)); ov=raws[name]
-        u=cand&(ov>bs); bs=np.where(u,ov,bs); bl=np.where(u,name,bl)
-    return bl,bs
+        elig[name]=np.isin(gpos,gb)|((gpos=='')&np.isin(four,fb))
+    fit=shape_fit(SB_S,role_weights(ROL_SB),len(df),four) if SB_S else raws
+    by_shape=np.ones(len(df),dtype=bool)
+    bl=np.array(['-']*len(df),dtype=object)
+    bs=np.full(len(df),-np.inf); br=np.full(len(df),-np.inf); braw=np.full(len(df),-1.0)
+    for name in ROL_SB:
+        e=elig[name]
+        u=e&by_shape&(fit[name]>bs); bs=np.where(u,fit[name],bs); bl=np.where(u,name,bl)
+        u=e&~by_shape&(raws[name]>br); br=np.where(u,raws[name],br); bl=np.where(u,name,bl)
+        braw=np.where(e&(raws[name]>braw),raws[name],braw)
+    return bl,braw
 
 # ============ MODERN ERA ============
 GOLm={'goals_p90':0.62,'np_xg_p90':0.30,'finishing_per_shot':0.08}
-BUILD={'xg_buildup_p90':0.40,'key_passes_p90':0.30,'xg_chain_p90':0.30}
+# BUILD used to be three flavours of attacking involvement, so a deep-lying
+# organiser scored nothing on the block that is supposed to be his job.
+# Rodri is 98th-99th percentile among midfielders on pass completion, pass
+# volume and progressive passing and the rating could not see any of it.
+# Half the block is now the passing itself.
+# ── the defensive blocks, SPLIT 2026-09-07 ───────────────────────────────────
+# One `DEFW` used to serve every defensive role, and its heaviest term is the
+# aerial win rate — so a ball-winning midfielder was judged mostly on heading.
+# Three jobs, three blocks:
+#   DEF_AIR     the centre back who wins the duel and the header
+#   DEF_GROUND  the midfielder who takes the ball back: interceptions, tackles,
+#               and not being beaten. Aerials barely count — a holding midfielder
+#               is not a target for crosses.
+#   DEF_FB      the full back: one-v-one and reading the ball, almost no aerial
+# The ratios inside each are the measured correlations from
+# rebuild_defender_ratings.py, re-normalised per block.
+DEF_AIR={'aerial_pct':0.42,'duel_pct':0.24,'beaten_rarely':0.10,
+         'interceptions_p90':0.14,'tackles_won_p90':0.10}
+DEF_GROUND={'interceptions_p90':0.32,'tackles_won_p90':0.26,'duel_pct':0.24,
+            'beaten_rarely':0.12,'aerial_pct':0.06}
+DEF_FB={'duel_pct':0.30,'beaten_rarely':0.24,'interceptions_p90':0.22,
+        'tackles_won_p90':0.16,'aerial_pct':0.08}
+DEFW=DEF_AIR
+# ── and the build-up blocks ──────────────────────────────────────────────────
+# `BUILD` was xG buildup + key passes + xG chain: three flavours of attacking
+# involvement, all of them team-context. "Central de salida" means the centre
+# back who PLAYS OUT, and not one of his four heaviest weights was a pass.
+#   BUILD_PASS    playing out: completion, volume, progression. What the name says
+#   BUILD_CHANCE  making the chance: key passes, expected assists, creating actions
+BUILD_PASS={'pass_pct':0.34,'prog_passes_p90':0.34,'passes_p90':0.22,'xg_buildup_p90':0.10}
+BUILD_CHANCE={'key_passes_p90':0.38,'xa_p90':0.34,'xg_chain_p90':0.16,'prog_passes_p90':0.12}
+# "Creador" and "Mediapunta" were 0.88 alike because both leaned on the same
+# chance block. They are not the same player: the creator builds it from deep
+# and the mediapunta plays it in the last third and arrives in the box.
+DEEP_CREATE={'prog_passes_p90':0.34,'key_passes_p90':0.30,'xa_p90':0.22,'pass_pct':0.14}
+FINAL_THIRD={'key_passes_p90':0.42,'xa_p90':0.38,'xg_chain_p90':0.20}
+BUILD=BUILD_PASS
 AREAm={'key_passes_p90':0.45,'xa_p90':0.35,'xg_chain_p90':0.20}
-BNDm={'crosses_p90':0.32,'xa_p90':0.36,'key_passes_p90':0.32}
-DEFW={'interceptions_p90':0.55,'tackles_won_p90':0.45}; PHYS={'fouls_drawn_p90':1.0}
+# Same correction for the attacking full back: crosses were a third of it.
+BNDm={'xa_p90':0.40,'key_passes_p90':0.34,'crosses_p90':0.14,'sca_p90':0.12}
+# The modern defensive block used to be volume and nothing else, because
+# Understat carried no duel-win rate. FBref does (mundialytics.identity
+# .fbref_quality), so it now mirrors DEFG's 66/34 quality-to-volume split;
+# the ratios INSIDE the quality part are the measured correlations from
+# rebuild_defender_ratings.py (aerial .205, challenge .138, dribbled-past
+# .052), normalised. Where FBref has no row the stat is NaN and score_mod
+# scores it 50, i.e. the player is not judged on what nobody measured.
+PHYS={'fouls_drawn_p90':1.0}
+# ── the six forward roles, REDRAWN 2026-09-07 ────────────────────────────────
+# They used to share GOLm for attack and AREAm for creation and differ only in
+# the A/O/D split, which made them the same vector wearing six names: Delantero
+# completo and Extremo interior were 0.99 alike, Killer and Extremo interior
+# 0.97, and any two forward roles 0.79 on average. Nothing can classify into
+# categories that overlap that much. Each now owns the blend its name claims:
+#
+#   Killer            pure finishing volume — goals_p90 carries 0.75 of the
+#                     whole role, up from 0.57
+#   Target man        gets there on chance volume and wins the ball in the air
+#   Extremo           crosses from the touchline
+#   Extremo interior  cuts inside: finishing plus carrying the ball forward
+#   Falso 9           drops in to make the chance rather than take it
+#   Delantero completo  genuinely balanced, which is now a distinct thing
+#
+# Measured after: average similarity between two forward roles 0.79 -> 0.59
+# (midfield sits at 0.51), maximum 0.99 -> 0.88.
+KILLA={'goals_p90':0.80,'np_xg_p90':0.20}
+TGTA={'goals_p90':0.50,'np_xg_p90':0.50}
+# CROSSES DO NOT MEASURE CREATING, and they used to carry 60% of this block —
+# 44% of a winger's whole rating. Franck Honorat crosses 9.04 times per 90, the
+# most of anyone in the dataset, and came out rated 88.4 for it, level with
+# Olise on 1.04 goals+assists per 90 against his 0.46.
+#
+# Measured against next season's assists per 90 (n=1,615): crosses alone reach
+# R2 +0.158 and, added to the validated creation block (SCA, xAG, GCA, key
+# passes, R2 +0.350), they add **+0.000**. Crosses into the penalty area are
+# worse still, +0.065 alone. Crossing is a STYLE, not a level.
+#
+# So the weights here are the fitted coefficients of that block, normalised;
+# crosses keep the small share the fit gives them, which is enough to tilt the
+# role SHAPE toward a wide player without paying him for the volume.
+WIDEO={'sca_p90':0.42,'xa_p90':0.39,'gca_p90':0.13,'crosses_p90':0.06}
+CUTO={'prog_passes_p90':0.52,'key_passes_p90':0.26,'xa_p90':0.14,'passes_p90':0.08}
+F9O={'key_passes_p90':0.50,'xa_p90':0.35,'pass_pct':0.15}
+AERD={'aerial_pct':1.0}
 ROL_MOD={
- 'Central de salida':('D',(0.05,0.35,0.60),{'A':[(GOLm,1)],'O':[(BUILD,1)],'D':[(DEFW,1)]}),
- 'Lateral ofensivo':('D',(0.20,0.50,0.30),{'A':[(GOLm,1)],'O':[(BNDm,1)],'D':[(DEFW,1)]}),
- 'Destructor':('M',(0.06,0.08,0.86),{'A':[(GOLm,1)],'O':[(BUILD,1)],'D':[(DEFW,1)]}),
- 'Pivote organizador':('M',(0.08,0.64,0.28),{'A':[(GOLm,1)],'O':[(BUILD,1)],'D':[(DEFW,1)]}),
- 'Box-to-box':('M',(0.32,0.35,0.33),{'A':[(GOLm,1)],'O':[(BUILD,1)],'D':[(DEFW,1)]}),
- 'Creador':('M',(0.09,0.86,0.05),{'A':[(GOLm,1)],'O':[(BUILD,1)],'D':[(DEFW,1)]}),
- 'Mediapunta':('M',(0.33,0.62,0.05),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]}),
- 'Extremo':('F',(0.27,0.65,0.08),{'A':[(GOLm,1)],'O':[(BNDm,1)],'D':[(DEFW,1)]}),
- 'Extremo interior':('F',(0.72,0.23,0.05),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]}),
- 'Killer':('F',(0.92,0.05,0.03),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]}),
- 'Target man':('F',(0.68,0.08,0.24),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(PHYS,1)]}),
- 'Delantero completo':('F',(0.64,0.30,0.06),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]}),
- 'Falso 9':('F',(0.45,0.48,0.07),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]})}
-TOK={'D':['Central de salida','Lateral ofensivo'],'M':['Destructor','Pivote organizador','Box-to-box','Creador','Mediapunta'],
+ 'Central de salida':('D',(0.05,0.40,0.55),{'A':[(GOLm,1)],'O':[(BUILD_PASS,1)],'D':[(DEF_AIR,1)]}),
+ 'Lateral ofensivo':('D',(0.20,0.50,0.30),{'A':[(GOLm,1)],'O':[(BNDm,1)],'D':[(DEF_FB,1)]}),
+ 'Lateral defensivo':('D',(0.05,0.25,0.70),{'A':[(GOLm,1)],'O':[(BUILD_PASS,1)],'D':[(DEF_FB,1)]}),
+ 'Destructor':('M',(0.05,0.15,0.80),{'A':[(GOLm,1)],'O':[(BUILD_PASS,1)],'D':[(DEF_GROUND,1)]}),
+ 'Pivote organizador':('M',(0.06,0.64,0.30),{'A':[(GOLm,1)],'O':[(BUILD_PASS,1)],'D':[(DEF_GROUND,1)]}),
+ 'Box-to-box':('M',(0.30,0.35,0.35),{'A':[(GOLm,1)],'O':[(BUILD_CHANCE,0.6),(BUILD_PASS,0.4)],'D':[(DEF_GROUND,1)]}),
+ 'Creador':('M',(0.08,0.87,0.05),{'A':[(GOLm,1)],'O':[(DEEP_CREATE,1)],'D':[(DEF_GROUND,1)]}),
+ 'Mediapunta':('M',(0.38,0.57,0.05),{'A':[(GOLm,1)],'O':[(FINAL_THIRD,1)],'D':[(DEF_GROUND,1)]}),
+ 'Extremo':('F',(0.40,0.54,0.06),{'A':[(GOLm,1)],'O':[(WIDEO,1)],'D':[(DEF_FB,1)]}),
+ 'Extremo interior':('F',(0.46,0.51,0.03),{'A':[(KILLA,1)],'O':[(CUTO,1)],'D':[(DEF_FB,1)]}),
+ 'Killer':('F',(0.94,0.04,0.02),{'A':[(KILLA,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]}),
+ 'Target man':('F',(0.55,0.10,0.35),{'A':[(TGTA,1)],'O':[(AREAm,1)],'D':[(AERD,1)]}),
+ 'Delantero completo':('F',(0.50,0.42,0.08),{'A':[(GOLm,1)],'O':[(AREAm,1)],'D':[(DEFW,1)]}),
+ 'Falso 9':('F',(0.32,0.62,0.06),{'A':[(GOLm,1)],'O':[(F9O,1)],'D':[(DEFW,1)]})}
+TOK={'D':['Central de salida','Lateral ofensivo','Lateral defensivo'],'M':['Destructor','Pivote organizador','Box-to-box','Creador','Mediapunta'],
  'F':['Extremo','Extremo interior','Killer','Target man','Delantero completo','Falso 9'],
  'S':['Extremo interior','Killer','Target man','Delantero completo','Falso 9']}
-MSTATS=['goals_p90','np_xg_p90','xa_p90','key_passes_p90','xg_chain_p90','xg_buildup_p90','crosses_p90','interceptions_p90','tackles_won_p90','fouls_drawn_p90']
+FBQ_STATS=['duel_pct','aerial_pct','beaten_rarely','pass_pct','passes_p90','prog_passes_p90','sca_p90','gca_p90']
+MSTATS=['goals_p90','np_xg_p90','xa_p90','key_passes_p90','xg_chain_p90','xg_buildup_p90','crosses_p90','interceptions_p90','tackles_won_p90','fouls_drawn_p90']+FBQ_STATS
 
 # BUG FIXED 2026-07-04: modern_anchors() used to stop its curve at p99 and
 # np.interp clamps flat beyond the last point -- so every elite performer above
@@ -163,26 +370,54 @@ def score_mod(R, A, shrink=True):
     fbcr=(R['fb_nineties']/(R['fb_nineties']+15)).fillna(0).to_numpy() if shrink else one
     mcr=(R['matches']/(R['matches']+12)).to_numpy() if shrink else one
     fincr=(R['fin_shots']/(R['fin_shots']+100)).to_numpy() if shrink else one
+    qcr=(R['fbq_90s']/(R['fbq_90s']+10)).fillna(0).to_numpy() if shrink else one
     S={}
     for col in MSTATS:
         xs,ys=A[col]; raw=np.interp(R[col].fillna(0),xs,ys)
-        cr=fbcr if col in ('interceptions_p90','tackles_won_p90','fouls_drawn_p90','crosses_p90') else mcr
+        cr=(qcr if col in FBQ_STATS
+            else fbcr if col in ('interceptions_p90','tackles_won_p90','fouls_drawn_p90','crosses_p90')
+            else mcr)
         raw=np.where(R[col].isna(),50.0,raw)
         S[col]=np.asarray(50.0+(raw-50.0)*cr,dtype=float)
     xs,ys=zip(*ps.ANCHOR_FINISHING_PER_SHOT); fraw=np.interp(R['finishing_per_shot'],xs,ys)
     S['finishing_per_shot']=np.asarray(50.0+(fraw-50.0)*fincr,dtype=float)
     def sc(s): return S[s] if s in S else np.full(len(R),50.0)
-    def bl(w): return sum(sc(s)*ww for s,ww in w.items())/sum(w.values())
+    # RENORMALISE OVER WHAT EXISTS. Scoring a missing stat 50 and dividing by the
+    # full weight is not neutral, it is a penalty: with FBref quality carrying
+    # 66% of the defensive block and covering 39% of modern players, everyone
+    # else was pushed to the middle of a block they were never measured on, and
+    # Kanté fell 14.6 points for playing outside the leagues FBref publishes.
+    # A player is scored on the stats he HAS, reweighted to sum to one.
+    miss={s:(R[s].isna().to_numpy() if s in R.columns else np.zeros(len(R),bool)) for s in MSTATS}
+    def bl(w):
+        num=np.zeros(len(R)); den=np.zeros(len(R))
+        for s,ww in w.items():
+            have=~miss.get(s,np.zeros(len(R),bool))
+            num+=np.where(have,sc(s)*ww,0.0); den+=np.where(have,ww,0.0)
+        return np.where(den>1e-9,num/np.maximum(den,1e-9),50.0)
     def mx(pt): return sum(bl(b)*w for b,w in pt)/sum(w for _,w in pt)
+    # RAW rates for the shape, not the curve-compressed scores. The anchor
+    # curves flatten the top — 0.63 and 0.95 goals per 90 both land near 93 —
+    # so a profile built on them cannot tell the best finisher in the world
+    # from a very good one, which is exactly the distinction the role needs.
+    MOD_S.clear(); MOD_S.update({c: pd.to_numeric(R[c], errors='coerce').to_numpy()
+                                 for c in MSTATS if c in R.columns})
     return {n:(cw[0]*mx(cm['A'])+cw[1]*mx(cm['O'])+cw[2]*mx(cm['D']))/sum(cw) for n,(bk,cw,cm) in ROL_MOD.items()}
 
 def bestfit_mod(R, raws):
     toks=[set(str(p).split()) for p in R['pos']]
-    bl=np.array(['-']*len(R),dtype=object); bs=np.full(len(R),-1.0)
+    elig={name:np.array([any(name in TOK.get(t,[]) for t in tk) for tk in toks]) for name in ROL_MOD}
+    mgrp=np.array([next((t for t in ('S','F','M','D') if t in tk),'M') for tk in toks])
+    fit=shape_fit(MOD_S,role_weights(ROL_MOD),len(R),mgrp) if MOD_S else raws
+    by_shape=np.ones(len(R),dtype=bool)
+    bl=np.array(['-']*len(R),dtype=object)
+    bs=np.full(len(R),-np.inf); br=np.full(len(R),-np.inf); braw=np.full(len(R),-1.0)
     for name in ROL_MOD:
-        cand=np.array([any(name in TOK.get(t,[]) for t in tk) for tk in toks]); ov=raws[name]
-        u=cand&(ov>bs); bs=np.where(u,ov,bs); bl=np.where(u,name,bl)
-    return bl,bs
+        e=elig[name]
+        u=e&by_shape&(fit[name]>bs); bs=np.where(u,fit[name],bs); bl=np.where(u,name,bl)
+        u=e&~by_shape&(raws[name]>br); br=np.where(u,raws[name],br); bl=np.where(u,name,bl)
+        braw=np.where(e&(raws[name]>braw),raws[name],braw)
+    return bl,braw
 
 # helper: build modern career-agg frame with per90
 def modern_agg(m):
@@ -196,7 +431,14 @@ def modern_agg(m):
     for c in ['interceptions','tackles_won','crosses','fouls_drawn']: R[c+'_p90']=np.where(g['fb_nineties']>0,g[c]/fb90,np.nan)
     R['finishing_per_shot']=np.where(g['shots']>0,(g['goals']-g['xg'])/g['shots'].clip(lower=1),0.0)
     R['fb_nineties']=g['fb_nineties']; R['fin_shots']=g['finishing_shots']
-    return R.reset_index(drop=True)
+    R=R.reset_index(drop=True)
+    # measured quality, keyed on the same normalised name the rest of the file uses
+    from mundialytics.identity.fbref_quality import by_key as _fbq
+    q=_fbq(norm)
+    for c in FBQ_STATS+['fbq_90s']:
+        R[c]=[ (q.get(k) or {}).get(c,np.nan) for k in R['pn'] ]
+    print(f'  calidad FBref unida a {int(R["fbq_90s"].notna().sum()):,} de {len(R):,} jugadores modernos')
+    return R
 
 print('scoring StatsBomb-era base...')
 car=pd.read_csv(f'{P}/player_profiles_with_positions.csv')
@@ -208,8 +450,10 @@ names_sb=list(ROL_SB)
 car['role']=sb_role; car['base_raw']=sb_base
 car['base_unshrunk']=[sb_rawU[r][i] if r in sb_rawU else 50.0 for i,r in enumerate(sb_role)]
 car['pn']=car['player'].map(norm)
+if 'defense_creation_matches' not in car.columns: car['defense_creation_matches']=0.0
 sb=car.groupby('pn').agg(player=('player','first'),role=('role','first'),base_raw=('base_raw','max'),
-    base_unshrunk=('base_unshrunk','first'),matches=('matches','sum')).reset_index()
+    base_unshrunk=('base_unshrunk','first'),matches=('matches','sum'),
+    dcm=('defense_creation_matches','sum')).reset_index()
 
 print('scoring modern base...')
 m=pd.read_csv(f'{P}/player_profiles_modern.csv'); m['pn']=m['player'].map(norm)
@@ -260,7 +504,14 @@ def pick(row):
     # player has real SB data, take the SB ROLE; and for DEFENSIVE roles take the
     # SB-only base (modern would just drag an aerial-blind score). Attackers/mids
     # still blend both eras (modern adds their prime years).
-    if ms>=20 and pd.notna(sbr):
+    # ms counts APPEARANCES; `dcm` counts the matches whose raw events were
+    # actually parsed, and it is zero for 63% of profiles. Rodri has 365
+    # StatsBomb appearances and not one parsed event, so his role and his
+    # defensive score were both chosen off placeholder values — and the branch
+    # below then preferred them over the modern ones. A role picked from
+    # nothing must not outrank a role picked from data.
+    dcm=row.get('dcm',0) or 0
+    if ms>=20 and dcm>=10 and pd.notna(sbr):
         role=sbr
         braw=sbraw if sbr in DEFROLES else \
             ((sbraw if pd.notna(sbraw) else 0)*ms+(mdraw if pd.notna(mdraw) else 0)*mm)/max(tot,1)
@@ -337,9 +588,19 @@ mg['base_ovr']=mg['base_ovr'].fillna(mg['base_raw'].apply(lambda r: to_ovr(r) if
 # Goalkeepers: role "Portero", base = real gk_score (save%/GA/CS), not the
 # outfield role scoring (which leaves them role "-" ~50).
 gk_scores=ps._build_gk_scores()
-gk_by_pn={}
+# joined by NAME INDEX, not by `.lower()`: goalkeeper_match_stats.csv writes
+# "marc andré ter stegen" and the profiles write "Marc-André ter Stegen", so a
+# bare lowercase join missed 29% of keepers onto the 50.0 default -> exactly
+# 66.0 on the curve below. ter Stegen has a real 70.2, worth about 85.
+from mundialytics.identity.current_squads import NameIndex as _NI
+_gk_idx=_NI()
+for _n,_v in gk_scores.items(): _gk_idx.add(_n,float(_v),rank=float(_v))
+gk_by_pn={}; _gk_hit=0
 for _,r in car[car['position']=='Goalkeeper'].iterrows():
-    gk_by_pn[r['pn']]=gk_scores.get(str(r['player']).lower(),50.0)
+    _h=_gk_idx.lookup(r['player'])
+    if _h is not None: _gk_hit+=1
+    gk_by_pn[r['pn']]=float(_h) if _h is not None else 50.0
+print(f'  porteros con nota real: {_gk_hit} de {len(gk_by_pn)}')
 is_gk=mg['pn'].isin(gk_by_pn)
 mg.loc[is_gk,'role']='Portero'
 # GK display curve so a top keeper (Oblak gk_score~75) reaches ~88 like a top
@@ -377,6 +638,12 @@ p90=(m2['minutes']/90).clip(lower=0.1); fb90=m2['fb_nineties'].clip(lower=0.1)
 Rs=pd.DataFrame(); Rs['matches']=m2['matches']; Rs['fb_nineties']=m2['fb_nineties']; Rs['fin_shots']=m2['finishing_shots']; Rs['finishing_per_shot']=m2['finishing_per_shot']
 for c in ['goals','np_xg','assists','xa','shots','key_passes','xg_chain','xg_buildup']: Rs[c+'_p90']=m2[c]/p90
 for c in ['interceptions','tackles_won','crosses','fouls_drawn']: Rs[c+'_p90']=np.where(m2['fb_nineties']>0,m2[c]/fb90,np.nan)
+# The FBref quality is DELIBERATELY absent from the per-season path. It only
+# covers 2023/24 and 2024/25, and a player's duel rate today says nothing about
+# the season a PRIME card is claiming — scoring "Suárez 15/16" on the 2024/25
+# Suárez is the retired-goalscorer bug wearing a different hat. NaN here means
+# score_mod scores those blocks 50, so season ratings are untouched by this.
+for c in FBQ_STATS+['fbq_90s']: Rs[c]=np.nan
 sraws_m=score_mod(Rs,Amod,shrink=False)
 for i in range(len(m2)):
     pn=m2['pn'].iloc[i]; ur=role_by.get(pn)
