@@ -198,15 +198,24 @@ export type ScorerRace = {
 };
 
 export type SquadPlayer = {
+  /** The CARD id, not the man: a player has up to three of them. */
   player: string;
   display: string;
   team: string;
   position: string;
+  role?: string;
+  /** "actual" this season, "prime" a great season of his, "icono" a retired great. */
+  kind?: "actual" | "prime" | "icono";
+  /** "15/16" on a prime; primes are the only cards that carry a year. */
+  season?: string | null;
   overall: number;
   /** Shot-stopping for keepers, offensive strength for everyone else. */
   attack: number;
   defense: number;
   creation: number;
+  /** False when nobody ever measured him defending — the axis is what his role
+   *  implies, which is true of two thirds of defenders. */
+  measured?: boolean;
   matches: number;
 };
 

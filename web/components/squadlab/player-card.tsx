@@ -16,7 +16,12 @@ import { cn } from "@/lib/utils";
  * Pass the *rounded* overall, the one printed on the card: 84.6 shows as 85, and
  * a silver 85 sitting beside a gold 85 reads as a rendering fault.
  */
-export function tierOf(overall: number) {
+export function tierOf(overall: number, kind?: string) {
+  // A special edition is not a rating band: a prime and an icon say something
+  // about WHICH version of the player this is, and they keep their own face
+  // whatever they are rated.
+  if (kind === "icono") return "icono";
+  if (kind === "prime") return "prime";
   if (overall >= 90) return "elite";
   if (overall >= 85) return "gold";
   if (overall >= 80) return "silver";
@@ -29,7 +34,7 @@ export function tierOf(overall: number) {
  * glow nobody notices — and the set is the hook for the special editions to
  * come, which will join it with their own `--aura`.
  */
-const AURA_TIERS = new Set(["elite"]);
+const AURA_TIERS = new Set(["elite", "prime", "icono"]);
 
 const POSITION_ABBR: Record<string, string> = {
   Goalkeeper: "GK",
@@ -71,7 +76,7 @@ export function PlayerCard({
   size?: "sm" | "md";
 }) {
   const overall = Math.round(player.overall);
-  const tier = tierOf(overall);
+  const tier = tierOf(overall, player.kind);
   const s = SIZE[size];
   const Tag = onClick ? "button" : "div";
 
@@ -90,7 +95,8 @@ export function PlayerCard({
       {AURA_TIERS.has(tier) ? (
         <span
           aria-hidden
-          className="mv-aura"
+          className={cn("mv-aura", tier === "prime" && "mv-aura-prime",
+            tier === "icono" && "mv-aura-icono")}
           style={{ "--deal-delay": `${delay}ms` } as CSSProperties}
         />
       ) : null}
@@ -105,11 +111,24 @@ export function PlayerCard({
           selected && "mv-card-selected",
         )}
       >
+        {player.season ? (
+          // The year IS the claim a prime makes — this is Suárez in 2015/16,
+          // not Suárez — so it goes on the face, not in a tooltip.
+          <span className="mv-card-year">{player.season}</span>
+        ) : null}
+
         <span className="flex items-start justify-between gap-1.5">
           <span className={cn("font-semibold leading-none", s.ovr)}>{overall}</span>
-          <span className="rounded-[5px] bg-black/15 px-1.5 py-0.5 text-[0.55rem] font-bold tracking-[0.06em]">
-            {POSITION_ABBR[player.position] ??
-              player.position.slice(0, 2).toUpperCase()}
+          <span
+            className={cn(
+              "rounded-[5px] px-1.5 py-0.5 text-[0.55rem] font-bold tracking-[0.06em]",
+              tier === "icono" ? "bg-black/10" : "bg-black/15",
+            )}
+          >
+            {tier === "icono"
+              ? "ICONO"
+              : (POSITION_ABBR[player.position] ??
+                player.position.slice(0, 2).toUpperCase())}
           </span>
         </span>
 

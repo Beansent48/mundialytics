@@ -18,6 +18,8 @@ const SIZE = 1080;
 
 /** The card gradients, kept in step with the ones in globals.css. */
 const TIER_COLORS: Record<string, [string, string, string, string]> = {
+  icono: ["#ffffff", "#cfd5e6", "#9aa3bb", "#12151f"],
+  prime: ["#5ff0c6", "#0f9b7c", "#06483c", "#eafff8"],
   elite: ["#b79bff", "#6d3fff", "#3c1d9e", "#ffffff"],
   gold: ["#ffe08a", "#e0a52e", "#a97016", "#12141c"],
   silver: ["#eef1f6", "#b8c0cf", "#8a93a5", "#12141c"],
@@ -211,7 +213,10 @@ export function ShareCard({
     let cx = (SIZE - (cw * 3 + cgap * 2)) / 2;
     for (const p of top) {
       const rounded = Math.round(p.overall);
-      const [c1, c2, c3, ink] = TIER_COLORS[tierOf(rounded)] ?? TIER_COLORS.bronze;
+      // the share card is the thing people post, so a drafted icon has to be
+      // recognisable in it as an icon
+      const [c1, c2, c3, ink] =
+        TIER_COLORS[tierOf(rounded, p.kind)] ?? TIER_COLORS.bronze;
 
       const grad = ctx.createLinearGradient(cx, 690, cx + cw, 690 + ch);
       grad.addColorStop(0, c1);

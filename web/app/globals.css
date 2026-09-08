@@ -334,6 +334,42 @@
     background: linear-gradient(160deg, #e6b98d, #b9793f 58%, #8a5424);
   }
 
+  /* The two special editions. A prime is a SEASON of a player, an icon is a
+     retired great — different claims, so different objects rather than two more
+     shades of the tier ramp.
+
+     The icon is the only LIGHT card in the game. Its first pass was gold on
+     dark and sat two shades from the ordinary gold tier, which made the rarest
+     card in the pool read as the third-rarest; everything else here is dark, so
+     inverting it is the one treatment nothing can accidentally approach. */
+  .mv-card-prime {
+    background: linear-gradient(160deg, #5ff0c6, #0f9b7c 55%, #06483c);
+    color: #eafff8;
+  }
+  .mv-card-icono {
+    background: linear-gradient(160deg, #ffffff, #cfd5e6 55%, #9aa3bb);
+    color: #12151f;
+  }
+  /* The rim highlight is drawn for a dark body; on the light icon it reads as
+     a smudge along the top edge. */
+  .mv-card-icono::before {
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.9);
+  }
+  .mv-card-icono::after {
+    opacity: 0.35;
+  }
+
+  /* The year a prime is claiming, in the corner the tier badge leaves free. */
+  .mv-card-year {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.4rem;
+    font-size: 0.5rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    opacity: 0.85;
+  }
+
   /* An empty slot keeps the silhouette so the pitch reads as eleven cards from
      the first frame — a ghost, not a dashed box. */
   .mv-card-empty {
@@ -363,6 +399,13 @@
    is a sibling painted behind it — which also means future special editions get
    the effect for free by setting --aura to their own colour. */
 @layer components {
+  .mv-aura-prime {
+    --aura: #2fe0ac;
+  }
+  .mv-aura-icono {
+    --aura: #eef2ff;
+  }
+
   .mv-aura {
     position: absolute;
     inset: -22%;
