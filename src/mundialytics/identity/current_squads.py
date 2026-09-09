@@ -82,6 +82,15 @@ def position_group(abbrev: object) -> str:
     return "Unknown"
 
 
+# letters unicode NFKD leaves intact (no combining-mark decomposition), which the
+# ascii strip would otherwise delete rather than fold to their base letter
+_TRANSLIT = str.maketrans({
+    "ı": "i", "İ": "i", "ø": "o", "Ø": "o", "ł": "l", "Ł": "l", "đ": "d", "Đ": "d",
+    "ð": "d", "Ð": "d", "þ": "th", "Þ": "th", "ß": "ss", "æ": "ae", "Æ": "ae",
+    "œ": "oe", "Œ": "oe", "ħ": "h", "Ħ": "h", "ŋ": "n", "ĸ": "k", "ł": "l",
+})
+
+
 def _fold(name: object, keep_hyphen: bool = False) -> str:
     """Accent-stripped, punctuation-flattened, lowercase name."""
     s = unicodedata.normalize("NFKD", str(name))
@@ -100,6 +109,11 @@ def _fold(name: object, keep_hyphen: bool = False) -> str:
     # apostrophe was mangled into a quote somewhere upstream.
     for _q in "’‘ʼ´`\"":
         s = s.replace(_q, "'")
+    # Letters NFKD does NOT decompose to ASCII would be DROPPED by the ascii
+    # strip below, not folded — "Yıldız" became "yldz", "Højlund" "hjlund",
+    # "Michał" "micha" — so the same man spelt with a plain i/o/l in another
+    # feed never joined. Transliterate them to their base letter first.
+    s = s.translate(_TRANSLIT)
     s = s.encode("ascii", "ignore").decode().lower()
     s = s.replace("'", " ").replace(".", " ")
     if not keep_hyphen:
