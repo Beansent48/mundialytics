@@ -392,17 +392,6 @@ def test_every_formation_is_eleven_players(formation):
     assert outfield == formation
 
 
-def test_the_pitch_has_a_spot_for_every_slot():
-    import sys
-    sys.path.insert(0, str(ROOT / "app"))
-    import squadlab_draft as D
-
-    for formation, slots in C.FORMATION_SLOTS.items():
-        coords = D.FORMATION_COORDS[formation]
-        for pos, n in slots.items():
-            assert len(coords[pos]) == n, f"{formation} {pos}"
-
-
 # ── the Champions field ────────────────────────────────────────────────────────
 def test_the_champions_field_is_thirty_six_teams_of_eight_games():
     """35 teams is not a Champions League: the league phase and the whole

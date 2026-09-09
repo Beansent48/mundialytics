@@ -288,13 +288,17 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
-pytest tests/                    # 165 pass on a clean checkout
-streamlit run app/streamlit_app.py
+pytest tests/                    # clean-checkout suite
+
+# The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes:
+uvicorn api.main:app --port 8000
+npm --prefix web run dev         # http://localhost:3000
 ```
 
-The Streamlit app has eight pages: matchday, single-competition simulation,
-league forecasting from the current table, player and team props, European
-competitions, results and track record, individual awards, and SquadLab.
+The web app has pages for matchday, single-competition simulation, league
+forecasting from the current table, player and team props, European
+competitions, results and track record, individual awards, and SquadLab —
+where you draft an eleven and play the real Champions League.
 
 ## Layout
 

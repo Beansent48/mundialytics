@@ -791,10 +791,14 @@ python scripts/diagnose_dataset.py \
   --out outputs/sample_matches_diagnostic.json
 ```
 
-## Interfaz Streamlit
+## Interfaz web
+
+La interfaz es una app web (Next.js en `web/`) sobre la API FastAPI de `api/`.
+Se levantan dos procesos:
 
 ```bash
-streamlit run app/streamlit_app.py
+uvicorn api.main:app --port 8000
+npm --prefix web run dev         # http://localhost:3000
 ```
 
 ## Estructura
