@@ -453,6 +453,10 @@
     "leaguePhaseRankLine": "{rank} in the league phase",
     "championLine": "Champion: {team}",
     "squadElo": "Squad Elo",
-    "leaguePhasePos": "League-phase spot"
+    "leaguePhasePos": "League-phase spot",
+    "roleFormula": "Role formula",
+    "otherStats": "Other measured stats",
+    "noAdvancedData": "No advanced data measured for this player.",
+    "percentileNote": "Percentiles vs his position. The role weights each stat (%)."
   }
 }

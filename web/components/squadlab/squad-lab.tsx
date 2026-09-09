@@ -279,6 +279,8 @@ export function SquadLab() {
                               player={p}
                               delay={delay}
                               selected={openSlot === slot.key}
+                              roleWeights={pool.roleWeights}
+                              substatLabels={pool.substatLabels}
                               onClick={() =>
                                 setOpenSlot(openSlot === slot.key ? null : slot.key)
                               }
@@ -354,6 +356,8 @@ export function SquadLab() {
                     key={p.player}
                     player={p}
                     delay={i * 70}
+                    roleWeights={pool.roleWeights}
+                    substatLabels={pool.substatLabels}
                     onClick={() => pick(openSlotObj.key, p)}
                   />
                 ))}
