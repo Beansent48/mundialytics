@@ -116,6 +116,7 @@ def stats_birth() -> dict:
 # blended-level `bl` and the club blend (keepers/defenders) is re-applied in
 # rating space. Axes still come from the old path in this first pass.
 ROLE_RATINGS = ROOT / "data/processed/player_role_ratings.csv"
+ROLE_UNMEASURED_MAX = 79.0   # a player with no advanced data is a decent starter at most
 _ROLE_RT: "NameIndex | None" = None
 
 
@@ -196,9 +197,16 @@ def role_engine_bl(squads, out, elo_map, bz, career) -> pd.Series:
         meas.loc[mask] = meas[mask] + DEF_CLUB_W * 1.5 * ez
     # the role rating is already complete and minute-credibility-shrunk; use it
     # directly. Blending it with the OLD strength `career` (inflated by the
-    # legacy attack bump) is exactly what put Malen back at 90. Career only
-    # covers the unmeasured, capped so no data cannot reach the elite tier.
-    return meas.where(meas.notna(), np.minimum(career, UNMEASURED_MAX))
+    # legacy attack bump) is exactly what put Malen back at 90.
+    #
+    # A player with NO role data (promoted from a league we have no advanced
+    # data for — Ximo Navarro of newly-up Deportivo, and ~a third of the squad
+    # list from lower divisions) must not inherit the old volume-inflated career
+    # rating: we cannot conjure data we do not have, so the honest answer is a
+    # CONSERVATIVE rating, capped well below the measured elite. Genuine big-5
+    # players landing here are a name-match gap to fix in identity, not a reason
+    # to hand everyone 85.
+    return meas.where(meas.notna(), np.minimum(career, ROLE_UNMEASURED_MAX))
 UNDERSTAT_PM = ROOT / "data/external/advanced/understat/understat_player_match.csv"
 
 # A prime is a great season, not a fluke: blending the season rating back toward
