@@ -158,8 +158,10 @@ def role_engine_bl(squads, out, elo_map, bz, career) -> pd.Series:
     # career-gk + club blend, which the user already approved (Oblak/Courtois).
     mask = pos == "Defender"
     if mask.any():
+        # a light nudge now — GA_ON (xG conceded on-pitch) already carries most
+        # of the team-defence signal the crude club Elo used to stand in for
         ez = ((elo[mask] - elo[mask].mean()) / (elo[mask].std() or 1.0)).fillna(0.0)
-        meas.loc[mask] = meas[mask] + DEF_CLUB_W * 3.0 * ez
+        meas.loc[mask] = meas[mask] + DEF_CLUB_W * 1.5 * ez
     # the role rating is already complete and minute-credibility-shrunk; use it
     # directly. Blending it with the OLD strength `career` (inflated by the
     # legacy attack bump) is exactly what put Malen back at 90. Career only
