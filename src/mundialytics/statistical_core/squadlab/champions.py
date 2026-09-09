@@ -14,9 +14,11 @@ catalogue, push it through the same squad-to-lambda bridge, and fit the club's
 actual Elo against what the bridge says about it. A drafted squad then reads off
 that line. It is a fitted relationship with a reported R², not a guess.
 
-THE SLOT. Your club takes the place of the weakest side in the real draw, which
-keeps the fixture list, the pots and the schedule exactly as they are — you play
-the eight opponents that team was actually drawn against.
+THE SLOT. Your club takes a RANDOM club's place in the real draw (it used to be
+always the weakest, Sabah), which keeps the fixture list, the pots and the
+schedule exactly as they are — you play the eight opponents that club was drawn
+against, and the draw changes every time you play. Pass a fresh rng for a fresh
+draw.
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ from mundialytics.statistical_core.competition.european import (
 )
 from mundialytics.statistical_core.player_strength import PlayerStrengthProfile
 from mundialytics.statistical_core.squadlab.player_rating import (
-    attribute_cards, attribute_goals, compute_match_ratings,
+    attribute_cards, attribute_goals, compute_match_ratings, squad_attack_multiplier,
 )
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -238,11 +240,18 @@ class ChampionsRun:
         self.calib = calib or load_calibration(ROOT)
 
         elo = dict(field_["elo"])
-        self.replaced = weakest_team(elo)
+        # a RANDOM draw: your eleven takes a random club's slot in the real
+        # field (was always the weakest, Sabah), so the eight opponents and the
+        # path change every time you play. Pass a fresh rng for a fresh draw.
+        self.replaced = str(self.rng.choice(sorted(elo)))
         del elo[self.replaced]
         elo[squad_name] = float(squad_elo)
         self.elo = elo
         self.squad_elo = float(squad_elo)
+        # complementarity: a lopsided attack (all finish, no creation, or vice
+        # versa) converts less — the profile shapes the scoreline, not just who
+        # scores. Bounded ~[0.85, 1.0]. See squad_attack_multiplier.
+        self.attack_mult = squad_attack_multiplier(squad)
 
         fx = field_["fixtures"].copy()
         fx["home"] = fx["home"].replace(self.replaced, squad_name)
@@ -262,6 +271,11 @@ class ChampionsRun:
         i, j = self.idx[home], self.idx[away]
         lam_h = self.tour.lam_h_neutral[i, j] if neutral else self.tour.lam_h[i, j]
         lam_a = self.tour.lam_a_neutral[i, j] if neutral else self.tour.lam_a[i, j]
+        # your squad's attack is scaled by how balanced its finishing/creation is
+        if self.squad_name == home:
+            lam_h = lam_h * self.attack_mult
+        elif self.squad_name == away:
+            lam_a = lam_a * self.attack_mult
         hg, ag = self._goals(lam_h), self._goals(lam_a)
         m = ChampionsMatch(stage=stage, matchday=matchday, home=home, away=away,
                            home_goals=hg, away_goals=ag)

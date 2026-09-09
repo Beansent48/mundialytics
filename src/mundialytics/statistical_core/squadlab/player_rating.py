@@ -54,7 +54,15 @@ class PlayerMatchEvent:
     rating: float = RATING_BASE
 
 
+# how much a lopsided XI is docked on goals: a team of only finishers with
+# nobody to feed them, or only creators with nobody to finish, converts less
+# than a balanced one. Bounded and modest — the profile decides the tilt, not a
+# wild swing. See squad_attack_multiplier.
+BALANCE_DOCK = 0.30
+
+
 def _scorer_weights(squad: list[PlayerStrengthProfile]) -> np.ndarray:
+    # who FINISHES: the offensive (finishing) strength, position-tilted
     return np.array([
         POSITION_ATTACK_WEIGHT.get(p.position, 0.45) * max(p.offensive_strength - 30.0, 1.0)
         for p in squad
@@ -62,12 +70,35 @@ def _scorer_weights(squad: list[PlayerStrengthProfile]) -> np.ndarray:
 
 
 def _assist_weights(squad: list[PlayerStrengthProfile]) -> np.ndarray:
+    # who CREATES the goal: the CREATION strength, not the finishing — this is
+    # what makes a creator (high xA/key passes) feed a finisher, the
+    # complementarity the profile is for. Position-tilted so a centre back
+    # assists far less than a playmaker.
     return np.array([
-        (0.5 * POSITION_ATTACK_WEIGHT.get(p.position, 0.45)
-         + 0.5 * POSITION_DEFENSE_WEIGHT.get(p.position, 0.40))
-        * max(p.offensive_strength - 30.0, 1.0)
+        POSITION_ATTACK_WEIGHT.get(p.position, 0.45)
+        * max(getattr(p, "creation_strength", p.offensive_strength) - 30.0, 1.0)
         for p in squad
     ])
+
+
+def squad_attack_multiplier(squad: list[PlayerStrengthProfile]) -> float:
+    """A goal-scaling factor in ~[0.85, 1.0] rewarding a BALANCED attack.
+
+    Finishing and creation are complements: chances have to be both made and
+    taken. A squad strong at one and empty at the other is docked; a squad with
+    both keeps full output. Uses the harmonic-vs-arithmetic mean of the two, so
+    the penalty grows with the imbalance and vanishes when they match."""
+    if len(squad) < 4:
+        return 1.0
+    off = sorted((p.offensive_strength for p in squad), reverse=True)[:5]
+    cre = sorted((getattr(p, "creation_strength", p.offensive_strength) for p in squad), reverse=True)[:5]
+    fn = float(np.clip((np.mean(off) - 40.0) / 50.0, 0.0, 1.0))
+    cn = float(np.clip((np.mean(cre) - 40.0) / 50.0, 0.0, 1.0))
+    if fn + cn <= 1e-9:
+        return 1.0
+    harm = 2.0 * fn * cn / (fn + cn)
+    arith = 0.5 * (fn + cn)
+    return float(1.0 + BALANCE_DOCK * (harm - arith))     # harm <= arith, so <= 1.0
 
 
 def attribute_goals(
