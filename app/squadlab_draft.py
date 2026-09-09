@@ -1,9 +1,10 @@
 """SquadLab Champions Draft — the game mode.
 
 You draft eleven players out of packs, one slot at a time, and your club takes
-the place of the weakest side in the real Champions League field. Nothing is
-chosen by league any more: the pool is every player of every club we simulate,
-plus their prime seasons, plus the icons.
+a RANDOM club's place in the real Champions League field (a fresh draw each
+play), so the eight opponents change every time. Nothing is chosen by league:
+the pool is every player of every club we simulate — any league — plus their
+prime seasons, plus the icons.
 
 The three card faces are deliberately different objects rather than three
 colours of the same one. A prime carries a year because that is the whole claim

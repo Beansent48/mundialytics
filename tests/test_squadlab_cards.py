@@ -415,21 +415,23 @@ def test_the_champions_field_is_thirty_six_teams_of_eight_games():
     assert set(played.unique()) == {8}, played[played != 8].to_dict()
 
 
-def test_the_squad_replaces_the_weakest_side_and_inherits_its_draw():
-    from mundialytics.statistical_core.squadlab.champions import (
-        ChampionsRun, load_field, weakest_team,
-    )
+def test_the_squad_replaces_a_random_side_and_inherits_its_draw():
+    from mundialytics.statistical_core.squadlab.champions import ChampionsRun, load_field
 
     df = _cards()
     field = load_field()
-    weakest = weakest_team(field["elo"])
     xi = [c.to_profile() for c in C.best_eleven(df, "real madrid")]
     run = ChampionsRun("Tu Equipo", xi, 1800.0, field, rng=np.random.default_rng(2))
-    assert run.replaced == weakest
-    assert weakest not in run.elo and "Tu Equipo" in run.elo
+    # a random real club's slot, whichever it is, and its exact eight fixtures
+    assert run.replaced in field["elo"]
+    assert run.replaced not in run.elo and "Tu Equipo" in run.elo
     mine = run.fixtures[(run.fixtures["home"] == "Tu Equipo")
                         | (run.fixtures["away"] == "Tu Equipo")]
     assert len(mine) == 8
+    # a different rng draws a different slot (over a few seeds it must vary)
+    drawn = {ChampionsRun("Tu Equipo", xi, 1800.0, field,
+                          rng=np.random.default_rng(s)).replaced for s in range(6)}
+    assert len(drawn) > 1
 
 
 def test_a_full_run_produces_a_champion_and_your_own_matches():
