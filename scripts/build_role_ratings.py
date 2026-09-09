@@ -97,8 +97,10 @@ GAMMA = 2.3                 # emphasis: only the genuine top of a skill counts
 # steeper at the top so the true elite pull AWAY from the merely very-good
 # (the user's rule: compress the pack down, keep the gap). Median stays ~75.
 OVR_XS = [0.15, 0.25, 0.35, 0.45, 0.55, 0.63, 0.70]
-OVR_YS = [72.0, 76.0, 79.0, 82.0, 85.0, 89.0, 93.0]
-OVR_MAX = 92.0             # ACTUAL cap; primes/icons above, built elsewhere
+OVR_YS = [72.0, 76.0, 79.0, 82.0, 85.0, 89.0, 95.0]
+# NO hard cap here: the overall stays CONTINUOUS (the elite reach ~93-95) and
+# the card's soft_cap_actual (a tanh) brings the ceiling to 92 PROPORTIONALLY,
+# so the top keeps its gaps (Kane over Haaland over ...) instead of a flat wall.
 LEAGUE_PTS = 2.0           # how much a full sd of league strength moves the composite-rating
 
 
@@ -106,23 +108,33 @@ def emphasis(p):
     return np.power(np.clip(p, 0.0, 1.0), GAMMA)
 
 
-def role_score(prof: pd.Series, weights: dict) -> tuple[float, float]:
-    """(score in 0..1, coverage) of a profile under one role's value-vector.
+GROUP_OF = {s: g for g, members in AXIS_GROUPS.items() for s in members}
 
-    Weights are renormalised over the sub-stats actually present, so a missing
-    column costs coverage, not a zero. Coverage lets us distrust a role scored
-    off almost nothing."""
-    num = den = cov_w = cov_tot = 0.0
+
+def role_grouped(prof: pd.Series, weights: dict):
+    """Score a profile under one role, DECOMPOSED by axis group.
+
+    Returns (overall 0..1, coverage, gnum, gden) where gnum/gden are the
+    role-weighted emphasis sum and weight per group (attack/creation/defense/
+    gk). The overall is sum(gnum)/sum(gden) — so the group scores gnum/gden ARE
+    the axes and the overall is their weighted average: better axes always mean
+    a better overall. Weights renormalise over present sub-stats (a missing
+    column costs coverage, not a zero)."""
+    gnum = {"attack": 0.0, "creation": 0.0, "defense": 0.0, "gk": 0.0}
+    gden = {"attack": 0.0, "creation": 0.0, "defense": 0.0, "gk": 0.0}
+    cov_w = cov_tot = 0.0
     for s, w in weights.items():
         cov_tot += w
         v = prof.get(s, np.nan)
         if pd.notna(v):
-            num += w * emphasis(float(v))
-            den += w
+            g = GROUP_OF.get(s, "creation")
+            gnum[g] += w * emphasis(float(v))
+            gden[g] += w
             cov_w += w
+    den = sum(gden.values())
     if den <= 0:
-        return 0.0, 0.0
-    return num / den, cov_w / cov_tot
+        return 0.0, 0.0, gnum, gden
+    return sum(gnum.values()) / den, cov_w / cov_tot, gnum, gden
 
 
 def build() -> pd.DataFrame:
@@ -132,28 +144,32 @@ def build() -> pd.DataFrame:
         prof = r._asdict()
         pos = str(prof["position"])
         cands = CANDIDATES.get(pos, ATT_MID)
-        best_role, best_sc = None, -1.0
+        best = None
         for role in cands:
-            sc, cov = role_score(prof, ROLE_WEIGHTS[role])
-            # a role scored off < half its weight is not trustworthy; skip unless
-            # nothing else is available
-            sc_eff = sc if cov >= 0.5 else sc * cov
-            if sc_eff > best_sc:
-                best_sc, best_role = sc_eff, role
-        # league nudges the composite (harder league = same output means more)
-        comp = float(np.clip(best_sc + LEAGUE_W * LEAGUE_PTS / 100.0 * float(prof.get("league_z", 0.0)), 0, 1))
-        ovr = float(np.interp(comp, OVR_XS, OVR_YS))
-        # axes from the profile (emphasis-curved mean of each group)
+            comp, cov, gnum, gden = role_grouped(prof, ROLE_WEIGHTS[role])
+            comp_eff = comp if cov >= 0.5 else comp * cov
+            if best is None or comp_eff > best[0]:
+                best = (comp_eff, role, comp, gnum, gden)
+        comp_eff, best_role, comp, gnum, gden = best
+        # the axes ARE the role-weighted group scores; where the role does not
+        # value a group, fall back to a flat mean so the bar is still shown
         ax = {}
         for a, members in AXIS_GROUPS.items():
-            vals = [emphasis(float(prof[m])) for m in members if pd.notna(prof.get(m, np.nan))]
-            ax[a] = float(np.mean(vals)) if vals else np.nan
+            if gden.get(a, 0.0) > 0:
+                ax[a] = gnum[a] / gden[a]
+            else:
+                vals = [emphasis(float(prof[m])) for m in members if pd.notna(prof.get(m, np.nan))]
+                ax[a] = float(np.mean(vals)) if vals else np.nan
+        # league nudges the composite; overall stays continuous (card caps to 92)
+        c = float(np.clip(comp + LEAGUE_W * LEAGUE_PTS / 100.0 * float(prof.get("league_z", 0.0)), 0, 1))
         rows.append({
             "player": prof["player"], "position": pos, "league": prof["league"],
-            "role": best_role, "role_fit": round(best_sc, 3), "n90": prof["n90"],
-            "overall": round(min(ovr, OVR_MAX), 1),
-            "attack": ax["attack"], "creation": ax["creation"],
-            "defense": ax["defense"], "gk": ax["gk"],
+            "role": best_role, "role_fit": round(comp_eff, 3), "n90": prof["n90"],
+            "overall": round(float(np.interp(c, OVR_XS, OVR_YS)), 1),
+            "attack": round(ax["attack"], 4) if pd.notna(ax["attack"]) else np.nan,
+            "creation": round(ax["creation"], 4) if pd.notna(ax["creation"]) else np.nan,
+            "defense": round(ax["defense"], 4) if pd.notna(ax["defense"]) else np.nan,
+            "gk": round(ax["gk"], 4) if pd.notna(ax["gk"]) else np.nan,
         })
     out = pd.DataFrame(rows)
     print(f"  {len(out):,} jugadores valorados · media {out['overall'].mean():.1f} · "

@@ -137,28 +137,34 @@ def _role_ratings_index() -> NameIndex:
 
 
 def apply_role_axes(squads, out, bz) -> None:
-    """Override the card's ATA/DEF/CRE with the role engine's profile axes
-    (0..1 closeness -> the position's AXIS_SCALE band by within-position
-    percentile). Keepers keep their old axes. Only touched when the flag is on."""
+    """Override the card's ATA/DEF/CRE with the role engine's profile axes.
+
+    The stored axis is a 0..1 role-weighted group score, mapped CONTINUOUSLY to
+    the position's AXIS_SCALE band (interp over the score itself, not its
+    within-position percentile) — so two elite forwards no longer both clamp to
+    the band maximum, they keep the small gap their profiles actually have.
+    Keepers keep their old axes. Only touched when the flag is on."""
     idx = _role_ratings_index()
     n = len(squads)
     pos = [str(p) for p in out["position"]]
-    raw = {"attack": [np.nan] * n, "creation": [np.nan] * n, "defense": [np.nan] * n}
+    got = {"attack": list(out["attack"]), "creation": list(out["creation"]),
+           "defense": list(out["defense"])}
+    col = {"attack": 3, "creation": 4, "defense": 5}
     for i, who in enumerate(squads["player"]):
+        if pos[i] == "Goalkeeper":
+            continue
         h = idx.lookup(who, birth=bz(who))
-        if h is not None and len(h) >= 6:
-            raw["attack"][i], raw["creation"][i], raw["defense"][i] = h[3], h[4], h[5]
-    posser = pd.Series(pos)
-    for ax in ("attack", "creation", "defense"):
-        pct = pd.Series(raw[ax]).groupby(posser).rank(pct=True)
-        vals = list(out[ax])
-        for i in range(n):
-            if pos[i] == "Goalkeeper" or not np.isfinite(pct.iloc[i]):
+        if h is None or len(h) < 6:
+            continue
+        for ax, ci in col.items():
+            s = h[ci]
+            if not np.isfinite(s):
                 continue
             lo, mid, hi = AXIS_SCALE.get(pos[i], AXIS_SCALE["Midfielder"])[ax]
-            v = float(np.interp(pct.iloc[i], [0.1, 0.5, 0.9], [lo, mid, hi]))
-            vals[i] = round(cap_defense(pos[i], v) if ax == "defense" else v, 1)
-        out[ax] = vals
+            v = float(np.interp(s, [0.06, 0.25, 0.50, 0.75], [lo, mid, hi, min(hi + 5, 97)]))
+            got[ax][i] = round(cap_defense(pos[i], v) if ax == "defense" else v, 1)
+    for ax in ("attack", "creation", "defense"):
+        out[ax] = got[ax]
 
 
 def role_engine_bl(squads, out, elo_map, bz, career) -> pd.Series:
