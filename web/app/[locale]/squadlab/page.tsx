@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { SquadLab } from "@/components/squadlab/squad-lab";
-import { api, type Competition } from "@/lib/api";
+import { api } from "@/lib/api";
 
 export async function generateMetadata({
   params,
@@ -23,10 +23,12 @@ export default async function SquadLabPage({
   setRequestLocale(locale);
   const t = await getTranslations("squadlab");
 
-  let competitions: Competition[] = [];
+  // A cheap health probe: if the engine is still warming up (fitting on tens of
+  // thousands of matches at boot), show the offline card instead of a pool that
+  // will 503. The squad pool itself is fetched client-side once the user starts.
   let offline = false;
   try {
-    competitions = await api.competitions();
+    await api.competitions();
   } catch {
     offline = true;
   }
@@ -52,7 +54,7 @@ export default async function SquadLabPage({
         </div>
       ) : (
         <div className="mt-12">
-          <SquadLab competitions={competitions} />
+          <SquadLab />
         </div>
       )}
     </div>

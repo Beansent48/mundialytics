@@ -235,35 +235,73 @@ export type SquadPlayerRating = {
   cards: number;
 };
 
+/** One of the squad's own matches. Only the squad's matches carry detail. */
 export type SquadFixture = {
+  /** "liga" | "playoff" | "r16" | "qf" | "sf" | "final" */
+  stage: string;
+  stageLabel: string;
   home: string;
   away: string;
   homeGoals: number;
   awayGoals: number;
   isSquad: boolean;
-  /** Narrative detail travels only for the squad's own matches. */
   events: SquadMatchEvent[] | null;
   stats: { key: string; home: number; away: number }[] | null;
   ratings: SquadPlayerRating[] | null;
 };
 
+export type LeaguePhaseRow = {
+  rank: number;
+  team: string;
+  played: number;
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDiff: number;
+  isSquad: boolean;
+};
+
+/** A two-legged knockout tie (the final is a single leg, leg2 empty). */
+export type BracketTie = {
+  round: string;
+  roundLabel: string;
+  teamA: string;
+  teamB: string;
+  leg1: string;
+  leg2: string;
+  agg: string;
+  winner: string;
+  /** "" | "pró." (extra time) | "pen." (penalties) */
+  note: string;
+  isSquad: boolean;
+};
+
+export type SquadBracket = {
+  playoff: BracketTie[];
+  r16: BracketTie[];
+  qf: BracketTie[];
+  sf: BracketTie[];
+  final: BracketTie[];
+};
+
+/** The result of one Champions run with the drafted eleven. */
 export type SquadSeason = {
   teamName: string;
+  /** The real club whose slot in the draw the squad took. */
   replaced: string | null;
-  matchdays: { matchday: number; fixtures: SquadFixture[] }[];
-  standings: {
-    rank: number; team: string; played: number; points: number;
-    goalsFor: number; goalsAgainst: number; isSquad: boolean;
-  }[];
-  scorers: { player: string; team: string; goals: number; assists: number; isSquad: boolean }[];
-  odds: {
-    title: number | null; top2: number | null; top4: number | null;
-    relegation: number | null; expectedPoints?: number; expectedGoals?: number;
-  } | null;
-  finish: {
-    rank: number; team: string; played: number; points: number;
-    goalsFor: number; goalsAgainst: number; isSquad: boolean;
-  } | null;
+  squadElo: number;
+  seed: number;
+  champion: string;
+  runnerUp: string;
+  /** e.g. "Campeón", "Finalista", "Eliminado en octavos". */
+  stage: string;
+  /** Finishing position in the 36-team league phase. */
+  leaguePhaseRank: number;
+  leaguePhase: LeaguePhaseRow[];
+  /** The squad's own matches, chronological: league phase then knockout. */
+  matches: SquadFixture[];
+  bracket: SquadBracket;
+  scorers: { player: string; goals: number; assists: number; isSquad: boolean }[];
 };
 
 export type DayFixtures = {
@@ -341,16 +379,18 @@ export const api = {
   league: (slug: string) => request<LeagueForecast>(`/league/${slug}`, 600),
   uefa: () => request<UefaCard[]>("/competitions", 600),
   awards: (slug: string) => request<ScorerRace>(`/awards/${slug}`, 1800),
-  squadPool: (competition: string) =>
-    request<SquadPool>(`/squadlab/pool?competition=${competition}`, 3600),
-  playSeason: async (competition: string, squad: string[], mode: string) => {
+  // The squad always plays the Champions, so the pool is pan-European — no
+  // competition to scope it to.
+  squadPool: () => request<SquadPool>(`/squadlab/pool`, 3600),
+  playChampions: async (squad: string[], mode: string, seed?: number) => {
     // A POST carrying a squad the user just invented: nothing to cache, since
-    // no two visitors send the same body. Playing 380 matches takes real
-    // seconds, so this deliberately skips `request`'s 20s abort.
+    // no two visitors send the same body, and each play takes a random slot in
+    // the draw. Playing the whole tournament takes real seconds, so this
+    // deliberately skips `request`'s 20s abort.
     const res = await fetch(`${BASE}/squadlab/season`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ competition, squad, mode }),
+      body: JSON.stringify({ squad, mode, seed }),
       cache: "no-store",
     });
     if (!res.ok) {

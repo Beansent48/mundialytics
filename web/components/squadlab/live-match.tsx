@@ -15,14 +15,15 @@ const GOAL_PAUSE_MS = 1200;
 
 export function LiveMatch({
   fixture,
-  matchday,
+  label,
   teamName,
   squadLabel,
   running,
   onFinish,
 }: {
   fixture: SquadFixture;
-  matchday: number;
+  /** The stage caption for this match, e.g. "Fase liga · J1" or "Octavos · Ida". */
+  label: string;
   /** The name the API uses for the squad, matched against the fixture. */
   teamName: string;
   /** The name the reader sees, in their language. */
@@ -73,7 +74,7 @@ export function LiveMatch({
     <div className="overflow-hidden rounded-[18px] border border-border bg-surface">
       <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
         <span className="text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-dim">
-          {t("matchdayLabel", { n: matchday })}
+          {label}
         </span>
         {done ? (
           <span className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-dim">
