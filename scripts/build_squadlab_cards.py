@@ -55,8 +55,19 @@ Three routes were tried and REJECTED, recorded here so they are not retried:
     within-position z is the smaller, correctly-shaped signal, and is what
     ships. A test that a bad answer wins is a bad test for that answer.
 
-Run with the project venv:
-    .venv/Scripts/python.exe scripts/build_squadlab_cards.py
+THE ROLE ENGINE IS THE DEFAULT SINCE 2026-09-09. The outfield rating comes from
+player_role_ratings.csv (statistical, per-role, elite-anchored), so that file --
+and the micro-stats it is built from -- must be rebuilt BEFORE the cards, in
+this order. There is no orchestrator for the card pipeline; it is run by hand:
+
+    .venv/Scripts/python.exe scripts/build_player_attack_fbref.py
+    .venv/Scripts/python.exe scripts/build_player_defense_fbref.py
+    .venv/Scripts/python.exe scripts/build_player_micro_stats.py   # -> player_micro_stats.csv
+    .venv/Scripts/python.exe scripts/build_role_ratings.py         # -> player_role_ratings.csv
+    .venv/Scripts/python.exe scripts/build_squadlab_cards.py       # -> squadlab_cards.csv
+
+Set SQUADLAB_ROLE_ENGINE=off to fall back to the old strength engine (keepers
+use the old career+club blend under either engine).
 """
 from __future__ import annotations
 
@@ -121,7 +132,9 @@ _ROLE_RT: "NameIndex | None" = None
 
 
 def role_engine_on() -> bool:
-    return bool(os.environ.get("SQUADLAB_ROLE_ENGINE"))
+    # the role engine is now the default (flipped to production 2026-09-09);
+    # set SQUADLAB_ROLE_ENGINE=off to fall back to the old strength engine
+    return os.environ.get("SQUADLAB_ROLE_ENGINE", "on").lower() != "off"
 
 
 def _role_ratings_index() -> NameIndex:
