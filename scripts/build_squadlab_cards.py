@@ -61,6 +61,7 @@ Run with the project venv:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import unicodedata
 from pathlib import Path
@@ -105,6 +106,65 @@ def stats_birth() -> dict:
                 _STATS_BIRTH = {p: (float(y) if _pd.notna(y) else None)
                                 for p, y in zip(a["player"], b)}
     return _STATS_BIRTH
+
+
+# ── the role-based rating engine (opt-in via SQUADLAB_ROLE_ENGINE) ─────────────
+# The redesign: build_player_micro_stats.py + build_role_ratings.py produce a
+# per-player role rating from concrete sub-stats, elite-anchored so only the
+# genuine top of each position clears 90. This is OFF by default so the live
+# card set is untouched; when the env var is set, role_engine_bl replaces the
+# blended-level `bl` and the club blend (keepers/defenders) is re-applied in
+# rating space. Axes still come from the old path in this first pass.
+ROLE_RATINGS = ROOT / "data/processed/player_role_ratings.csv"
+_ROLE_RT: "NameIndex | None" = None
+
+
+def role_engine_on() -> bool:
+    return bool(os.environ.get("SQUADLAB_ROLE_ENGINE"))
+
+
+def _role_ratings_index() -> NameIndex:
+    global _ROLE_RT
+    if _ROLE_RT is None:
+        _ROLE_RT = NameIndex()
+        if ROLE_RATINGS.exists():
+            b = stats_birth()
+            for r in pd.read_csv(ROLE_RATINGS).itertuples(index=False):
+                _ROLE_RT.add(r.player, (float(r.overall), str(r.role), float(r.n90 or 0)),
+                             rank=float(r.n90 or 0), birth=b.get(r.player))
+    return _ROLE_RT
+
+
+def role_engine_bl(squads, out, elo_map, bz, career) -> pd.Series:
+    """`bl` (pre-form overall) from player_role_ratings.csv, with the club blend
+    re-applied in rating space: keepers lean on club Elo (shot-stopping is
+    noise), defenders get a small club nudge (their stats reward volume)."""
+    idx = _role_ratings_index()
+    pos = pd.Series(list(out["position"]), index=squads.index)
+    elo = pd.Series([float(elo_map.get(t, np.nan)) for t in squads["team"]], index=squads.index)
+    meas = pd.Series(np.nan, index=squads.index)
+    n90s = pd.Series(0.0, index=squads.index)
+    roles = list(out["role"])
+    for i, who in enumerate(squads["player"]):
+        h = idx.lookup(who, birth=bz(who))
+        if h is not None:
+            meas.iloc[i], role, n90s.iloc[i] = h[0], h[1], h[2]
+            if role and role != "nan":
+                roles[i] = role
+    out["role"] = roles
+    # defenders get a small club nudge (their stats reward volume, so a Barça CB
+    # who defends by dominating the ball reads low). Keepers are handled OUTSIDE
+    # this engine — their shot-stopping is noise, so the card keeps its existing
+    # career-gk + club blend, which the user already approved (Oblak/Courtois).
+    mask = pos == "Defender"
+    if mask.any():
+        ez = ((elo[mask] - elo[mask].mean()) / (elo[mask].std() or 1.0)).fillna(0.0)
+        meas.loc[mask] = meas[mask] + DEF_CLUB_W * 3.0 * ez
+    # the role rating is already complete and minute-credibility-shrunk; use it
+    # directly. Blending it with the OLD strength `career` (inflated by the
+    # legacy attack bump) is exactly what put Malen back at 90. Career only
+    # covers the unmeasured, capped so no data cannot reach the elite tier.
+    return meas.where(meas.notna(), np.minimum(career, UNMEASURED_MAX))
 UNDERSTAT_PM = ROOT / "data/external/advanced/understat/understat_player_match.csv"
 
 # A prime is a great season, not a fluke: blending the season rating back toward
@@ -1549,6 +1609,13 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
     n_meas = int(sum(x is not None for x in strength))
     print(f"  overall desde señales de nivel: {n_meas:,} cartas medidas, "
           f"curva absoluta (mediana provisional {bl.median():.0f})")
+    if role_engine_on():
+        # outfield from the role engine; keepers keep the old career-gk+club bl
+        gk = np.array([str(p) == "Goalkeeper" for p in out["position"]])
+        new_bl = role_engine_bl(squads, out, elo_map, bz, career)
+        bl = pd.Series(np.where(gk, bl.to_numpy(), new_bl.to_numpy()), index=squads.index)
+        print(f"  MOTOR DE ROLES activo (outfield): overall desde "
+              f"player_role_ratings.csv (mediana {bl.median():.0f})")
 
     # current form from this season's ESPN counting stats
     tm = pd.to_numeric(squads["team_matches"], errors="coerce").fillna(0)
