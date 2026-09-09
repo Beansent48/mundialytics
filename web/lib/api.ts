@@ -202,12 +202,15 @@ export type SquadPlayer = {
   display: string;
   team: string;
   position: string;
+  role: string;
   overall: number;
   /** Shot-stopping for keepers, offensive strength for everyone else. */
   attack: number;
   defense: number;
   creation: number;
   matches: number;
+  /** Measured sub-stat percentiles (0-100) behind the rating; null if projected. */
+  substats: Record<string, number> | null;
 };
 
 export type SquadPool = {
@@ -216,6 +219,10 @@ export type SquadPool = {
   slots: Record<string, number>;
   positions: string[];
   players: Record<string, SquadPlayer[]>;
+  /** Per-role sub-stat weight formula, /100. */
+  roleWeights: Record<string, Record<string, number>>;
+  /** Human labels for the sub-stat codes. */
+  substatLabels: Record<string, string>;
 };
 
 /** A goal or a booking, with the minute it happened on. */

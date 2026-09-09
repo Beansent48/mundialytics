@@ -35,6 +35,54 @@ ROOT = Path(__file__).resolve().parents[1]
 POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 SLOTS = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
 
+MICRO_STATS = ROOT / "data/processed/player_micro_stats.csv"
+
+# The measured sub-stats, per player, that feed the role rating — the depth
+# behind a card. Outfield first, keeper last; a card only carries the set for
+# its own position. Percentiles within (season, position), 0-100 on the wire.
+OUTFIELD_SUBSTATS = [
+    "FIN", "BOX", "CONV", "XA", "BIGC", "THRU", "CROSS", "SETP_TAKE", "SETP_FIN",
+    "DRIB", "PROG", "LONG", "RETEN", "FOULDRAWN", "DUEL", "AER", "INT", "RECOV",
+    "HIGHREG", "GA_ON",
+]
+GK_SUBSTATS = ["SHOTSTOP", "AERIAL_GK", "SWEEP", "DISTRIB"]
+
+# Human labels for the popup, so a reader sees "Finalización", not "FIN".
+SUBSTAT_LABELS = {
+    "FIN": "Finalización", "BOX": "Presencia en área", "CONV": "Conversión de tiro",
+    "XA": "Asistencia esperada", "BIGC": "Ocasiones claras creadas",
+    "THRU": "Pases al hueco", "CROSS": "Centros", "SETP_TAKE": "Balón parado (ejecuta)",
+    "SETP_FIN": "Balón parado (remate)", "DRIB": "Regate", "PROG": "Progresión",
+    "LONG": "Pase largo / cambio", "RETEN": "Retención de balón",
+    "FOULDRAWN": "Faltas recibidas", "DUEL": "Duelos ganados", "AER": "Juego aéreo",
+    "INT": "Intercepciones", "RECOV": "Recuperaciones", "HIGHREG": "Presión alta",
+    "GA_ON": "Goles evitados", "SHOTSTOP": "Paradas", "AERIAL_GK": "Salidas aéreas",
+    "SWEEP": "Portero-líbero", "DISTRIB": "Distribución",
+}
+
+# The role formula: how much each sub-stat weighs in a role's rating, /100.
+# MIRROR of ROLE_WEIGHTS v3 in scripts/build_role_ratings.py (the source of
+# truth that produces the ratings) — kept here only to show the formula in the
+# card popup. If the weights change there, change them here.
+ROLE_WEIGHTS = {
+    "Killer":             {"FIN": 42, "BOX": 22, "CONV": 12, "XA": 8, "SETP_FIN": 6, "AER": 5, "HIGHREG": 5},
+    "Target man":         {"FIN": 28, "AER": 18, "BOX": 16, "SETP_FIN": 12, "RETEN": 10, "CONV": 8, "FOULDRAWN": 8},
+    "Delantero completo": {"FIN": 30, "XA": 17, "DRIB": 14, "BOX": 13, "CONV": 11, "PROG": 10, "AER": 5},
+    "Falso 9":            {"XA": 26, "FIN": 18, "THRU": 16, "DRIB": 12, "FOULDRAWN": 12, "RETEN": 10, "HIGHREG": 6},
+    "Extremo":            {"DRIB": 28, "FIN": 30, "CROSS": 12, "PROG": 12, "BOX": 12, "FOULDRAWN": 6},
+    "Extremo interior":   {"FIN": 28, "DRIB": 22, "XA": 18, "BOX": 14, "CONV": 10, "HIGHREG": 8},
+    "Mediapunta":         {"XA": 26, "BIGC": 16, "THRU": 14, "FIN": 14, "DRIB": 12, "PROG": 10, "SETP_TAKE": 8},
+    "Creador":            {"XA": 22, "THRU": 18, "PROG": 18, "RETEN": 14, "DRIB": 10, "LONG": 10, "SETP_TAKE": 8},
+    "Box-to-box":         {"PROG": 16, "FIN": 12, "DUEL": 12, "HIGHREG": 12, "XA": 12, "RECOV": 10, "RETEN": 11, "GA_ON": 10, "AER": 5},
+    "Pivote organizador": {"RETEN": 20, "PROG": 18, "LONG": 14, "DUEL": 12, "GA_ON": 12, "INT": 10, "RECOV": 8, "XA": 6},
+    "Destructor":         {"DUEL": 26, "INT": 18, "RECOV": 16, "HIGHREG": 12, "GA_ON": 12, "AER": 10, "RETEN": 6},
+    "Central stopper":    {"DUEL": 22, "AER": 22, "GA_ON": 20, "INT": 14, "RETEN": 8, "PROG": 8, "SETP_FIN": 6},
+    "Central de salida":  {"RETEN": 18, "PROG": 16, "GA_ON": 16, "DUEL": 15, "AER": 12, "INT": 9, "LONG": 8, "THRU": 6},
+    "Lateral ofensivo":   {"PROG": 16, "XA": 14, "DRIB": 14, "GA_ON": 14, "CROSS": 12, "DUEL": 12, "RETEN": 10, "AER": 8},
+    "Lateral defensivo":  {"DUEL": 22, "GA_ON": 18, "INT": 14, "RETEN": 14, "RECOV": 12, "AER": 10, "PROG": 10},
+    "Portero":            {"SHOTSTOP": 55, "AERIAL_GK": 18, "DISTRIB": 15, "SWEEP": 12},
+}
+
 # How many of each card kind the shortlist carries, per position. The catalogue
 # holds 138 primes and 62 icons against 2,811 current players, but sorting the
 # lot by rating floats every special to the top and a draft becomes "take the
@@ -61,6 +109,55 @@ def strength_model():
     return model
 
 
+def _fold_name(s: object) -> str:
+    """Accent/transliteration-insensitive key, matching the identity layer."""
+    import unicodedata
+
+    try:
+        from mundialytics.identity.current_squads import _fold
+
+        return _fold(str(s))
+    except Exception:
+        text = str(s).translate(str.maketrans(
+            {"ı": "i", "İ": "i", "ø": "o", "Ø": "o", "ł": "l", "Ł": "l",
+             "đ": "d", "Đ": "d", "ð": "d", "Ð": "d", "ß": "ss", "æ": "ae"}))
+        return "".join(ch for ch in unicodedata.normalize("NFKD", text)
+                       if not unicodedata.combining(ch)).lower().strip()
+
+
+@lru_cache(maxsize=1)
+def _micro_index() -> dict:
+    """folded player name -> {SUBSTAT: percentile 0-100}, the measured profile.
+
+    Read straight off player_micro_stats.csv (the depth behind a role rating).
+    On a name collision the row with the most minutes wins — the man actually
+    playing this season, not a lower-league namesake.
+    """
+    if not MICRO_STATS.exists():
+        return {}
+    df = pd.read_csv(MICRO_STATS)
+    codes = [c for c in (OUTFIELD_SUBSTATS + GK_SUBSTATS) if c in df.columns]
+    if "n90" in df.columns:
+        df = df.sort_values("n90", ascending=False)
+    out: dict[str, dict[str, int]] = {}
+    for r in df.itertuples(index=False):
+        key = _fold_name(getattr(r, "player", ""))
+        if not key or key in out:
+            continue
+        prof = {}
+        for code in codes:
+            v = getattr(r, code, None)
+            if v is not None and not pd.isna(v):
+                prof[code] = int(round(float(v) * 100))
+        if prof:
+            out[key] = prof
+    return out
+
+
+def _substats_for(name: object) -> dict | None:
+    return _micro_index().get(_fold_name(name))
+
+
 def _card_entry(c) -> dict:
     """One card in the shape the client draws.
 
@@ -85,6 +182,9 @@ def _card_entry(c) -> dict:
         "creation": None if c.position == "Goalkeeper" else round(float(c.creation), 1),
         "measured": bool(c.n_def > 0),
         "matches": int(c.matches),
+        # The measured sub-stat profile behind the rating (percentiles 0-100),
+        # for the card popup. None for players with no advanced data (projected).
+        "substats": _substats_for(c.player),
     }
 
 
@@ -164,7 +264,14 @@ def champions_pool(limit_per_position: int = 40) -> dict:
                 chosen = _stable_sample(chosen, f"champions|{pos}|{kind}", n)
             picked += [_card_entry(c) for c in cards_from_frame(chosen)]
         by_pos[pos] = sorted(picked, key=lambda x: -x["overall"])[:limit_per_position]
-    return {"slots": SLOTS, "positions": POSITIONS, "players": by_pos}
+    return {
+        "slots": SLOTS,
+        "positions": POSITIONS,
+        "players": by_pos,
+        # metadata for the card popup: the role formulas and readable labels
+        "roleWeights": ROLE_WEIGHTS,
+        "substatLabels": SUBSTAT_LABELS,
+    }
 
 
 @lru_cache(maxsize=1)

@@ -453,6 +453,10 @@
     "leaguePhaseRankLine": "{rank} en la fase liga",
     "championLine": "Campeón: {team}",
     "squadElo": "Elo del equipo",
-    "leaguePhasePos": "Puesto fase liga"
+    "leaguePhasePos": "Puesto fase liga",
+    "roleFormula": "Fórmula del rol",
+    "otherStats": "Otras métricas medidas",
+    "noAdvancedData": "Sin datos avanzados medidos para este jugador.",
+    "percentileNote": "Percentiles frente a su posición. El rol pondera cada estadística (%)."
   }
 }

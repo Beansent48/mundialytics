@@ -1,7 +1,9 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { Info } from "lucide-react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
+import { PlayerStatsPanel } from "@/components/squadlab/player-stats-popover";
 import type { SquadPlayer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -63,17 +65,43 @@ export function PlayerCard({
   delay = 0,
   selected = false,
   size = "md",
+  roleWeights,
+  substatLabels,
 }: {
   player: SquadPlayer;
   onClick?: () => void;
   delay?: number;
   selected?: boolean;
   size?: "sm" | "md";
+  /** All role formulas; when given (with labels) the card gets a stats popover. */
+  roleWeights?: Record<string, Record<string, number>>;
+  substatLabels?: Record<string, string>;
 }) {
   const overall = Math.round(player.overall);
   const tier = tierOf(overall);
   const s = SIZE[size];
   const Tag = onClick ? "button" : "div";
+
+  const canInspect = !!substatLabels && !!roleWeights;
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const open = canInspect && (hovered || pinned) && anchor != null;
+
+  const capture = () => {
+    if (wrapRef.current) setAnchor(wrapRef.current.getBoundingClientRect());
+  };
+
+  // A pinned popover closes on the next click outside the card.
+  useEffect(() => {
+    if (!pinned) return;
+    const onDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setPinned(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [pinned]);
 
   // A keeper's defensive axis *is* their shot-stopping, so showing both would
   // print the same number twice.
@@ -83,10 +111,23 @@ export function PlayerCard({
       : ([
           ["ATT", player.attack],
           ["DEF", player.defense],
+          ["CRE", player.creation],
         ] as const);
 
   return (
-    <span className="relative block">
+    <span
+      ref={wrapRef}
+      className="relative block"
+      onMouseEnter={
+        canInspect
+          ? () => {
+              capture();
+              setHovered(true);
+            }
+          : undefined
+      }
+      onMouseLeave={canInspect ? () => setHovered(false) : undefined}
+    >
       {AURA_TIERS.has(tier) ? (
         <span
           aria-hidden
@@ -129,20 +170,47 @@ export function PlayerCard({
           // Numbers, not bars. On a card this small a bar can only say "about
           // half", and the whole point of a rating is that it is a figure you
           // can compare across two cards side by side.
-          <span className="mt-1.5 hidden items-center gap-2.5 border-t border-current/20 pt-1.5 sm:flex">
+          <span className="mt-1.5 hidden items-center justify-between gap-1 border-t border-current/20 pt-1.5 sm:flex">
             {stats.map(([label, value]) => (
-              <span key={label} className="flex items-baseline gap-1">
-                <span className="text-[0.5rem] font-bold tracking-[0.05em] opacity-60">
+              <span key={label} className="flex items-baseline gap-0.5">
+                <span className="text-[0.5rem] font-bold tracking-[0.04em] opacity-60">
                   {label}
                 </span>
-                <span className="text-[0.72rem] font-semibold leading-none">
-                  {Math.round(value)}
+                <span className="text-[0.7rem] font-semibold leading-none">
+                  {value == null ? "—" : Math.round(value)}
                 </span>
               </span>
             ))}
           </span>
         ) : null}
       </Tag>
+
+      {canInspect ? (
+        <button
+          type="button"
+          aria-label="Estadísticas avanzadas"
+          onClick={(e) => {
+            e.stopPropagation();
+            capture();
+            setPinned((p) => !p);
+          }}
+          className={cn(
+            "absolute bottom-1 right-1 z-10 flex size-4 items-center justify-center rounded-full bg-black/25 text-white/80 transition-opacity hover:bg-black/45 hover:text-white",
+            pinned ? "opacity-100" : "opacity-60",
+          )}
+        >
+          <Info className="size-2.5" />
+        </button>
+      ) : null}
+
+      {open ? (
+        <PlayerStatsPanel
+          player={player}
+          roleWeights={roleWeights![player.role]}
+          substatLabels={substatLabels!}
+          anchor={anchor!}
+        />
+      ) : null}
     </span>
   );
 }
