@@ -430,7 +430,7 @@ def align_positions(d: pd.DataFrame) -> pd.DataFrame:
     +1.12 while Olise, on 0.38, came out +0.67 among forwards. Standardising
     against the wrong population is not a small error, it inverts the answer.
     """
-    from mundialytics.identity.current_squads import NameIndex, load_current_squads
+    from mundialytics.identity.current_squads import NameIndex, full_key, load_current_squads
     sq = load_current_squads()
     if sq.empty or "position" not in d.columns:
         return d
@@ -441,8 +441,26 @@ def align_positions(d: pd.DataFrame) -> pd.DataFrame:
     d = d.copy()
     hit = [idx.lookup(w) for w in d["player"]]
     d["position"] = [str(h) if h else str(f) for h, f in zip(hit, d["position"])]
+    # curated position overrides win over BOTH the squad and FBref — for players
+    # a name mismatch leaves unmatched (Grimaldo, a left back FBref files as MF)
+    # or that the feeds simply get wrong. Hand-maintained from football knowledge.
+    ov = ROOT / "data/curated/position_overrides.csv"
+    n_ov = 0
+    if ov.exists():
+        omap = {}
+        for r in pd.read_csv(ov).itertuples(index=False):
+            if str(getattr(r, "position", "")) in {"Goalkeeper", "Defender", "Midfielder", "Forward"}:
+                omap[full_key(r.player)] = str(r.position)
+        if omap:
+            pos = d["position"].tolist()
+            for i, who in enumerate(d["player"]):
+                o = omap.get(full_key(who))
+                if o:
+                    pos[i] = o
+                    n_ov += 1
+            d["position"] = pos
     print(f"  posicion alineada con la plantilla en {sum(h is not None for h in hit):,} "
-          f"de {len(d):,} jugadores")
+          f"de {len(d):,} jugadores ({n_ov} por correccion curada)")
     return d
 
 
