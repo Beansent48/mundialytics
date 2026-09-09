@@ -57,13 +57,13 @@ ROLE_WEIGHTS: dict[str, dict[str, float]] = {
     "Extremo interior":   {"FIN": 28, "DRIB": 22, "XA": 18, "BOX": 14, "CONV": 10, "HIGHREG": 8},
     "Mediapunta":         {"XA": 26, "BIGC": 16, "THRU": 14, "FIN": 14, "DRIB": 12, "PROG": 10, "SETP_TAKE": 8},
     "Creador":            {"XA": 22, "THRU": 18, "PROG": 18, "RETEN": 14, "DRIB": 10, "LONG": 10, "SETP_TAKE": 8},
-    "Box-to-box":         {"PROG": 16, "FIN": 14, "DUEL": 14, "HIGHREG": 14, "XA": 12, "RECOV": 12, "RETEN": 13, "AER": 5},
-    "Pivote organizador": {"RETEN": 22, "PROG": 20, "LONG": 16, "DUEL": 14, "INT": 12, "RECOV": 10, "XA": 6},
-    "Destructor":         {"DUEL": 28, "INT": 20, "RECOV": 18, "HIGHREG": 14, "AER": 12, "RETEN": 8},
-    "Central stopper":    {"DUEL": 26, "AER": 26, "INT": 20, "RETEN": 10, "PROG": 10, "SETP_FIN": 8},
-    "Central de salida":  {"RETEN": 20, "PROG": 18, "DUEL": 18, "AER": 14, "LONG": 12, "INT": 12, "THRU": 6},
-    "Lateral ofensivo":   {"PROG": 18, "DRIB": 16, "XA": 16, "CROSS": 14, "DUEL": 14, "RETEN": 12, "AER": 10},
-    "Lateral defensivo":  {"DUEL": 26, "INT": 18, "AER": 10, "RECOV": 14, "RETEN": 16, "PROG": 12},
+    "Box-to-box":         {"PROG": 16, "FIN": 12, "DUEL": 12, "HIGHREG": 12, "XA": 12, "RECOV": 10, "RETEN": 11, "GA_ON": 10, "AER": 5},
+    "Pivote organizador": {"RETEN": 20, "PROG": 18, "LONG": 14, "DUEL": 12, "GA_ON": 12, "INT": 10, "RECOV": 8, "XA": 6},
+    "Destructor":         {"DUEL": 26, "INT": 18, "RECOV": 16, "HIGHREG": 12, "GA_ON": 12, "AER": 10, "RETEN": 6},
+    "Central stopper":    {"DUEL": 22, "AER": 22, "GA_ON": 20, "INT": 14, "RETEN": 8, "PROG": 8, "SETP_FIN": 6},
+    "Central de salida":  {"RETEN": 18, "PROG": 16, "GA_ON": 16, "DUEL": 15, "AER": 12, "INT": 9, "LONG": 8, "THRU": 6},
+    "Lateral ofensivo":   {"PROG": 16, "XA": 14, "DRIB": 14, "GA_ON": 14, "CROSS": 12, "DUEL": 12, "RETEN": 10, "AER": 8},
+    "Lateral defensivo":  {"DUEL": 22, "GA_ON": 18, "INT": 14, "RETEN": 14, "RECOV": 12, "AER": 10, "PROG": 10},
     "Portero":            {"SHOTSTOP": 55, "AERIAL_GK": 18, "DISTRIB": 15, "SWEEP": 12},
 }
 # which roles a position may be scored under. Midfielder and Forward pool the
@@ -85,7 +85,7 @@ CANDIDATES = {"Forward": FWD_ROLES, "Midfielder": MID_ROLES, "Defender": DEF_ROL
 AXIS_GROUPS = {
     "attack":   ["FIN", "BOX", "CONV", "DRIB", "SETP_FIN"],
     "creation": ["XA", "BIGC", "THRU", "CROSS", "SETP_TAKE", "PROG", "LONG", "RETEN", "FOULDRAWN"],
-    "defense":  ["DUEL", "AER", "INT", "RECOV", "HIGHREG"],
+    "defense":  ["DUEL", "AER", "INT", "RECOV", "HIGHREG", "GA_ON"],
     "gk":       ["SHOTSTOP", "AERIAL_GK", "SWEEP", "DISTRIB"],
 }
 
@@ -94,8 +94,10 @@ GAMMA = 2.3                 # emphasis: only the genuine top of a skill counts
 # role composite (0..1) -> overall. Interp calibrated so the elite clear 90 and
 # a normal starter sits 75-82. Validated against Kane/Mbappé/Haaland (>90),
 # Malen (mid-80s), a pure crosser (<82).
-OVR_XS = [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.72]
-OVR_YS = [72.0, 76.0, 80.0, 84.0, 88.0, 91.0, 93.0]
+# steeper at the top so the true elite pull AWAY from the merely very-good
+# (the user's rule: compress the pack down, keep the gap). Median stays ~75.
+OVR_XS = [0.15, 0.25, 0.35, 0.45, 0.55, 0.63, 0.70]
+OVR_YS = [72.0, 76.0, 79.0, 82.0, 85.0, 89.0, 93.0]
 OVR_MAX = 92.0             # ACTUAL cap; primes/icons above, built elsewhere
 LEAGUE_PTS = 2.0           # how much a full sd of league strength moves the composite-rating
 

@@ -62,7 +62,7 @@ CRED_90S = 10.0     # minutes credibility: a percentile is shrunk toward 0.5 by 
 OUTFIELD = [
     "FIN", "BOX", "CONV", "XA", "BIGC", "THRU", "CROSS", "SETP_TAKE", "SETP_FIN",
     "DRIB", "PROG", "LONG", "RETEN", "FOULDRAWN", "DUEL", "AER", "INT", "RECOV",
-    "HIGHREG",
+    "HIGHREG", "GA_ON",
 ]
 KEEPER = ["SHOTSTOP", "AERIAL_GK", "SWEEP", "DISTRIB"]
 SUBSTATS = OUTFIELD + KEEPER
@@ -108,6 +108,9 @@ def load_2526() -> pd.DataFrame:
                 + _num(d["clearances"]).fillna(0)) / ns,
         "RECOV": _num(d["ballRecovery"]) / ns,
         "HIGHREG": _num(d["possessionWonAttThird"]) / ns,
+        # team defence WHILE ON THE PITCH, inverted (fewer conceded = better) —
+        # a defender's real job is preventing goals, which the volume stats miss
+        "GA_ON": -_num(d["goalsConceded"]) / ns,
         # keeper
         "SHOTSTOP": _num(d["goalsPrevented"]) / ns,
         "AERIAL_GK": (_num(d["highClaims"]).fillna(0) + _num(d["punches"]).fillna(0)) / ns,
@@ -150,6 +153,7 @@ def load_2425() -> pd.DataFrame:
         "INT": (col("Int").fillna(0) + col("Blocks").fillna(0) + col("Clr").fillna(0)) / n,
         "RECOV": col("Recov") / n,
         "HIGHREG": col("Att 3rd") / n,                 # tackles in the attacking third
+        "GA_ON": -col("onxGA") / n,                    # xG conceded while on the pitch, inverted
         "SHOTSTOP": col("PSxG+/-") / n,
         "AERIAL_GK": col("Stp%"),                      # % of crosses stopped
         "SWEEP": col("#OPA/90"),
@@ -201,6 +205,8 @@ def load_2324() -> pd.DataFrame:
         "INT": ((g(de, "intr").fillna(0) + g(de, "blocks").fillna(0) + g(de, "clr").fillna(0)) / n).values,
         "RECOV": (g(mi, "ball_recoveries") / n).values,
         "HIGHREG": (g(de, "att_3rd") / n).values,
+        "GA_ON": np.nan,                               # no on-pitch xGA in the 23/24 tables here
+
         "SHOTSTOP": (g(ga, "psxg_net") / n).values if ga is not None else np.nan,
         "AERIAL_GK": g(ga, "crosses_stopped_pct").values if ga is not None else np.nan,
         "SWEEP": g(ga, "def_actions_outside_pen_area_per90").values if ga is not None else np.nan,
