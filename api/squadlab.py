@@ -1,16 +1,20 @@
 """
 SquadLab for the HTTP API.
 
-Two modes reach the web: Draft (your club replaces the league's bottom side and
-you sign eleven players, each pick removed from the global pool) and Sandbox
-(any eleven, no constraints). Both wire the squad into the same Poisson /
-Dixon-Coles machinery the real clubs already use, so a made-up team is priced by
-the engine rather than by a separate toy.
+Your drafted eleven ALWAYS plays the real Champions League. Two build methods
+reach the web: Draft (sign eleven from packs, each pick removed from the global
+pool) and Sandbox (any eleven, no constraints). Either way the squad takes a
+RANDOM real club's slot in the actual 36-team draw, so the eight league-phase
+opponents and the knockout path change every time you play (see
+squadlab/champions.py). The domestic-league season was retired: two thirds of a
+Champions field have no row in the club engine's AttackDefenseModel, so the
+tournament runs on Elo instead, and the squad reads its Elo off a line fitted
+against the real clubs' own best elevens.
 
-The season is played once and returned whole. Streaming it matchday by matchday
+The whole run is played once and returned whole. Streaming it round by round
 would be a nicer animation and a much worse contract: the client wants to move
-at its own pace and to jump to the final table, and both are trivial once it
-holds every result.
+at its own pace and to jump to the final, and both are trivial once it holds
+every result.
 """
 from __future__ import annotations
 
@@ -21,9 +25,12 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+from mundialytics.statistical_core.squadlab.champions import (
+    ROUND_LABELS,
+    SQUAD_TEAM_NAME,
+)
 
-SQUAD_TEAM_NAME = "Your XI"
+ROOT = Path(__file__).resolve().parents[1]
 
 POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 SLOTS = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
@@ -126,6 +133,63 @@ def pool(competition_id: str, limit_per_position: int = 40) -> dict:
     return {"slots": SLOTS, "positions": POSITIONS, "players": by_pos}
 
 
+def champions_pool(limit_per_position: int = 40) -> dict:
+    """The cards available to draft, from ANY league, by position, best first.
+
+    The Champions field is pan-European, so unlike the retired domestic mode the
+    pool is not filtered to one competition: the best forwards on offer might be
+    from LaLiga, the Bundesliga and the Eredivisie at once. Primes and icons ride
+    along at the same scarcity the pack odds carry (POOL_MIX).
+    """
+    from mundialytics.statistical_core.squadlab.cards import cards_from_frame, load_cards
+
+    df = load_cards()
+    if df.empty:                      # catalogue not built: fall back to the model
+        return _pool_from_profiles("", limit_per_position)
+
+    by_pos: dict[str, list[dict]] = {p: [] for p in POSITIONS}
+    for pos in POSITIONS:
+        at_pos = df[df["position"] == pos]
+        picked: list[dict] = []
+        for kind, n in POOL_MIX.items():
+            grp = at_pos[at_pos["kind"] == kind]
+            if grp.empty:
+                continue
+            if kind == "actual":
+                chosen = grp.nlargest(n, "overall")
+            else:
+                # a stable sample rather than the top n, so the two rarest card
+                # types are not the same fixtures of the furniture every session
+                chosen = grp.nlargest(min(len(grp), n * 6), "overall")
+                chosen = _stable_sample(chosen, f"champions|{pos}|{kind}", n)
+            picked += [_card_entry(c) for c in cards_from_frame(chosen)]
+        by_pos[pos] = sorted(picked, key=lambda x: -x["overall"])[:limit_per_position]
+    return {"slots": SLOTS, "positions": POSITIONS, "players": by_pos}
+
+
+@lru_cache(maxsize=1)
+def _champions_resources():
+    """The real CL field (elo + drawn fixtures) and the squad-rating -> Elo line.
+
+    Cached: the draw is read off disk (a game wants a stable field), and the
+    fitted line does not change between requests. The RANDOM slot the squad
+    takes is drawn per playthrough inside ChampionsRun, not here.
+    """
+    from mundialytics.statistical_core.squadlab.cards import load_cards
+    from mundialytics.statistical_core.squadlab.champions import (
+        load_field, squad_elo_scale,
+    )
+
+    field = load_field()
+    elo_df = pd.read_csv(ROOT / "data/processed/clubelo_local.csv").dropna(
+        subset=["club", "elo"])
+    scale = squad_elo_scale(
+        None, load_cards(),
+        dict(zip(elo_df["club"].astype(str), elo_df["elo"].astype(float))),
+    )
+    return field, scale
+
+
 def _stable_sample(df: pd.DataFrame, seed: str, n: int) -> pd.DataFrame:
     if len(df) <= n:
         return df
@@ -200,74 +264,31 @@ def seeded_sample(candidates: list[dict], seed: str, n: int = 5) -> list[dict]:
     return sorted(sample, key=lambda x: -x["overall"])
 
 
-def league_opponents(df_clubs: pd.DataFrame, competition_id: str,
-                     drop_last: bool) -> tuple[list[str], str | None]:
-    """The real clubs the squad plays against, and the one it replaced."""
-    season = sorted(df_clubs.loc[df_clubs["competition"] == competition_id,
-                                 "season"].unique())[-1]
-    rows = df_clubs[(df_clubs["competition"] == competition_id)
-                    & (df_clubs["season"] == season)]
-    teams = sorted(set(rows["home_team"]) | set(rows["away_team"]))
-    if not drop_last:
-        return teams, None
+def play_champions(squad_names: list[str], seed: int | None = None) -> dict:
+    """Play the whole Champions League once with the chosen eleven.
 
-    points: dict[str, int] = {t: 0 for t in teams}
-    for r in rows.itertuples():
-        if pd.isna(r.home_goals) or pd.isna(r.away_goals):
-            continue
-        h, a = int(r.home_goals), int(r.away_goals)
-        points[r.home_team] += 3 if h > a else 1 if h == a else 0
-        points[r.away_team] += 3 if a > h else 1 if h == a else 0
-    bottom = min(points, key=lambda t: points[t])
-    return [t for t in teams if t != bottom], bottom
+    The squad takes a RANDOM club's slot in the real draw (a fresh rng per call,
+    so the path changes every time). Its Elo is read off the fitted line; the
+    league phase and the bracket then run on the European Elo layer.
+    """
+    import numpy as np
 
-
-def play_season(engine, df_clubs: pd.DataFrame, competition_id: str,
-                squad_names: list[str], drop_last: bool,
-                n_sims: int = 20_000) -> dict:
-    """Play the full season once, then price it with a Monte Carlo layer."""
-    from mundialytics.statistical_core.squadlab.calendar import (
-        generate_double_round_robin,
-    )
-    from mundialytics.statistical_core.squadlab.lambda_source import (
-        RealTeamLambdaSource,
-        SeasonLambdaSource,
-    )
-    from mundialytics.statistical_core.squadlab.season_simulator import (
-        SeasonOrchestrator,
-    )
-    from mundialytics.statistical_core.squadlab.squad_lambda_model import (
-        SquadLambdaModel,
-    )
+    from mundialytics.statistical_core.squadlab.champions import ChampionsRun
 
     model = strength_model()
     squad = resolve_squad(model, squad_names)
     if len(squad) < 11:
         raise ValueError("The squad needs eleven players the model knows")
 
-    opponents, replaced = league_opponents(df_clubs, competition_id, drop_last)
+    field, scale = _champions_resources()
+    squad_elo = scale.elo_for([getattr(p, "overall", 0.0) for p in squad])
 
-    real_source = RealTeamLambdaSource(engine)
-    bridge = SquadLambdaModel(model)
-    lambda_source = SeasonLambdaSource(
-        SQUAD_TEAM_NAME, squad, bridge, real_source, engine.ad_model_
-    )
-    fixtures = generate_double_round_robin([SQUAD_TEAM_NAME] + opponents)
-
-    # Drafted players are clones: the real player keeps playing for his club and
-    # both appear separately in the scorer race. Without cloning, one name in two
-    # rosters double-counts his goals.
-    from mundialytics.serving.squad_roster import clone_for_squad, real_team_rosters
-
-    rosters = {SQUAD_TEAM_NAME: [clone_for_squad(p, SQUAD_TEAM_NAME) for p in squad]}
-    rosters.update(real_team_rosters(model, opponents))
-
-    orch = SeasonOrchestrator(lambda_source, fixtures, squad_roster=rosters,
-                              competition=competition_id)
-    season = orch.play_once(narrative=True)
-    mc = orch.run_monte_carlo(n_sims=n_sims)
-
-    return _shape_season(season, mc, replaced)
+    if seed is None:
+        seed = random.randrange(2 ** 32)
+    rng = np.random.default_rng(int(seed))
+    run = ChampionsRun(SQUAD_TEAM_NAME, squad, squad_elo, field, rng=rng)
+    res = run.play()
+    return _shape_champions(res, run.replaced, int(seed))
 
 
 def resolve_squad(model, names: list[str]):
@@ -296,85 +317,56 @@ def resolve_squad(model, names: list[str]):
     return out
 
 
-def _shape_season(season, mc: pd.DataFrame, replaced: str | None) -> dict:
-    """The season in the shape the client reveals matchday by matchday."""
-    by_md: dict[int, list[dict]] = {}
-    for m in season.matches:
-        is_squad = SQUAD_TEAM_NAME in (m.home, m.away)
-        by_md.setdefault(int(m.matchday), []).append({
-            "home": _label(m.home),
-            "away": _label(m.away),
-            "homeGoals": int(m.home_goals),
-            "awayGoals": int(m.away_goals),
-            "isSquad": is_squad,
-            # The narrative detail only travels for the eleven's own matches:
-            # it is the only one the client plays out, and shipping it for all
-            # 380 would multiply the response for nothing.
-            "events": _timeline(m) if is_squad else None,
-            "stats": _match_stats(m) if is_squad else None,
-            "ratings": _squad_ratings(m) if is_squad else None,
-        })
+def _shape_champions(res, replaced: str, seed: int) -> dict:
+    """The Champions run in the shape the client reveals round by round.
 
-    table = season.table.copy()
-    table["team"] = table["team"].map(_label)
-    standings = [
+    Only the squad's own matches carry the narrative detail (events, stats,
+    ratings): they are the only ones the client plays out, and the other 35
+    clubs' 144 games resolve as scorelines inside the league-phase table.
+    """
+    table = res.table
+    league_phase = [
         {
-            "rank": i + 1,
-            "team": r["team"],
+            "rank": int(r["pos"]),
+            "team": _label(str(r["team"])),
             "played": int(r["played"]),
             "points": int(r["pts"]),
             "goalsFor": int(r["gf"]),
             "goalsAgainst": int(r["ga"]),
-            "isSquad": r["team"] == SQUAD_TEAM_NAME,
+            "goalDiff": int(r["gd"]),
+            "isSquad": str(r["team"]) == SQUAD_TEAM_NAME,
         }
-        for i, r in enumerate(table.to_dict("records"))
+        for r in table.to_dict("records")
     ]
 
-    tallies = season.player_season_tallies
+    own = [m for m in res.matches if SQUAD_TEAM_NAME in (m.home, m.away)]
+    matches = [_champ_fixture(m) for m in own]
+
     scorers = []
-    if tallies is not None and len(tallies) and "goals" in tallies.columns:
-        top = tallies.nlargest(10, "goals")
-        scorers = [
-            {
-                "player": _display(str(r.player)),
-                "team": _label(str(getattr(r, "team", "") or "")),
-                "goals": int(r.goals),
-                "assists": int(getattr(r, "assists", 0) or 0),
-                "isSquad": str(getattr(r, "team", "")) == SQUAD_TEAM_NAME,
-            }
-            for r in top.itertuples()
-        ]
+    sc = res.scorers
+    if sc is not None and len(sc):
+        for r in sc.head(12).itertuples():
+            scorers.append({
+                "player": _display(str(r.jugador)),
+                "goals": int(r.goles),
+                "assists": int(r.asistencias),
+                # only the squad's own goals are attributed to a scorer
+                "isSquad": True,
+            })
 
-    odds = None
-    if mc is not None and len(mc):
-        row = mc[mc["team"] == SQUAD_TEAM_NAME]
-        if len(row):
-            r = row.iloc[0]
-            # Column names come from SeasonOrchestrator.run_monte_carlo:
-            # p_champion / p_top2 / p_top4 / p_relegation / avg_pts / avg_goals.
-            odds = {
-                key: (None if col not in mc.columns else round(float(r[col]), 4))
-                for key, col in [
-                    ("title", "p_champion"),
-                    ("top2", "p_top2"),
-                    ("top4", "p_top4"),
-                    ("relegation", "p_relegation"),
-                ]
-            }
-            if "avg_pts" in mc.columns:
-                odds["expectedPoints"] = round(float(r["avg_pts"]), 1)
-            if "avg_goals" in mc.columns:
-                odds["expectedGoals"] = round(float(r["avg_goals"]), 1)
-
-    squad_row = next((s for s in standings if s["isSquad"]), None)
     return {
         "teamName": SQUAD_TEAM_NAME,
         "replaced": _label(replaced) if replaced else None,
-        "matchdays": [{"matchday": k, "fixtures": v} for k, v in sorted(by_md.items())],
-        "standings": standings,
+        "squadElo": round(float(res.squad_elo), 0),
+        "seed": int(seed),
+        "champion": _label(res.champion),
+        "runnerUp": _label(res.runner_up),
+        "stage": res.squad_stage,
+        "leaguePhaseRank": int(res.squad_position),
+        "leaguePhase": league_phase,
+        "matches": matches,
+        "bracket": _champ_bracket(res.rounds),
         "scorers": scorers,
-        "odds": odds,
-        "finish": squad_row,
     }
 
 
@@ -382,99 +374,126 @@ def _label(team: str) -> str:
     return team if team == SQUAD_TEAM_NAME else str(team).title()
 
 
-def _timeline(m) -> list[dict]:
+def _stage_label(stage: str, matchday: int) -> str:
+    if stage == "liga":
+        return f"Fase liga · J{matchday}"
+    if stage == "final":
+        return "Final"
+    return f"{ROUND_LABELS.get(stage, stage)} · {'Ida' if matchday == 1 else 'Vuelta'}"
+
+
+def _champ_fixture(m) -> dict:
+    """One of the squad's own matches, in the client's fixture shape."""
+    return {
+        "stage": m.stage,
+        "stageLabel": _stage_label(m.stage, m.matchday),
+        "home": _label(m.home),
+        "away": _label(m.away),
+        "homeGoals": int(m.home_goals),
+        "awayGoals": int(m.away_goals),
+        "isSquad": True,
+        "events": _champ_timeline(m),
+        "stats": _champ_stats(m),
+        "ratings": _champ_ratings(m),
+    }
+
+
+def _champ_timeline(m) -> list[dict]:
     """Goals and bookings in the order they happened.
 
-    The simulator returns *what* happened, not *when*. Conditional on the score,
-    a Poisson process places its events uniformly across the ninety minutes, so
-    the clock is drawn here from the same model that produced the score. It is
-    done at serving time on a separate seeded stream rather than inside the
-    core: drawing there would consume the simulator's RNG and move every result
-    in the season.
+    The squad's goals are named (scorer, assister); the opponent's are not —
+    only the squad's roster is attributed, exactly as the domestic season did.
+    Conditional on the score, the minute is drawn on a separate seeded stream so
+    it never disturbs the simulator's own RNG.
     """
     rng = random.Random(
-        f"{m.matchday}|{m.home}|{m.away}|{m.home_goals}-{m.away_goals}"
+        f"{m.stage}|{m.matchday}|{m.home}|{m.away}|{m.home_goals}-{m.away_goals}"
     )
+    squad_home = bool(m.squad_is_home)
+    squad_side = "home" if squad_home else "away"
+    opp_side = "away" if squad_home else "home"
+    squad_goals = int(m.home_goals if squad_home else m.away_goals)
+    opp_goals = int(m.away_goals if squad_home else m.home_goals)
+    opp_team = m.away if squad_home else m.home
+
     out: list[dict] = []
-    for side, goals, cards in (
-        ("home", m.home_goal_events, m.home_card_players),
-        ("away", m.away_goal_events, m.away_card_players),
-    ):
-        for entry in goals or []:
-            pair = entry if isinstance(entry, (tuple, list)) else (entry, None)
-            assist = pair[1] if len(pair) > 1 else None
-            out.append({
-                "type": "goal",
-                "side": side,
-                "player": _display(str(pair[0])),
-                "assist": _display(str(assist)) if assist else None,
-                "minute": rng.randint(1, 90),
-            })
-        for player in cards or []:
-            out.append({
-                "type": "card",
-                "side": side,
-                "player": _display(str(player)),
-                "assist": None,
-                "minute": rng.randint(1, 90),
-            })
-
-    # A handful of clubs have no rated players in the profile file, so the
-    # simulator scores their goals without naming a scorer. Unnamed goals still
-    # have to appear, or the running score would stop short of the real result
-    # and the scoreboard would jump at full time.
-    for side, team, goals in (
-        ("home", m.home, int(m.home_goals)),
-        ("away", m.away, int(m.away_goals)),
-    ):
-        named = sum(1 for e in out if e["type"] == "goal" and e["side"] == side)
-        for _ in range(max(goals - named, 0)):
-            out.append({
-                "type": "goal",
-                "side": side,
-                "player": _label(team),
-                "assist": None,
-                "minute": rng.randint(1, 90),
-            })
-
+    for entry in m.goal_events or []:
+        pair = entry if isinstance(entry, (tuple, list)) else (entry, None)
+        assist = pair[1] if len(pair) > 1 else None
+        out.append({
+            "type": "goal",
+            "side": squad_side,
+            "player": _display(str(pair[0])),
+            "assist": _display(str(assist)) if assist else None,
+            "minute": rng.randint(1, 90),
+        })
+    # any squad goal the attribution did not name still has to show, or the
+    # running score would stop short of the real result
+    for _ in range(max(squad_goals - len(m.goal_events or []), 0)):
+        out.append({"type": "goal", "side": squad_side,
+                    "player": _label(m.home if squad_home else m.away),
+                    "assist": None, "minute": rng.randint(1, 90)})
+    # the opponent's goals are unnamed: attribution only covers the squad
+    for _ in range(opp_goals):
+        out.append({"type": "goal", "side": opp_side, "player": _label(opp_team),
+                    "assist": None, "minute": rng.randint(1, 90)})
+    for player in m.card_players or []:
+        out.append({"type": "card", "side": squad_side,
+                    "player": _display(str(player)), "assist": None,
+                    "minute": rng.randint(1, 90)})
     out.sort(key=lambda e: e["minute"])
     return out
 
 
-# Everything the event-lambda model draws for a match, in the order a reader
-# scans it: the two figures that decide the game, then the volume behind them.
-STAT_KEYS = [
-    ("xg", "home_xg", "away_xg"),
-    ("shots", "home_shots", "away_shots"),
-    ("sot", "home_sot", "away_sot"),
-    ("corners", "home_corners", "away_corners"),
-    ("fouls", "home_fouls", "away_fouls"),
-    ("cards", "home_yellow_cards", "away_yellow_cards"),
+# The event-lambda figures the Champions match draws, in reading order. No
+# fouls: the European event calibration does not carry them.
+_CHAMP_STAT_KEYS = [
+    ("xg", "xg"), ("shots", "shots"), ("sot", "sot"),
+    ("corners", "corners"), ("cards", "yellows"),
 ]
 
 
-def _match_stats(m) -> list[dict]:
-    return [
-        {
-            "key": key,
-            "home": round(float(getattr(m, h, 0) or 0), 2),
-            "away": round(float(getattr(m, a, 0) or 0), 2),
-        }
-        for key, h, a in STAT_KEYS
-    ]
+def _champ_stats(m) -> list[dict]:
+    out = []
+    for key, attr in _CHAMP_STAT_KEYS:
+        pair = getattr(m, attr, (0, 0)) or (0, 0)
+        out.append({"key": key, "home": round(float(pair[0]), 2),
+                    "away": round(float(pair[1]), 2)})
+    return out
 
 
-def _squad_ratings(m) -> list[dict]:
+def _champ_ratings(m) -> list[dict]:
     """The eleven's own player ratings for this match, best first."""
-    events = m.home_events if m.home == SQUAD_TEAM_NAME else m.away_events
     rows = [
         {
-            "player": _display(str(e.player)),
+            "player": _display(str(getattr(e, "player", ""))),
             "rating": round(float(getattr(e, "rating", 0) or 0), 1),
             "goals": int(getattr(e, "goals", 0) or 0),
             "assists": int(getattr(e, "assists", 0) or 0),
             "cards": int(getattr(e, "yellow_cards", 0) or 0),
         }
-        for e in (events or {}).values()
+        for e in (m.ratings or {}).values()
     ]
     return sorted(rows, key=lambda r: -r["rating"])
+
+
+def _champ_bracket(rounds: dict) -> dict:
+    """Every knockout tie, by round, with the squad's own ties flagged."""
+    out: dict[str, list[dict]] = {}
+    for key in ("playoff", "r16", "qf", "sf", "final"):
+        out[key] = [
+            {
+                "round": key,
+                "roundLabel": ROUND_LABELS[key],
+                "teamA": _label(t["team_a"]),
+                "teamB": _label(t["team_b"]),
+                "leg1": t.get("leg1", ""),
+                "leg2": t.get("leg2", ""),
+                "agg": t.get("agg", ""),
+                "winner": _label(t["winner"]),
+                "note": t.get("note", ""),
+                "isSquad": SQUAD_TEAM_NAME in (t["team_a"], t["team_b"]),
+            }
+            for t in rounds.get(key, [])
+        ]
+    return out

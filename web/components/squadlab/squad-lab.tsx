@@ -19,7 +19,7 @@ import { ShareCard } from "@/components/squadlab/share-card";
 import { TeamSheet } from "@/components/squadlab/team-sheet";
 import {
   api,
-  type Competition,
+  type BracketTie,
   type SquadPlayer,
   type SquadPool,
   type SquadSeason,
@@ -58,12 +58,11 @@ function sample<T>(items: T[], n: number, seed: number): T[] {
   return arr.slice(0, n);
 }
 
-export function SquadLab({ competitions }: { competitions: Competition[] }) {
+export function SquadLab() {
   const t = useTranslations("squadlab");
 
   const [phase, setPhase] = useState<Phase>("setup");
   const [mode, setMode] = useState<Mode>("draft");
-  const [comp, setComp] = useState(competitions[0]?.slug ?? "");
 
   const [pool, setPool] = useState<SquadPool | null>(null);
   const [poolError, setPoolError] = useState(false);
@@ -95,7 +94,7 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
     setRerolls({});
     setSeason(null);
     try {
-      setPool(await api.squadPool(comp));
+      setPool(await api.squadPool());
       // the first slot opens itself: an empty pitch with no prompt is a puzzle
       setOpenSlot("Forward_0");
     } catch {
@@ -139,13 +138,13 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
     setOpenSlot(next && next.key !== slotKey ? next.key : null);
   }
 
-  async function playSeason() {
+  async function playChampions() {
     if (!complete) return;
     setPlaying(true);
     setSeasonError(null);
     try {
       const squad = slots.map((s) => picks[s.key].player);
-      const result = await api.playSeason(comp, squad, mode);
+      const result = await api.playChampions(squad, mode);
       setSeason(result);
       setRevealed(0);
       setPhase("season");
@@ -169,7 +168,6 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
       <SeasonView
         season={season}
         squad={slots.map((s) => picks[s.key]).filter(Boolean)}
-        competitionName={competitions.find((c) => c.slug === comp)?.name ?? ""}
         revealed={revealed}
         setRevealed={setRevealed}
         onReset={reset}
@@ -180,61 +178,41 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
   if (phase === "setup") {
     return (
       <div>
-        <div className="grid gap-8 sm:grid-cols-2">
-          <div>
-            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-dim">
-              {t("stepMode")}
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              {(["draft", "sandbox"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className={cn(
-                    "rounded-[13px] border px-5 py-4 text-left transition-colors duration-200",
-                    mode === m
-                      ? "border-brand bg-brand-ghost"
-                      : "border-border bg-surface hover:border-border-strong",
-                  )}
-                >
-                  <span className="text-[0.98rem] font-semibold">{t(`mode.${m}`)}</span>
-                  <span className="mt-1 block text-[0.83rem] leading-relaxed text-muted">
-                    {t(`mode.${m}Lead`)}
-                  </span>
-                </button>
-              ))}
-            </div>
+        <div className="max-w-xl">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-dim">
+            {t("stepMode")}
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            {(["draft", "sandbox"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={cn(
+                  "rounded-[13px] border px-5 py-4 text-left transition-colors duration-200",
+                  mode === m
+                    ? "border-brand bg-brand-ghost"
+                    : "border-border bg-surface hover:border-border-strong",
+                )}
+              >
+                <span className="text-[0.98rem] font-semibold">{t(`mode.${m}`)}</span>
+                <span className="mt-1 block text-[0.83rem] leading-relaxed text-muted">
+                  {t(`mode.${m}Lead`)}
+                </span>
+              </button>
+            ))}
           </div>
 
-          <div>
-            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-dim">
-              {t("stepCompetition")}
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              {competitions.map((c) => (
-                <button
-                  key={c.slug}
-                  type="button"
-                  onClick={() => setComp(c.slug)}
-                  className={cn(
-                    "rounded-[13px] border px-5 py-3.5 text-left text-[0.92rem] font-medium transition-colors duration-200",
-                    comp === c.slug
-                      ? "border-brand bg-brand-ghost"
-                      : "border-border bg-surface text-muted hover:border-border-strong hover:text-text",
-                  )}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="mt-6 flex items-start gap-2 rounded-[12px] border border-border bg-surface px-4 py-3 text-[0.83rem] leading-relaxed text-muted">
+            <Trophy className="mt-0.5 size-4 shrink-0 text-warning" />
+            {t("championsNote")}
+          </p>
         </div>
 
         <button
           type="button"
           onClick={start}
-          className="mt-10 inline-flex h-13 items-center gap-2 rounded-[12px] bg-brand px-8 py-3.5 text-[1rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover"
+          className="mt-8 inline-flex h-13 items-center gap-2 rounded-[12px] bg-brand px-8 py-3.5 text-[1rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover"
         >
           <Play className="size-4" />
           {t("start")}
@@ -243,8 +221,8 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
     );
   }
 
-  // Thirty seconds of engine time with the team sheet to read, instead of a
-  // spinner over an empty pitch.
+  // Engine time with the team sheet to read, instead of a spinner over an
+  // empty pitch.
   if (playing) {
     return <TeamSheet squad={slots.map((s) => picks[s.key])} />;
   }
@@ -264,10 +242,7 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
           {t("changeSetup")}
         </button>
         <span className="text-[0.8rem] text-dim">
-          {t("setupSummary", {
-            mode: t(`mode.${mode}`),
-            competition: competitions.find((c) => c.slug === comp)?.name ?? "",
-          })}
+          {t("setupSummary", { mode: t(`mode.${mode}`) })}
         </span>
       </div>
 
@@ -395,7 +370,7 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
             <button
               type="button"
               disabled={!complete || playing}
-              onClick={playSeason}
+              onClick={playChampions}
               className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-brand px-6 text-[0.95rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-40"
             >
               {playing ? (
@@ -428,19 +403,17 @@ export function SquadLab({ competitions }: { competitions: Competition[] }) {
   );
 }
 
-/* ── The season ──────────────────────────────────────────────────────────── */
+/* ── The Champions run ─────────────────────────────────────────────────────── */
 
 function SeasonView({
   season,
   squad,
-  competitionName,
   revealed,
   setRevealed,
   onReset,
 }: {
   season: SquadSeason;
   squad: SquadPlayer[];
-  competitionName: string;
   revealed: number;
   setRevealed: (n: number) => void;
   onReset: () => void;
@@ -448,50 +421,47 @@ function SeasonView({
   const t = useTranslations("squadlab");
   const locale = useLocale();
   const [sharing, setSharing] = useState(false);
-  // The matchday most recently revealed is *being played*: it must not reach
-  // the table or the results list yet, or the scoreboard would be reporting a
-  // result the reader can already see two panels down.
+  // The match most recently revealed is *being played*: it must not reach the
+  // results list yet, or the list would report a result the reader can still
+  // see running two panels down.
   const [running, setRunning] = useState(false);
   const [showMatch, setShowMatch] = useState(false);
   const stopRunning = useCallback(() => setRunning(false), []);
 
-  const total = season.matchdays.length;
+  const matches = season.matches;
+  const total = matches.length;
   const done = revealed >= total && !running;
   const settled = running ? revealed - 1 : revealed;
-  const shown = season.matchdays.slice(0, settled);
-  const current = revealed > 0 ? season.matchdays[revealed - 1] : null;
-  const currentFixture = current?.fixtures.find((f) => f.isSquad) ?? null;
+  const shown = matches.slice(0, settled);
+  const current = revealed > 0 ? matches[revealed - 1] : null;
 
-  // Table through the matchdays revealed so far, so the standings move with the
-  // season instead of giving the ending away on the first click.
-  const table = useMemo(() => {
-    const acc: Record<string, { points: number; gf: number; ga: number; played: number }> =
-      {};
-    for (const md of shown) {
-      for (const f of md.fixtures) {
-        for (const [team, gf, ga] of [
-          [f.home, f.homeGoals, f.awayGoals],
-          [f.away, f.awayGoals, f.homeGoals],
-        ] as const) {
-          const e = (acc[team] ??= { points: 0, gf: 0, ga: 0, played: 0 });
-          e.played += 1;
-          e.gf += gf;
-          e.ga += ga;
-          e.points += gf > ga ? 3 : gf === ga ? 1 : 0;
-        }
-      }
-    }
-    return Object.entries(acc)
-      .map(([team, e]) => ({ team, ...e, gd: e.gf - e.ga }))
-      .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
-  }, [shown]);
-
-  // The API names the club "Your XI"; only the client knows which language the
-  // reader is in, so the label is swapped in wherever that name is shown.
+  // The API names the club "Tu Equipo"; only the client knows the reader's
+  // language, so the label is swapped in wherever that name is shown.
   const squadLabel = t("sheetTitle");
   const label = (team: string) => (team === season.teamName ? squadLabel : team);
 
-  const finish = season.finish;
+  // The league-phase table has 36 rows; show the top of it plus the squad's own
+  // row when it finished outside the window, so it is always visible.
+  const TABLE_WINDOW = 12;
+  const tableRows = useMemo(() => {
+    const top = season.leaguePhase.slice(0, TABLE_WINDOW);
+    const squadRow = season.leaguePhase.find((r) => r.isSquad);
+    if (squadRow && squadRow.rank > TABLE_WINDOW) top.push(squadRow);
+    return top;
+  }, [season.leaguePhase]);
+
+  // The squad's own knockout ties, in order, plus the final for the champion.
+  const ROUND_ORDER = ["playoff", "r16", "qf", "sf", "final"] as const;
+  const ownTies = useMemo(() => {
+    const out: BracketTie[] = [];
+    for (const r of ROUND_ORDER) {
+      for (const tie of season.bracket[r] ?? []) {
+        if (tie.isSquad) out.push(tie);
+      }
+    }
+    return out;
+  }, [season.bracket]);
+  const finalTie = season.bracket.final?.[0] ?? null;
 
   return (
     <div>
@@ -522,35 +492,35 @@ function SeasonView({
             <p className="relative mt-4 text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-dim">
               {t("finalTitle")}
             </p>
-            <p className="font-display relative mt-2 text-[2.4rem] leading-none sm:text-[3rem]">
-              {ordinal(finish?.rank ?? 0, locale)}
+            <p className="font-display relative mt-2 text-[2rem] leading-tight sm:text-[2.6rem]">
+              {season.stage}
             </p>
             <p className="relative mt-3 text-[0.95rem] text-muted">
-              {t("finishLine", {
-                points: finish?.points ?? 0,
-                gf: finish?.goalsFor ?? 0,
-                ga: finish?.goalsAgainst ?? 0,
+              {t("leaguePhaseRankLine", {
+                rank: ordinal(season.leaguePhaseRank, locale),
               })}
+              {" · "}
+              {t("championLine", { team: label(season.champion) })}
             </p>
 
-            {season.odds ? (
-              <dl className="relative mx-auto mt-7 grid max-w-lg grid-cols-3 gap-px overflow-hidden rounded-[12px] border border-border bg-border">
-                {[
-                  { k: t("oddsTitle"), v: season.odds.title },
-                  { k: t("oddsTop4"), v: season.odds.top4 },
-                  { k: t("oddsRelegation"), v: season.odds.relegation },
-                ].map((o) => (
-                  <div key={o.k} className="bg-bg-elevated px-3 py-3.5">
-                    <dt className="text-[0.58rem] font-semibold uppercase tracking-[0.09em] text-dim">
-                      {o.k}
-                    </dt>
-                    <dd className="mt-1.5 text-[1.05rem] font-semibold">
-                      {o.v == null ? "—" : `${Math.round(o.v * 100)}%`}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
+            <dl className="relative mx-auto mt-7 grid max-w-md grid-cols-2 gap-px overflow-hidden rounded-[12px] border border-border bg-border">
+              <div className="bg-bg-elevated px-3 py-3.5">
+                <dt className="text-[0.58rem] font-semibold uppercase tracking-[0.09em] text-dim">
+                  {t("squadElo")}
+                </dt>
+                <dd className="mt-1.5 text-[1.05rem] font-semibold tabular-nums">
+                  {Math.round(season.squadElo)}
+                </dd>
+              </div>
+              <div className="bg-bg-elevated px-3 py-3.5">
+                <dt className="text-[0.58rem] font-semibold uppercase tracking-[0.09em] text-dim">
+                  {t("leaguePhasePos")}
+                </dt>
+                <dd className="mt-1.5 text-[1.05rem] font-semibold tabular-nums">
+                  {ordinal(season.leaguePhaseRank, locale)}
+                </dd>
+              </div>
+            </dl>
 
             <button
               type="button"
@@ -569,19 +539,18 @@ function SeasonView({
           squad={squad}
           season={season}
           squadLabel={squadLabel}
-          competitionName={competitionName}
           onClose={() => setSharing(false)}
         />
       ) : null}
 
-      {showMatch && current && currentFixture ? (
+      {showMatch && current ? (
         <div className="mt-8">
-          {/* Keyed on the matchday so the clock restarts rather than resuming
+          {/* Keyed on the match index so the clock restarts rather than resuming
               wherever the previous match left it. */}
           <LiveMatch
-            key={current.matchday}
-            fixture={currentFixture}
-            matchday={current.matchday}
+            key={revealed}
+            fixture={current}
+            label={current.stageLabel}
             teamName={season.teamName}
             squadLabel={squadLabel}
             running={running}
@@ -601,16 +570,15 @@ function SeasonView({
           }}
           className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-brand px-5 text-[0.9rem] font-medium text-brand-contrast transition-colors hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-40"
         >
-          {revealed === 0 ? t("kickOff") : t("nextMatchday")}
+          {revealed === 0 ? t("kickOff") : t("nextMatch")}
           <ChevronRight className="size-4" />
         </button>
         <button
           type="button"
           disabled={done}
           onClick={() => {
-            // Jumping to the end also clears the scoreboard: leaving a
-            // mid-season match sitting between the champion card and the final
-            // table is a leftover, not a result.
+            // Jumping to the end also clears the scoreboard: a mid-run match
+            // left between the trophy card and the tables is a leftover.
             setRevealed(total);
             setRunning(false);
             setShowMatch(false);
@@ -620,7 +588,7 @@ function SeasonView({
           {t("skipToEnd")}
         </button>
         <span className="text-[0.8rem] text-dim">
-          {t("matchdayOf", { n: revealed, total })}
+          {t("matchOf", { n: revealed, total })}
         </span>
       </div>
 
@@ -633,20 +601,18 @@ function SeasonView({
             {shown
               .slice()
               .reverse()
-              .slice(0, 10)
-              .map((md) => {
-                const f = md.fixtures.find((x) => x.isSquad);
-                if (!f) return null;
+              .slice(0, 12)
+              .map((f, i) => {
                 const home = f.home === season.teamName;
                 const us = home ? f.homeGoals : f.awayGoals;
                 const them = home ? f.awayGoals : f.homeGoals;
                 return (
                   <div
-                    key={md.matchday}
+                    key={`${f.stageLabel}-${i}`}
                     className="flex items-center gap-3 rounded-[11px] border border-border bg-surface px-4 py-2.5"
                   >
-                    <span className="w-8 shrink-0 text-[0.68rem] tabular-nums text-dim">
-                      J{md.matchday}
+                    <span className="w-24 shrink-0 truncate text-[0.66rem] uppercase tracking-[0.06em] text-dim">
+                      {f.stageLabel}
                     </span>
                     <span className="flex-1 truncate text-[0.85rem]">
                       {home ? f.away : f.home}
@@ -675,11 +641,70 @@ function SeasonView({
               </p>
             ) : null}
           </div>
+
+          {done && ownTies.length ? (
+            <div className="mt-6">
+              <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
+                {t("yourRun")}
+              </h2>
+              <div className="mt-3 flex flex-col gap-1.5">
+                {ownTies.map((tie, i) => {
+                  const opp = tie.teamA === season.teamName ? tie.teamB : tie.teamA;
+                  const won = tie.winner === season.teamName;
+                  return (
+                    <div
+                      key={`${tie.round}-${i}`}
+                      className={cn(
+                        "flex items-center gap-3 rounded-[11px] border px-4 py-2.5",
+                        won
+                          ? "border-positive/40 bg-positive/5"
+                          : "border-negative/40 bg-negative/5",
+                      )}
+                    >
+                      <span className="w-20 shrink-0 truncate text-[0.66rem] uppercase tracking-[0.06em] text-dim">
+                        {tie.roundLabel}
+                      </span>
+                      <span className="flex-1 truncate text-[0.85rem]">{label(opp)}</span>
+                      <span className="text-[0.7rem] text-dim">
+                        {tie.agg}
+                        {tie.note ? ` ${tie.note}` : ""}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-[6px] px-1.5 py-0.5 text-[0.68rem] font-semibold",
+                          won ? "bg-positive/15 text-positive" : "bg-negative/12 text-negative",
+                        )}
+                      >
+                        {won ? t("advanced") : t("eliminated")}
+                      </span>
+                    </div>
+                  );
+                })}
+                {finalTie ? (
+                  <div className="mt-1 flex items-center gap-3 rounded-[11px] border border-warning/40 bg-warning/5 px-4 py-2.5">
+                    <span className="w-20 shrink-0 truncate text-[0.66rem] uppercase tracking-[0.06em] text-warning">
+                      {finalTie.roundLabel}
+                    </span>
+                    <span className="flex-1 truncate text-[0.85rem]">
+                      {label(finalTie.teamA)} — {label(finalTie.teamB)}
+                    </span>
+                    <span className="text-[0.7rem] text-dim">
+                      {finalTie.leg1}
+                      {finalTie.note ? ` ${finalTie.note}` : ""}
+                    </span>
+                    <span className="rounded-[6px] bg-warning/15 px-1.5 py-0.5 text-[0.68rem] font-semibold text-warning">
+                      {label(finalTie.winner)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section>
           <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
-            {done ? t("finalTable") : t("tableSoFar")}
+            {t("leaguePhaseTable")}
           </h2>
           <div className="mt-3 overflow-x-auto rounded-[var(--radius-card)] border border-border">
             <table className="w-full min-w-[22rem] text-[0.82rem]">
@@ -689,67 +714,54 @@ function SeasonView({
                   <th className="px-3 py-2 text-left font-semibold">{t("colTeam")}</th>
                   <th className="px-2 py-2 text-right font-semibold">{t("colPlayed")}</th>
                   <th className="px-2 py-2 text-right font-semibold">{t("colFor")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">
-                    {t("colAgainst")}
-                  </th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colAgainst")}</th>
                   <th className="px-2 py-2 text-right font-semibold">{t("colDiff")}</th>
-                  <th className="px-3 py-2 text-right font-semibold">
-                    {t("colPoints")}
-                  </th>
+                  <th className="px-3 py-2 text-right font-semibold">{t("colPoints")}</th>
                 </tr>
               </thead>
               <tbody>
-                {(done ? season.standings : table).slice(0, 12).map((r, i) => {
-                  const isSquad =
-                    "isSquad" in r ? r.isSquad : r.team === season.teamName;
-                  // The final table names them goalsFor/goalsAgainst, the
-                  // running one gf/ga — same figures, two sources.
-                  const gf = "goalsFor" in r ? r.goalsFor : r.gf;
-                  const ga = "goalsAgainst" in r ? r.goalsAgainst : r.ga;
-                  const gd = gf - ga;
-                  return (
-                    <tr
-                      key={r.team}
+                {tableRows.map((r) => (
+                  <tr
+                    key={r.team}
+                    className={cn(
+                      "border-b border-border last:border-0",
+                      r.isSquad ? "bg-brand-ghost" : "bg-surface",
+                    )}
+                  >
+                    <td className="px-3 py-2 tabular-nums text-dim">{r.rank}</td>
+                    <td className={cn("px-3 py-2", r.isSquad ? "font-semibold text-text" : "")}>
+                      {label(r.team)}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.played}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.goalsFor}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.goalsAgainst}
+                    </td>
+                    <td
                       className={cn(
-                        "border-b border-border last:border-0",
-                        isSquad ? "bg-brand-ghost" : "bg-surface",
+                        "px-2 py-2 text-right tabular-nums",
+                        r.goalDiff > 0
+                          ? "text-positive"
+                          : r.goalDiff < 0
+                            ? "text-negative"
+                            : "text-dim",
                       )}
                     >
-                      <td className="px-3 py-2 tabular-nums text-dim">{i + 1}</td>
-                      <td
-                        className={cn(
-                          "px-3 py-2",
-                          isSquad ? "font-semibold text-text" : "",
-                        )}
-                      >
-                        {label(r.team)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted">
-                        {r.played}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted">
-                        {gf}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted">
-                        {ga}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-2 py-2 text-right tabular-nums",
-                          gd > 0 ? "text-positive" : gd < 0 ? "text-negative" : "text-dim",
-                        )}
-                      >
-                        {gd > 0 ? `+${gd}` : gd}
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                        {r.points}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {r.points}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+          <p className="mt-2 text-[0.7rem] text-dim">{t("leaguePhaseNote")}</p>
         </section>
       </div>
 
@@ -762,18 +774,15 @@ function SeasonView({
             {season.scorers.slice(0, 8).map((s, i) => (
               <div
                 key={`${s.player}-${i}`}
-                className={cn(
-                  "flex items-center gap-3 rounded-[11px] border px-4 py-2.5",
-                  s.isSquad
-                    ? "border-brand/40 bg-brand-ghost"
-                    : "border-border bg-surface",
-                )}
+                className="flex items-center gap-3 rounded-[11px] border border-brand/40 bg-brand-ghost px-4 py-2.5"
               >
                 <span className="w-5 text-[0.72rem] tabular-nums text-dim">{i + 1}</span>
-                <span className="flex-1 truncate text-[0.86rem] font-medium">
-                  {s.player}
-                </span>
-                <span className="truncate text-[0.72rem] text-dim">{s.team}</span>
+                <span className="flex-1 truncate text-[0.86rem] font-medium">{s.player}</span>
+                {s.assists ? (
+                  <span className="text-[0.68rem] text-dim">
+                    {t("assistShort", { n: s.assists })}
+                  </span>
+                ) : null}
                 <span className="w-8 text-right text-[0.88rem] font-semibold tabular-nums">
                   {s.goals}
                 </span>

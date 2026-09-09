@@ -72,13 +72,11 @@ export function ShareCard({
   squad,
   season,
   squadLabel,
-  competitionName,
   onClose,
 }: {
   squad: SquadPlayer[];
   season: SquadSeason;
   squadLabel: string;
-  competitionName: string;
   onClose: () => void;
 }) {
   const t = useTranslations("squadlab");
@@ -94,7 +92,9 @@ export function ShareCard({
     () => false,
   );
 
-  const finish = season.finish;
+  const competitionName = "Champions League";
+  const championLabel =
+    season.champion === season.teamName ? squadLabel : season.champion;
   const outfield = squad.filter((p) => p.position !== "Goalkeeper");
   const overall = Math.round(mean(squad.map((p) => p.overall)));
   const attack = Math.round(mean(outfield.map((p) => p.attack)));
@@ -105,8 +105,8 @@ export function ShareCard({
   const summary = [
     `${squadLabel} · ${competitionName}`,
     t("summaryFinish", {
-      rank: ordinal(finish?.rank ?? 0, locale),
-      points: finish?.points ?? 0,
+      stage: season.stage,
+      rank: ordinal(season.leaguePhaseRank, locale),
     }),
     scorer ? t("summaryScorer", { player: scorer.player, goals: scorer.goals }) : "",
     "mundialytics",
@@ -153,17 +153,23 @@ export function ShareCard({
     ctx.fillStyle = "#f2f4f8";
     ctx.fillText(`${squadLabel} · ${competitionName}`, SIZE / 2, 168);
 
-    ctx.font = font(700, 168);
+    // The stage is a phrase ("Campeón", "Eliminado en octavos"), not a number,
+    // so the headline scales down to fit the width instead of clipping.
+    let stageSize = 120;
+    ctx.font = font(700, stageSize);
+    while (ctx.measureText(season.stage).width > SIZE - 120 && stageSize > 48) {
+      stageSize -= 6;
+      ctx.font = font(700, stageSize);
+    }
     ctx.fillStyle = "#ffffff";
-    ctx.fillText(ordinal(finish?.rank ?? 0, locale), SIZE / 2, 340);
+    ctx.fillText(season.stage, SIZE / 2, 330);
 
     ctx.font = font(500, 34);
     ctx.fillStyle = "#99a1b3";
     ctx.fillText(
       t("finishLine", {
-        points: finish?.points ?? 0,
-        gf: finish?.goalsFor ?? 0,
-        ga: finish?.goalsAgainst ?? 0,
+        rank: ordinal(season.leaguePhaseRank, locale),
+        champion: championLabel,
       }),
       SIZE / 2,
       400,
@@ -269,7 +275,9 @@ export function ShareCard({
     locale,
     squadLabel,
     competitionName,
-    finish,
+    championLabel,
+    season.stage,
+    season.leaguePhaseRank,
     overall,
     attack,
     defense,

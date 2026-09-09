@@ -858,50 +858,43 @@ from pydantic import BaseModel, Field  # noqa: E402
 
 
 class SeasonRequest(BaseModel):
-    competition: str
     squad: list[str] = Field(min_length=11, max_length=11)
+    # Draft vs Sandbox is only a build method now — both play the Champions.
     mode: str = "draft"
+    # Omit for a fresh random draw; pass one to replay the same path.
+    seed: int | None = None
 
 
 @app.get("/squadlab/pool")
-def squadlab_pool(competition: str) -> dict:
-    """Every player available in one competition, by position, best first."""
+def squadlab_pool() -> dict:
+    """Every player available to draft, from any league, by position, best first.
+
+    The squad always plays the Champions, whose field is pan-European, so the
+    pool is no longer scoped to a single competition.
+    """
     from api import squadlab as sl
 
-    meta = cat.COMPETITIONS.get(competition)
-    if meta is None:
-        raise HTTPException(404, f"Unknown competition: {competition}")
-    data = sl.pool(meta["id"])
+    data = sl.champions_pool()
     if not any(data["players"].values()):
         raise HTTPException(503, "No player profiles available")
-    return {"competition": competition, "competitionName": meta["name"], **data}
+    return {"competition": "champions", "competitionName": "Champions League", **data}
 
 
 @app.post("/squadlab/season")
 def squadlab_season(req: SeasonRequest) -> dict:
-    """Play a full season with the chosen eleven.
+    """Play the whole Champions League once with the chosen eleven.
 
-    Not cached: the whole point is that the squad is the user's, so there is no
-    key to cache on that would ever be hit twice. The simulation is a one-off
-    cost per team someone builds.
+    Not cached: the squad is the user's and each playthrough takes a random slot
+    in the draw, so there is no key that would ever be hit twice.
     """
     from api import squadlab as sl
 
-    meta = cat.COMPETITIONS.get(req.competition)
-    if meta is None:
-        raise HTTPException(404, f"Unknown competition: {req.competition}")
-
-    engine, _, df = club_engine()
     try:
-        # Draft replaces the league's bottom club; Sandbox is measured against
-        # the full league, so nobody is dropped.
-        return sl.play_season(
-            engine, df, meta["id"], req.squad, drop_last=(req.mode == "draft")
-        )
+        return sl.play_champions(req.squad, seed=req.seed)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(503, f"Could not play the season: {str(exc)[:180]}") from exc
+        raise HTTPException(503, f"Could not play the Champions: {str(exc)[:180]}") from exc
 
 @app.get("/fixtures/day")
 def fixtures_day(day: str | None = None) -> dict:
