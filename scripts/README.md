@@ -12,7 +12,7 @@ or research runs kept for reproducibility — **you only need the handful below.
 | `python scripts/plot_calibration.py` | Regenerates the reliability diagram in the README. |
 | `python scripts/run_statistical_matchday.py` | Predictions for a single matchday, with the full market set. |
 | `python scripts/predict_match.py` | One fixture, one report. |
-| `streamlit run app/streamlit_app.py` | The UI over all of the above. |
+| `uvicorn api.main:app --port 8000` + `npm --prefix web run dev` | The web UI (Next.js in `web/`) over all of the above. |
 
 ## Everything else, by prefix
 
