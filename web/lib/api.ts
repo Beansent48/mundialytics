@@ -203,14 +203,20 @@ export type SquadPlayer = {
   team: string;
   position: string;
   role: string;
+  /** "actual" | "prime" | "icono" — drives the card's design. */
+  kind: string;
+  /** Prime season label (e.g. "23/24"); null for actual/icono. */
+  season: string | null;
   overall: number;
   /** Shot-stopping for keepers, offensive strength for everyone else. */
   attack: number;
   defense: number;
   creation: number;
   matches: number;
-  /** Measured sub-stat percentiles (0-100) behind the rating; null if projected. */
+  /** Measured sub-stat percentiles (0-100) behind the rating; ACTUAL only. */
   substats: Record<string, number> | null;
+  /** Curated "why this card" line for prime/icono; null for actual. */
+  highlight: { stat: string; note: string } | null;
 };
 
 export type SquadPool = {

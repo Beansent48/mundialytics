@@ -36,6 +36,7 @@ POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 SLOTS = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
 
 MICRO_STATS = ROOT / "data/processed/player_micro_stats.csv"
+CARD_HIGHLIGHTS = ROOT / "data/curated/card_highlights.csv"
 
 # The measured sub-stats, per player, that feed the role rating — the depth
 # behind a card. Outfield first, keeper last; a card only carries the set for
@@ -158,6 +159,44 @@ def _substats_for(name: object) -> dict | None:
     return _micro_index().get(_fold_name(name))
 
 
+@lru_cache(maxsize=1)
+def _highlights_index() -> dict:
+    """Curated highlight per prime/icono card, so the popup shows what JUSTIFIES
+    the card (a prime's season, an icono's career) instead of stale current data.
+
+    Keyed `("prime", fold(player), season)` and `("icono", fold(player))`. Values
+    are `{"stat": str, "note": str}`. See data/curated/card_highlights.csv.
+    """
+    if not CARD_HIGHLIGHTS.exists():
+        return {}
+    df = pd.read_csv(CARD_HIGHLIGHTS, dtype=str).fillna("")
+    out: dict = {}
+    for r in df.itertuples(index=False):
+        kind = str(getattr(r, "kind", "")).strip().lower()
+        who = _fold_name(getattr(r, "player", ""))
+        if not who or kind not in ("prime", "icono"):
+            continue
+        val = {"stat": str(getattr(r, "stat", "")).strip(),
+               "note": str(getattr(r, "note", "")).strip()}
+        if kind == "prime":
+            out[("prime", who, str(getattr(r, "season", "")).strip())] = val
+        else:
+            out[("icono", who)] = val
+    return out
+
+
+def _highlight_for(c) -> dict | None:
+    """The curated highlight for a prime/icono card, else None (actual cards)."""
+    kind = getattr(c, "kind", "actual")
+    if kind not in ("prime", "icono"):
+        return None
+    idx = _highlights_index()
+    who = _fold_name(getattr(c, "player", ""))
+    if kind == "prime":
+        return idx.get(("prime", who, str(getattr(c, "season_label", "") or "")))
+    return idx.get(("icono", who))
+
+
 def _card_entry(c) -> dict:
     """One card in the shape the client draws.
 
@@ -183,8 +222,12 @@ def _card_entry(c) -> dict:
         "measured": bool(c.n_def > 0),
         "matches": int(c.matches),
         # The measured sub-stat profile behind the rating (percentiles 0-100),
-        # for the card popup. None for players with no advanced data (projected).
-        "substats": _substats_for(c.player),
+        # for the card popup. ACTUAL only: a prime/icono's current-season stats
+        # do not describe the season/career the card celebrates, so they get a
+        # curated highlight instead (below), never stale numbers.
+        "substats": _substats_for(c.player) if c.kind == "actual" else None,
+        # Curated "why this card" line for prime/icono; None for actual cards.
+        "highlight": _highlight_for(c),
     }
 
 

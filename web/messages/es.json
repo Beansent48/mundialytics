@@ -457,6 +457,9 @@
     "roleFormula": "Fórmula del rol",
     "otherStats": "Otras métricas medidas",
     "noAdvancedData": "Sin datos avanzados medidos para este jugador.",
-    "percentileNote": "Percentiles frente a su posición. El rol pondera cada estadística (%)."
+    "percentileNote": "Percentiles frente a su posición. El rol pondera cada estadística (%).",
+    "primeSeason": "La temporada del prime",
+    "careerHighlight": "En su carrera",
+    "noHighlight": "Carta especial — sin datos actuales."
   }
 }

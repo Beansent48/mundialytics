@@ -30,6 +30,11 @@ export function PlayerStatsPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
+  // Prime/icono cards celebrate a past season or a career, not this season's
+  // form, so they show a curated highlight instead of the current formula.
+  const isPrime = player.kind === "prime";
+  const isSpecial = isPrime || player.kind === "icono";
+
   // Place below the card, flip above when there is no room, clamp to viewport.
   useLayoutEffect(() => {
     const el = panelRef.current;
@@ -86,7 +91,14 @@ export function PlayerStatsPanel({
         <p className="truncate text-[0.9rem] font-semibold">{player.display}</p>
         <p className="mt-0.5 flex items-center gap-1.5 text-[0.72rem] text-muted">
           <span className="truncate">{player.team}</span>
-          {player.role ? (
+          {isSpecial ? (
+            <>
+              <span className="text-dim">·</span>
+              <span className="rounded-[5px] bg-black/25 px-1.5 py-0.5 text-[0.66rem] font-semibold">
+                {isPrime ? `PRIME${player.season ? ` ${player.season}` : ""}` : "ICONO"}
+              </span>
+            </>
+          ) : player.role ? (
             <>
               <span className="text-dim">·</span>
               <span className="rounded-[5px] bg-brand-ghost px-1.5 py-0.5 text-[0.66rem] font-semibold text-brand">
@@ -98,53 +110,79 @@ export function PlayerStatsPanel({
       </div>
 
       <div className="max-h-[22rem] overflow-y-auto px-4 py-3">
-        {weighted.length ? (
-          <>
-            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-dim">
-              {t("roleFormula")}
+        {isSpecial ? (
+          player.highlight && (player.highlight.stat || player.highlight.note) ? (
+            <>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-dim">
+                {isPrime ? t("primeSeason") : t("careerHighlight")}
+              </p>
+              {player.highlight.stat ? (
+                <p className="mt-2 text-[0.96rem] font-semibold leading-snug text-text">
+                  {player.highlight.stat}
+                </p>
+              ) : null}
+              {player.highlight.note ? (
+                <p className="mt-2 text-[0.83rem] leading-relaxed text-muted">
+                  {player.highlight.note}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-[0.82rem] leading-relaxed text-muted">
+              {t("noHighlight")}
             </p>
-            <div className="mt-2 flex flex-col gap-2">
-              {weighted.map(([code, weight]) => (
-                <StatRow
-                  key={code}
-                  label={substatLabels[code] ?? code}
-                  code={code}
-                  weight={weight}
-                  value={hasProfile ? (subs[code] ?? null) : null}
-                />
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        {extra.length ? (
+          )
+        ) : (
           <>
-            <p className="mt-4 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-dim">
-              {t("otherStats")}
+            {weighted.length ? (
+              <>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-dim">
+                  {t("roleFormula")}
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {weighted.map(([code, weight]) => (
+                    <StatRow
+                      key={code}
+                      label={substatLabels[code] ?? code}
+                      code={code}
+                      weight={weight}
+                      value={hasProfile ? (subs[code] ?? null) : null}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            {extra.length ? (
+              <>
+                <p className="mt-4 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-dim">
+                  {t("otherStats")}
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {extra.map((code) => (
+                    <StatRow
+                      key={code}
+                      label={substatLabels[code] ?? code}
+                      code={code}
+                      weight={null}
+                      value={subs[code] ?? null}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            {!hasProfile ? (
+              <p className="mt-2 text-[0.76rem] leading-relaxed text-dim">
+                {t("noAdvancedData")}
+              </p>
+            ) : null}
+
+            <p className="mt-3 border-t border-border pt-2 text-[0.66rem] leading-relaxed text-dim">
+              {t("percentileNote")}
             </p>
-            <div className="mt-2 flex flex-col gap-2">
-              {extra.map((code) => (
-                <StatRow
-                  key={code}
-                  label={substatLabels[code] ?? code}
-                  code={code}
-                  weight={null}
-                  value={subs[code] ?? null}
-                />
-              ))}
-            </div>
           </>
-        ) : null}
-
-        {!hasProfile ? (
-          <p className="mt-2 text-[0.76rem] leading-relaxed text-dim">
-            {t("noAdvancedData")}
-          </p>
-        ) : null}
-
-        <p className="mt-3 border-t border-border pt-2 text-[0.66rem] leading-relaxed text-dim">
-          {t("percentileNote")}
-        </p>
+        )}
       </div>
     </div>,
     document.body,

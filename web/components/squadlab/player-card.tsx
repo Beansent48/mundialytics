@@ -25,14 +25,6 @@ export function tierOf(overall: number) {
   return "bronze";
 }
 
-/**
- * Tiers that get the aura: a violet flare as the card lands, then a glow that
- * never quite settles. Only the top band today — a glow every card has is a
- * glow nobody notices — and the set is the hook for the special editions to
- * come, which will join it with their own `--aura`.
- */
-const AURA_TIERS = new Set(["elite"]);
-
 const POSITION_ABBR: Record<string, string> = {
   Goalkeeper: "GK",
   Defender: "DF",
@@ -82,6 +74,24 @@ export function PlayerCard({
   const s = SIZE[size];
   const Tag = onClick ? "button" : "div";
 
+  // A prime or an icon wears its own design, not the tier colour, so it never
+  // reads as an ordinary current card. Primes also show their season on the face.
+  const isPrime = player.kind === "prime";
+  const isIcono = player.kind === "icono";
+  const kindClass = isPrime
+    ? "mv-card-prime"
+    : isIcono
+      ? "mv-card-icono"
+      : `mv-card-${tier}`;
+  const kindLabel = isPrime ? "PRIME" : isIcono ? "ICONO" : null;
+  const aura = isIcono
+    ? "#dfe6f2"
+    : isPrime
+      ? "#2fe0c6"
+      : tier === "elite"
+        ? "#8b5cff"
+        : null;
+
   const canInspect = !!substatLabels && !!roleWeights;
   const wrapRef = useRef<HTMLSpanElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -128,11 +138,13 @@ export function PlayerCard({
       }
       onMouseLeave={canInspect ? () => setHovered(false) : undefined}
     >
-      {AURA_TIERS.has(tier) ? (
+      {aura ? (
         <span
           aria-hidden
           className="mv-aura"
-          style={{ "--deal-delay": `${delay}ms` } as CSSProperties}
+          style={
+            { "--deal-delay": `${delay}ms`, "--aura": aura } as CSSProperties
+          }
         />
       ) : null}
       <Tag
@@ -141,16 +153,24 @@ export function PlayerCard({
         style={{ animationDelay: `${delay}ms` }}
         className={cn(
           "mv-card animate-deal text-left",
-          `mv-card-${tier}`,
+          kindClass,
           s.box,
           selected && "mv-card-selected",
         )}
       >
         <span className="flex items-start justify-between gap-1.5">
           <span className={cn("font-semibold leading-none", s.ovr)}>{overall}</span>
-          <span className="rounded-[5px] bg-black/15 px-1.5 py-0.5 text-[0.55rem] font-bold tracking-[0.06em]">
-            {POSITION_ABBR[player.position] ??
-              player.position.slice(0, 2).toUpperCase()}
+          <span className="flex flex-col items-end gap-0.5">
+            <span className="rounded-[5px] bg-black/15 px-1.5 py-0.5 text-[0.55rem] font-bold tracking-[0.06em]">
+              {POSITION_ABBR[player.position] ??
+                player.position.slice(0, 2).toUpperCase()}
+            </span>
+            {kindLabel ? (
+              <span className="rounded-[5px] bg-black/20 px-1.5 py-0.5 text-[0.5rem] font-bold tracking-[0.08em]">
+                {kindLabel}
+                {isPrime && player.season ? ` ${player.season}` : ""}
+              </span>
+            ) : null}
           </span>
         </span>
 
