@@ -69,12 +69,25 @@ export type ActualStats = {
   stats: { key: string; home: number; away: number }[];
 };
 
+/** Who did what, grouped per side. No minutes — the source has none. */
+export type SideEvents = {
+  goals: { player: string; count: number }[];
+  assists: { player: string; count: number }[];
+  yellows: string[];
+  /** Goals with no attributed scorer (own goals, unmapped names). */
+  unattributed: number;
+};
+
+export type MatchEvents = { home: SideEvents; away: SideEvents };
+
 export type Match = Fixture & {
   prediction: MatchPrediction;
   scorers: { home?: Scorer[]; away?: Scorer[] } | null;
   teamProps: TeamMarket[] | null;
   /** Real shots, corners and cards — null until the data refresh ingests them. */
   actual: ActualStats | null;
+  /** Real goals/assists/cards per side — null until the refresh ingests them. */
+  events: MatchEvents | null;
 };
 
 export type Competition = {

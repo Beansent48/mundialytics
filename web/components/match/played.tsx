@@ -25,6 +25,7 @@ export function PlayedMatch({ match }: { match: Match }) {
   const [compare, setCompare] = useState(false);
 
   const actual = match.actual;
+  const events = match.events;
   const pred = match.prediction;
   const score = match.score;
   if (!score) return null;
@@ -277,6 +278,103 @@ export function PlayedMatch({ match }: { match: Match }) {
         </>
       ) : null}
 
+      {/* What happened: goals, assists and cards grouped per side. No minutes —
+          the settled source has none — so it reads as a summary, not a clock. */}
+      {!compare && events ? (
+        <section>
+          <h2 className="font-display mb-5 text-[1.5rem] leading-tight sm:text-[1.8rem]">
+            {t("summaryTitle")}
+          </h2>
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-border bg-border">
+            {(
+              [
+                { s: events.home, name: match.home, color: "text-home", right: false },
+                { s: events.away, name: match.away, color: "text-away", right: true },
+              ] as const
+            ).map(({ s, name, color, right }) => {
+              const empty =
+                !s.goals.length &&
+                !s.assists.length &&
+                !s.yellows.length &&
+                !s.unattributed;
+              return (
+                <div
+                  key={name}
+                  className={cn("bg-surface px-5 py-5", right && "text-right")}
+                >
+                  <p className={cn("text-[0.9rem] font-semibold", color)}>{name}</p>
+                  {empty ? (
+                    <p className="mt-3 text-[0.8rem] text-dim">—</p>
+                  ) : (
+                    <ul className="mt-3 flex flex-col gap-2.5">
+                      {s.goals.map((g) => (
+                        <li
+                          key={`g-${g.player}`}
+                          className={cn(
+                            "flex items-center gap-2 text-[0.88rem]",
+                            right && "flex-row-reverse",
+                          )}
+                        >
+                          <span aria-hidden className="text-[0.8rem]">
+                            ⚽
+                          </span>
+                          <span className="font-medium">{g.player}</span>
+                          {g.count > 1 ? (
+                            <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[0.62rem] font-semibold tabular-nums text-muted">
+                              ×{g.count}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                      {s.unattributed ? (
+                        <li
+                          className={cn(
+                            "flex items-center gap-2 text-[0.88rem] text-dim",
+                            right && "flex-row-reverse",
+                          )}
+                        >
+                          <span aria-hidden className="text-[0.8rem]">
+                            ⚽
+                          </span>
+                          <span>{t("unattributed", { count: s.unattributed })}</span>
+                        </li>
+                      ) : null}
+                      {s.assists.map((a) => (
+                        <li
+                          key={`a-${a.player}`}
+                          className={cn(
+                            "text-[0.8rem] text-muted",
+                            right && "text-right",
+                          )}
+                        >
+                          {t("assistLabel", { player: a.player })}
+                          {a.count > 1 ? ` ×${a.count}` : ""}
+                        </li>
+                      ))}
+                      {s.yellows.map((y) => (
+                        <li
+                          key={`y-${y}`}
+                          className={cn(
+                            "flex items-center gap-2 text-[0.88rem]",
+                            right && "flex-row-reverse",
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className="inline-block h-3.5 w-2.5 shrink-0 rounded-[2px] bg-warning"
+                          />
+                          <span>{y}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       {actual?.stats.length ? (
         <section>
           <h2 className="font-display mb-5 text-[1.5rem] leading-tight sm:text-[1.8rem]">
@@ -337,6 +435,12 @@ export function PlayedMatch({ match }: { match: Match }) {
           </div>
           <p className="mt-4 text-[0.78rem] text-dim">{t("statsNote")}</p>
         </section>
+      ) : null}
+
+      {!compare && !events && !actual?.stats.length ? (
+        <p className="rounded-[var(--radius-card)] border border-border bg-surface px-5 py-8 text-center text-[0.88rem] text-muted">
+          {t("noData")}
+        </p>
       ) : null}
     </div>
   );

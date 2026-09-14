@@ -331,6 +331,99 @@ def _actual(row, meta: dict, season: str, df) -> dict | None:
     }
 
 
+# The player-match file is ~600k rows and reads from disk; load it once per data
+# version, not once per match page. Keyed on the dataset's last date so a refresh
+# rebuilds it without a deploy, exactly like the fixture cache above.
+_PLAYER_ACTUALS: dict[str, pd.DataFrame] = {}
+
+
+def _player_actuals(df) -> pd.DataFrame:
+    key = str(df["date"].max())[:10]
+    cached = _PLAYER_ACTUALS.get(key)
+    if cached is not None:
+        return cached
+    from mundialytics.serving.track_record import _player_match_actuals
+
+    pa = _player_match_actuals()
+    if len(pa):
+        pa = pa.copy()
+        pa["fecha"] = pd.to_datetime(pa["fecha"], errors="coerce").dt.strftime(
+            "%Y-%m-%d"
+        )
+        pa["eq"] = pa["equipo"].astype(str).str.lower()
+    _PLAYER_ACTUALS.clear()  # only the current data version is ever needed
+    _PLAYER_ACTUALS[key] = pa
+    return pa
+
+
+def _events(row, meta: dict, season: str, df) -> dict | None:
+    """Who scored, assisted and was booked — grouped per side.
+
+    Built from the same settled player-match file the track record scores itself
+    on, so it never claims an event the evaluator would not also count. There are
+    no minutes in that file (its `minutes` column is minutes played, not the clock
+    of each event) and no per-player red cards, so this is a grouped summary, not
+    a minute-by-minute timeline. When known scorers do not add up to the final
+    score — an own goal, or a name the source never mapped — the gap is surfaced
+    honestly as `unattributed` rather than hidden.
+    """
+    played = df[
+        (df["competition"] == meta["id"])
+        & (df["season"] == season)
+        & (df["home_team"] == row.home_team)
+        & (df["away_team"] == row.away_team)
+    ]
+    if played.empty:
+        return None
+    r = played.iloc[0]
+    match_date = pd.to_datetime(r.get("date"), errors="coerce")
+    if pd.isna(match_date):
+        return None
+    date_str = match_date.strftime("%Y-%m-%d")
+
+    pa = _player_actuals(df)
+    if not len(pa):
+        return None
+    home_l, away_l = str(row.home_team).lower(), str(row.away_team).lower()
+    day = pa[(pa["fecha"] == date_str) & (pa["eq"].isin([home_l, away_l]))]
+    if day.empty:
+        return None
+
+    def side(team_l: str, goals_scored: int) -> dict:
+        s = day[day["eq"] == team_l]
+        goals = sorted(
+            (
+                {"player": str(p.player), "count": int(p.goals)}
+                for p in s[s["goals"] > 0].itertuples()
+            ),
+            key=lambda g: -g["count"],
+        )
+        assists = sorted(
+            (
+                {"player": str(p.player), "count": int(p.assists)}
+                for p in s[s["assists"] > 0].itertuples()
+            ),
+            key=lambda a: -a["count"],
+        )
+        yellows = [str(p.player) for p in s[s["yellow_cards"] > 0].itertuples()]
+        attributed = sum(g["count"] for g in goals)
+        return {
+            "goals": goals,
+            "assists": assists,
+            "yellows": yellows,
+            "unattributed": max(0, int(goals_scored) - attributed),
+        }
+
+    home = side(home_l, int(r["home_goals"]))
+    away = side(away_l, int(r["away_goals"]))
+    empty = not any(
+        home[k] or away[k] for k in ("goals", "assists", "yellows")
+    ) and not (home["unattributed"] or away["unattributed"])
+    if empty:
+        return None
+    return {"home": home, "away": away}
+
+
 def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
     base = _fixture_payload(row, competition, season, with_probs=False)
     pred = _predict(row.home_team, row.away_team, meta["id"])
@@ -407,6 +500,7 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
     base["scorers"] = _scorers(pp, row.home_team, row.away_team, pred)
     base["teamProps"] = _team_props(tp, row.home_team, row.away_team, pred)
     base["actual"] = _actual(row, meta, season, df) if base["played"] else None
+    base["events"] = _events(row, meta, season, df) if base["played"] else None
     return base
 
 
