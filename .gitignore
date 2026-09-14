@@ -38,3 +38,6 @@ data/processed/*
 !data/processed/logs
 # ...but not its rotating copies (update_season.py keeps 10; git already has the history)
 data/processed/logs/backup/
+# Unattended-run artifacts (run_update.ps1): heartbeat + per-run stdout/stderr logs
+data/processed/logs/last_run.json
+data/processed/logs/runs/
