@@ -356,16 +356,78 @@ def _player_actuals(df) -> pd.DataFrame:
     return pa
 
 
-def _events(row, meta: dict, season: str, df) -> dict | None:
-    """Who scored, assisted and was booked — grouped per side.
+# The per-event timeline (minute, scorer, assist, card) lives in a separate ESPN
+# file from the aggregated player-match one; load it once per data version too.
+_MATCH_TIMELINE: dict[str, pd.DataFrame] = {}
 
-    Built from the same settled player-match file the track record scores itself
-    on, so it never claims an event the evaluator would not also count. There are
-    no minutes in that file (its `minutes` column is minutes played, not the clock
-    of each event) and no per-player red cards, so this is a grouped summary, not
-    a minute-by-minute timeline. When known scorers do not add up to the final
-    score — an own goal, or a name the source never mapped — the gap is surfaced
-    honestly as `unattributed` rather than hidden.
+
+def _timeline_events(df) -> pd.DataFrame:
+    key = str(df["date"].max())[:10]
+    cached = _MATCH_TIMELINE.get(key)
+    if cached is not None:
+        return cached
+    f = ROOT / "data/external/advanced/espn/espn_player_events_current.csv"
+    ev = pd.DataFrame()
+    if f.exists():
+        try:
+            ev = pd.read_csv(f, low_memory=False)
+        except Exception:
+            ev = pd.DataFrame()
+    if len(ev) and {"date", "team", "type_code", "minute_num"} <= set(ev.columns):
+        ev = ev.copy()
+        ev["fecha"] = pd.to_datetime(ev["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        ev["eq"] = ev["team"].astype(str).str.lower()
+    else:
+        ev = pd.DataFrame()  # old-schema file has no minute-level source
+    _MATCH_TIMELINE.clear()  # only the current data version is ever needed
+    _MATCH_TIMELINE[key] = ev
+    return ev
+
+
+def _timeline(row, date_str: str, df) -> list[dict] | None:
+    """Minute-ordered events for one match, when ESPN supplied the clock.
+
+    Returns None when there is no per-event feed for this match, so the caller
+    can fall back to the grouped summary. Own goals are credited to the side that
+    benefited (so the running score reads true) and flagged, exactly as SofaScore
+    shows them; the scorer named is the opponent who put it in.
+    """
+    ev = _timeline_events(df)
+    if not len(ev):
+        return None
+    home_l, away_l = str(row.home_team).lower(), str(row.away_team).lower()
+    day = ev[(ev["fecha"] == date_str) & (ev["eq"].isin([home_l, away_l]))]
+    if day.empty:
+        return None
+    out = []
+    for e in day.sort_values("minute_num", kind="stable").itertuples():
+        side = "home" if str(e.eq) == home_l else "away"
+        raw_assist = getattr(e, "assist", None)
+        assist = "" if pd.isna(raw_assist) else str(raw_assist).strip()
+        raw_min = getattr(e, "minute", None)
+        out.append({
+            "minute": "" if pd.isna(raw_min) else str(raw_min),
+            "side": side,
+            "type": str(e.type_code),
+            "player": str(e.player),
+            "assist": assist or None,
+        })
+    return out or None
+
+
+def _events(row, meta: dict, season: str, df) -> dict | None:
+    """Who scored, assisted and was booked.
+
+    Two views of the same match. The grouped per-side summary is built from the
+    settled player-match file the track record scores itself on, so it never
+    claims an event the evaluator would not also count; that file has no event
+    minutes and no per-player reds, so on its own it reads as a summary, not a
+    clock. When it can, this also attaches a minute-ordered `timeline` from
+    ESPN's per-event feed (goals, assists, penalties, own goals, cards), which
+    the front end renders SofaScore-style; the grouped summary stays as the
+    fallback for any match with no such feed. Goals with no attributed scorer —
+    an own goal, or a name the source never mapped — are surfaced honestly as
+    `unattributed` rather than hidden.
     """
     played = df[
         (df["competition"] == meta["id"])
@@ -416,12 +478,15 @@ def _events(row, meta: dict, season: str, df) -> dict | None:
 
     home = side(home_l, int(r["home_goals"]))
     away = side(away_l, int(r["away_goals"]))
-    empty = not any(
-        home[k] or away[k] for k in ("goals", "assists", "yellows")
-    ) and not (home["unattributed"] or away["unattributed"])
+    timeline = _timeline(row, date_str, df)
+    empty = (
+        not any(home[k] or away[k] for k in ("goals", "assists", "yellows"))
+        and not (home["unattributed"] or away["unattributed"])
+        and not timeline
+    )
     if empty:
         return None
-    return {"home": home, "away": away}
+    return {"home": home, "away": away, "timeline": timeline}
 
 
 def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:

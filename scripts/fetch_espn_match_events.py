@@ -66,6 +66,49 @@ STATS = {
 }
 
 
+def _event_code(kind: str, scoring: bool) -> str | None:
+    """ESPN keyEvent `type.type` -> our normalised code, or None to skip.
+
+    Only the events a timeline shows survive: goals (however scored), own goals,
+    scored penalties and cards. Kickoffs, delays, substitutions, VAR checks and
+    missed penalties fall through as None. A second yellow (`yellow-red-card`) is
+    a sending-off, so it settles as a red.
+    """
+    k = (kind or "").lower()
+    if k in ("red-card", "yellow-red-card"):
+        return "red"
+    if k == "yellow-card":
+        return "yellow"
+    if not scoring:  # non-scoring, non-card -> not a timeline event
+        return None
+    if k == "own-goal":
+        return "own_goal"
+    if k.startswith("penalty"):
+        return "penalty"
+    return "goal"
+
+
+def _minute_num(disp: str) -> float:
+    """"45'+2'" -> 45.02, "90'" -> 90.0 -- a scalar the timeline can sort on.
+
+    Stoppage time is folded into the hundredths so it orders after its own base
+    minute but before the next (45'+2' < 46'); base minutes never reach 100.
+    """
+    s = str(disp or "").replace("'", "").strip()
+    if not s:
+        return -1.0
+    if "+" in s:
+        base, _, extra = s.partition("+")
+        try:
+            return float(int(base or 0)) + int(extra or 0) / 100.0
+        except ValueError:
+            return -1.0
+    try:
+        return float(int(s))
+    except ValueError:
+        return -1.0
+
+
 def _get(url: str, tries: int = 3) -> dict:
     for i in range(tries):
         try:
@@ -86,18 +129,10 @@ def _aliases() -> dict[str, str]:
     return dict(zip(df.iloc[:, 0].astype(str), df.iloc[:, 1].astype(str)))
 
 
-def list_matches(code: str, comp: str, lo: str, hi: str,
-                 canon) -> tuple[list[dict], list[dict]]:
-    """Completed matches for one league, from the scoreboard (one request).
-
-    The timeline comes from here too. It is tempting to read it from the richer
-    per-match summary instead, but that endpoint's `keyEvents` carries no
-    `athletesInvolved` at all -- an extraction written against it silently
-    yields nothing. The scoreboard's `details` is the only place the minute, the
-    scorer and the penalty flag appear together, and it costs no extra request.
-    """
+def list_matches(code: str, comp: str, lo: str, hi: str, canon) -> list[dict]:
+    """Completed matches for one league, from the scoreboard (one request)."""
     data = _get(f"{BASE.format(code=code)}/scoreboard?dates={lo}-{hi}&limit=1000")
-    games, events = [], []
+    games = []
     for ev in data.get("events", []):
         c = ev["competitions"][0]
         if not c.get("status", {}).get("type", {}).get("completed"):
@@ -114,37 +149,11 @@ def list_matches(code: str, comp: str, lo: str, hi: str,
             "home_goals": int(home.get("score") or 0),
             "away_goals": int(away.get("score") or 0),
         })
-
-        sides = {str(x["team"]["id"]): canon(x["team"]["displayName"])
-                 for x in c.get("competitors", [])}
-        for d in c.get("details", []) or []:
-            ath = d.get("athletesInvolved") or []
-            if not ath or not ath[0].get("displayName"):
-                continue
-            tid = str((d.get("team") or {}).get("id", ""))
-            credited = sides.get(tid, "")
-            own = bool(d.get("ownGoal"))
-            # an own goal is credited to the other team, so its scorer's own
-            # side is the one that did NOT get the goal
-            team = credited
-            if own:
-                other = [v for k, v in sides.items() if k != tid]
-                team = other[0] if other else credited
-            events.append({
-                "event_id": eid, "competition": comp, "date": date, "team": team,
-                "player": ath[0]["displayName"],
-                "minute": (d.get("clock") or {}).get("displayValue", ""),
-                "type": (d.get("type") or {}).get("text", ""),
-                "scoring": bool(d.get("scoringPlay")),
-                "penalty": bool(d.get("penaltyKick")),
-                "own_goal": own, "shootout": bool(d.get("shootout")),
-            })
-    return games, events
+    return games
 
 
-def match_players(code: str, game: dict, canon) -> list[dict]:
-    """Full roster for one match (one request)."""
-    s = _get(f"{BASE.format(code=code)}/summary?event={game['event_id']}")
+def roster_rows(s: dict, game: dict, canon) -> list[dict]:
+    """Full roster for one match, from an already-fetched summary payload."""
     players = []
     for side in s.get("rosters", []) or []:
         team = canon(side.get("team", {}).get("displayName", ""))
@@ -164,6 +173,52 @@ def match_players(code: str, game: dict, canon) -> list[dict]:
                 row[col] = pd.to_numeric(v, errors="coerce") if v is not None else 0
             players.append(row)
     return players
+
+
+def event_rows(s: dict, game: dict, canon) -> list[dict]:
+    """Minute-by-minute timeline for one match, from the summary's `keyEvents`.
+
+    The summary is the only endpoint that names the assister: its keyEvents carry
+    `participants` (scorer at [0], assister at [1] for a goal) plus the minute,
+    the scoring team and a normalised `type.type`. The scoreboard's `details`,
+    used before, has none of that, so the timeline is read from here -- the same
+    call that already fetches the roster, so it costs no extra request.
+
+    An own goal is credited by ESPN to the team that BENEFITS, and it stays that
+    way here so per-side goal counts still add up to the scoreline; the scorer
+    (an opponent) is kept as `player` and flagged with `own_goal` so the reader
+    can be told it was an own goal.
+    """
+    sides = {str((sd.get("team") or {}).get("id")):
+             canon((sd.get("team") or {}).get("displayName", ""))
+             for sd in (s.get("rosters") or [])}
+    rows = []
+    for k in s.get("keyEvents") or []:
+        kind = (k.get("type") or {}).get("type", "")
+        scoring = bool(k.get("scoringPlay"))
+        code = _event_code(kind, scoring)
+        if code is None:
+            continue
+        parts = k.get("participants") or []
+        player = ((parts[0].get("athlete") or {}) if parts else {}).get("displayName")
+        if not player:
+            continue
+        assist = ""
+        if code in ("goal", "penalty") and len(parts) > 1:
+            assist = ((parts[1].get("athlete") or {}).get("displayName") or "")
+        tid = str((k.get("team") or {}).get("id", ""))
+        disp = (k.get("clock") or {}).get("displayValue", "")
+        rows.append({
+            "event_id": game["event_id"], "competition": game["competition"],
+            "date": game["date"], "team": sides.get(tid, ""),
+            "player": player, "assist": assist,
+            "minute": disp, "minute_num": _minute_num(disp),
+            "period": int((k.get("period") or {}).get("number", 0) or 0),
+            "type": (k.get("type") or {}).get("text", ""), "type_code": code,
+            "scoring": scoring, "penalty": code == "penalty",
+            "own_goal": code == "own_goal", "shootout": bool(k.get("shootout")),
+        })
+    return rows
 
 
 def main() -> None:
@@ -190,26 +245,38 @@ def main() -> None:
     old_e = (pd.read_csv(OUT_E, low_memory=False)
              if (OUT_E.exists() and not args.rebuild) else pd.DataFrame())
     have = set(old_p["event_id"].astype(str)) if "event_id" in old_p.columns else set()
+    # The events file gained an `assist` column and a summary-based source; an old
+    # file written before that has neither, so drop it and rebuild once -- every
+    # match then gains its assist rather than half the season staying without one.
+    if "assist" not in old_e.columns:
+        old_e = pd.DataFrame()
+    have_e = set(old_e["event_id"].astype(str)) if "event_id" in old_e.columns else set()
 
     games, players, events = [], [], []
     for code, comp in LEAGUES.items():
         try:
-            g, ev = list_matches(code, comp, lo, hi, canon)
+            g = list_matches(code, comp, lo, hi, canon)
         except Exception as exc:
             print(f"  {comp:15s} FALLO listado: {type(exc).__name__} {str(exc)[:60]}")
             continue
         games += g
-        events += ev
-        todo = [x for x in g if x["event_id"] not in have]
+        # One summary request per match, fetched only when the roster OR the
+        # timeline is still missing, and parsed for whichever is.
+        todo = [x for x in g
+                if x["event_id"] not in have or x["event_id"] not in have_e]
         n_ok = 0
         for x in todo:
             try:
-                pr = match_players(code, x, canon)
+                s = _get(f"{BASE.format(code=code)}/summary?event={x['event_id']}")
             except Exception:
                 continue
-            if pr:
-                players += pr
-                n_ok += 1
+            if x["event_id"] not in have:
+                pr = roster_rows(s, x, canon)
+                if pr:
+                    players += pr
+                    n_ok += 1
+            if x["event_id"] not in have_e:
+                events += event_rows(s, x, canon)
             time.sleep(0.25)
         print(f"  {comp:15s} {len(g):3d} partidos "
               f"({len(g) - len(todo)} en cache, {n_ok} descargados)")
@@ -236,8 +303,14 @@ def main() -> None:
 
     edf = pd.DataFrame(events)
     if len(old_e) and "event_id" in old_e.columns:
-        edf = pd.concat([old_e, edf], ignore_index=True).drop_duplicates()
+        edf = pd.concat([old_e, edf], ignore_index=True)
     if len(edf):
+        # Dedupe on the event's identity, not the whole row: a stray NaN in one
+        # copy once let byte-identical events survive `drop_duplicates()` twice.
+        edf = edf.drop_duplicates(
+            subset=["event_id", "team", "player", "minute", "type_code"],
+            keep="last",
+        ).sort_values(["date", "event_id", "minute_num"], kind="stable")
         edf.to_csv(OUT_E, index=False)
 
     app = pd.to_numeric(pdf.get("appearances"), errors="coerce").fillna(0)
