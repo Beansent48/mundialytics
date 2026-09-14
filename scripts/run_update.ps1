@@ -54,13 +54,28 @@ $isFull = $Force -or ((Get-Date).DayOfWeek.ToString() -eq $FullDay)
 $argv   = @($script)
 if ($isFull) { $argv += '--full' }
 
-"=== run_update $logIso  (full=$isFull) ===" | Tee-Object -FilePath $log
-# Native stdout+stderr straight to the log; the Python side prints its own
-# step-by-step progress and never prompts.
-& $python @argv *>&1 | Tee-Object -FilePath $log -Append
-$code = $LASTEXITCODE
+# Run the refresh. The plumbing here was rebuilt three times after unattended
+# runs failed on it (never on the Python pipeline, which always finished):
+#   1. `& python ... | Tee-Object`: PowerShell 5.1 wraps every native stderr line
+#      (sklearn/soccerdata emit hundreds of thousands on --full) in an ErrorRecord
+#      — aborted on the first line under -Stop, then ground for an HOUR formatting
+#      the backlog after Python had already finished.
+#   2. `Start-Process -Wait`: hung because -Wait waits on the whole process tree,
+#      and the ESPN/FBref fetch leaves orphaned Chrome children alive.
+#   3. `cmd.exe /c "... > log 2>&1"`: cmd's quote-stripping mangled arguments.
+# What works: Start-Process with OS-level file redirection (stderr volume is
+# irrelevant and never becomes a PowerShell error) and .WaitForExit() on the
+# process itself, which returns the moment PYTHON exits, not its Chrome children.
+# Touching .Handle first is required or .ExitCode reads back empty (a known bug).
+$errlog = "$log.stderr"
+$proc = Start-Process -FilePath $python -ArgumentList $argv -NoNewWindow -PassThru `
+    -RedirectStandardOutput $log -RedirectStandardError $errlog
+$null = $proc.Handle
+$proc.WaitForExit()
+$code = $proc.ExitCode
 
 # A heartbeat a monitor (or you) can read to spot a gap without opening logs.
+# stdout carries the SUMMARY; stderr (warnings) stays in the sibling .stderr file.
 $tail = (Get-Content $log -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
 $state = [ordered]@{
     finished_at = (Get-Date).ToString('o')
@@ -74,11 +89,11 @@ $state = [ordered]@{
 $state | ConvertTo-Json -Depth 4 |
     Out-File -FilePath (Join-Path $root 'data\processed\logs\last_run.json') -Encoding utf8
 
-# Retain the 30 most recent run logs.
-Get-ChildItem $logDir -Filter 'update_*.log' |
+# Retain the 30 most recent runs (each is a .log plus its sibling .stderr).
+Get-ChildItem $logDir -Filter 'update_*.log*' |
     Sort-Object LastWriteTime -Descending |
-    Select-Object -Skip 30 |
+    Select-Object -Skip 60 |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
-if ($code -ne 0) { Write-Error "update_season.py exited $code (see $log)" }
+if ($code -ne 0) { Write-Warning "update_season.py exited $code (see $log)" }
 exit $code
