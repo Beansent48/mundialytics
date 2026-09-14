@@ -23,6 +23,8 @@ max date, so it self-invalidates.
 """
 
 import argparse
+import os
+import signal
 import subprocess
 import sys
 import time
@@ -86,6 +88,24 @@ def check_foundation_integrity(prev_rows: int | None) -> None:
           f"xG cov {df.get('home_xg', pd.Series(dtype=float)).notna().mean():.0%}", flush=True)
 
 
+def _kill_process_tree(pid: int) -> None:
+    """Terminate a process and all its descendants (only this pid's subtree).
+
+    A timed-out step's Chrome/chromedriver children survive a plain kill and pile
+    up over daily runs. On Windows `taskkill /T` walks the descendant tree by
+    parent-pid, so it reaches those grandchildren and nothing else -- an
+    unrelated browser is not a descendant of this step and is never touched.
+    """
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                       capture_output=True)
+    else:
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
 def run_step(name: str, cmd: list[str], optional: bool = False,
              timeout: int | None = None) -> bool:
     """Run one refresh step.
@@ -94,14 +114,27 @@ def run_step(name: str, cmd: list[str], optional: bool = False,
     data source, say. `timeout` caps a step that can hang rather than fail: the
     FBref fetch once ran for minutes without writing a byte, which is exactly
     the kind of stall that must not hold up the weekly run.
+
+    On timeout the WHOLE process tree is killed, not just the direct child. The
+    FBref fetch drives Chrome through soccerdata/Selenium; killing only the Python
+    child (subprocess.run's default) orphans the chromedriver + Chrome
+    grandchildren, which then accumulate across daily runs. `taskkill /T` targets
+    only descendants of this step's own process, so a user's own browser -- never
+    a descendant -- is untouched.
     """
     print(f"\n=== {name} ===", flush=True)
     t0 = time.time()
+    proc = subprocess.Popen(cmd, cwd=ROOT)
     try:
-        r = subprocess.run(cmd, cwd=ROOT, timeout=timeout)
-        ok = r.returncode == 0
+        proc.wait(timeout=timeout)
+        ok = proc.returncode == 0
     except subprocess.TimeoutExpired:
-        print(f"    TIMEOUT tras {timeout}s", flush=True)
+        _kill_process_tree(proc.pid)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        print(f"    TIMEOUT tras {timeout}s (árbol de proceso terminado)", flush=True)
         ok = False
     tag = "OK" if ok else ("FAILED (opcional, se continua)" if optional else "FAILED")
     print(f"    {tag} ({time.time()-t0:.0f}s)", flush=True)
