@@ -18,7 +18,12 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
-PREDS = ROOT / "data/processed/enriched/understat_xg/walkforward_preds.csv"
+# The DEPLOYED walk-forward cache (full served config: sharpen 1.3, lambda
+# rescale, outcome_rho -0.06, goal_temper 1.05), not the bare walkforward_preds.csv
+# that the calibration FITTING reads — benchmarking the bare engine would
+# understate what the app actually serves. Regenerate with
+# scripts/generate_deployed_walkforward.py.
+PREDS = ROOT / "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv"
 WANT = {"Date", "HomeTeam", "AwayTeam", "B365H", "B365D", "B365A",
         "B365CH", "B365CD", "B365CA", "B365>2.5", "B365<2.5", "B365C>2.5", "B365C<2.5"}
 
