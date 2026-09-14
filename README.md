@@ -87,7 +87,12 @@ ClubElo / FBref / ESPN ┘     (entity resolution)        │          │
 
 - **Goal model** — Dixon-Coles double Poisson: per-team attack/defence strengths
   fitted jointly by maximum likelihood with exponential time-decay weights, plus
-  the Dixon-Coles low-score correction and an internal Elo prior.
+  the Dixon-Coles low-score correction and an internal Elo prior. The low-score
+  correction (and a light sub-Poisson temper) are tuned walk-forward to the
+  exact-score distribution rather than hand-set — a milder draw correction fits
+  the real scorelines better on all 5 folds (scoreline log-loss 2.926 → 2.916,
+  1X2 RPS and O/U 2.5 nudged the same way, none regressing;
+  `scripts/experiment_scoreline_calibration.py`).
 - **Form** — rolling team features computed strictly walk-forward: at every
   point in the backtest, only matches already played are visible. The single
   biggest accuracy gain in the project — roughly 0.004 of RPS, improving in 5 of
@@ -101,7 +106,10 @@ ClubElo / FBref / ESPN ┘     (entity resolution)        │          │
   quietly corrupt both.
 - **Markets** — the score matrix is derived once and every market (totals,
   BTTS, half-time, correct score) is read off it, so they stay mutually
-  consistent by construction.
+  consistent by construction. The headline "likely score" is reported *per
+  outcome* (most likely home win, draw, away win), because the single global
+  modal score of a product-Poisson matrix is a near-constant low draw and says
+  little about who is favoured.
 
 Validation is **temporal out-of-sample throughout**: train on seasons up to
 year *N*, test on *N+1*. Never k-fold — shuffled folds leak the future into the
@@ -258,13 +266,17 @@ open, kept because the benchmark above depends on it.
 
 Listed because half-finished work is normal and hiding it helps nobody.
 
-- **SquadLab** — assemble a squad, real or historical, and simulate its season
-  match by match. Simulator, calendar, player-rating layer and the all-time
-  squad catalogue work. The calibration mapping player ratings onto team
-  strength is precise on attack (R² = 0.68) and only modest on defence
-  (R² = 0.35): the public stats available support a narrower defensive spread
-  than an attacking one, so closing that gap needs better data rather than a
-  better fit. Reasoning in
+- **SquadLab** — now a playable draft, not just a simulator. Open tiered packs,
+  draft an eleven from ACTUAL / PRIME / ICON player cards (with re-rolls), pick a
+  formation, and play the **real Champions League** with your side dropped into an
+  actual bracket, resolved match by match on the same engine. Simulator, calendar,
+  the historical all-time catalogue and goalkeeper-quality layer all work. The
+  card axes are mapped per position-quantile (attack/defence/creation live on
+  different scales), and the squad's rating maps onto team strength through a
+  calibration that is precise on attack (R² = 0.68) and modest on defence
+  (R² = 0.35): the public stats support a narrower defensive spread than an
+  attacking one, so closing that gap needs better data rather than a better fit.
+  Reasoning in
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
@@ -299,6 +311,12 @@ The web app has pages for matchday, single-competition simulation, league
 forecasting from the current table, player and team props, European
 competitions, results and track record, individual awards, and SquadLab —
 where you draft an eleven and play the real Champions League.
+
+Keeping it fresh is one command — `python scripts/update_season.py` downloads new
+results, rebuilds the modelling foundation (with an integrity check and rollback),
+settles the logged markets and writes the upcoming round's predictions before
+kick-off. `scripts/run_update.ps1` wraps it for a daily Windows scheduled task, so
+results and forward predictions stay current without a manual run.
 
 ## Layout
 
