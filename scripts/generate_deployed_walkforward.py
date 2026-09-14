@@ -14,7 +14,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from mundialytics.statistical_core.prediction_engine import PredictionEngine  # noqa: E402
+from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
+    DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 
 SEASONS = ["2020-2021", "2021-2022", "2022-2023", "2023-2024", "2024-2025", "2025-2026"]
 OUT = ROOT / "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv"
@@ -36,9 +37,7 @@ def main() -> None:
         if len(test) == 0 or len(train) < 500:
             continue
         t0 = time.time()
-        eng = PredictionEngine(blend_weight_gl=0.30, sharpen_gamma_1x2=1.3,
-                               rescale_lambda_to_goals=True, outcome_rho=-0.17,
-                               xg_rate_kwargs={"use_ewma": True}).fit(train)
+        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(train)
         for _, r in test.iterrows():
             p = eng.predict_match(str(r.home_team), str(r.away_team),
                                   competition=str(r.competition), neutral=bool(r.get("neutral", 0)))

@@ -341,7 +341,33 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
     # whole lets the client show the correct-score grid without a second call.
     matrix = pred.score_matrix.iloc[:7, :7]
 
+    # Headline that does NOT collapse to "1-1" for every fixture. The global modal
+    # exact score is a true-but-useless number (product-Poisson always peaks on a
+    # low draw); lead instead with the modal 1X2 outcome, the expected score, and
+    # the most likely score *conditional on each outcome*. See
+    # ScoreDistribution.most_likely_by_outcome.
+    from mundialytics.statistical_core.distributions import ScoreDistribution
+    _dist = ScoreDistribution(lambda_home=pred.lambda_home,
+                              lambda_away=pred.lambda_away,
+                              matrix=pred.score_matrix)
+    _by_outcome = _dist.most_likely_by_outcome()
+    _probs = {"home": pred.p_home_win, "draw": pred.p_draw, "away": pred.p_away_win}
+    _modal = max(_probs, key=_probs.get)
+    headline = {
+        "modalOutcome": _modal,
+        "modalOutcomeProbability": round(_probs[_modal], 4),
+        "expectedScore": f"{round(pred.lambda_home)}-{round(pred.lambda_away)}",
+        "likelyScore": _by_outcome[_modal]["score"],
+        "byOutcome": {
+            k: {"score": v["score"],
+                "outcomeProbability": round(float(v["p_outcome"]), 4),
+                "conditionalProbability": round(float(v["p_conditional"]), 4)}
+            for k, v in _by_outcome.items()
+        },
+    }
+
     base["prediction"] = {
+        "headline": headline,
         "probabilities": {
             "home": round(pred.p_home_win, 4),
             "draw": round(pred.p_draw, 4),

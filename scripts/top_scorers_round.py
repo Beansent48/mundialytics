@@ -87,7 +87,8 @@ def main() -> None:
     import joblib
     from log_upcoming_round import fetch_fixtures
     from mundialytics.ratings.elo import EloConfig, EloRater
-    from mundialytics.statistical_core.prediction_engine import PredictionEngine
+    from mundialytics.statistical_core.prediction_engine import (
+        DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 
     files = sorted(glob.glob(str(ROOT / "data/processed/cache/props_models_*.joblib")))
     if not files:
@@ -112,9 +113,7 @@ def main() -> None:
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     elo = EloRater(EloConfig(season_reset_fraction=0.40))
     elo.fit(df)
-    eng = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.3,
-                           rescale_lambda_to_goals=True, outcome_rho=-0.17,
-                           xg_rate_kwargs={"use_ewma": True}).fit(
+    eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(
         df, elo_history=pd.DataFrame(elo.history))
 
     for r in up.itertuples(index=False):

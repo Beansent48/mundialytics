@@ -80,18 +80,17 @@ def _cached_fit(tag: str, df: pd.DataFrame, build):
 def club_engine():
     from mundialytics.ratings.elo import EloConfig, EloRater
     from mundialytics.statistical_core.engine_utils import load_clubs_data
-    from mundialytics.statistical_core.prediction_engine import PredictionEngine
+    from mundialytics.statistical_core.prediction_engine import (
+        DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 
     df = load_clubs_data()
 
     def build(d):
         elo = EloRater(EloConfig(season_reset_fraction=0.40))
         elo.fit(d)
-        eng = PredictionEngine(
-            blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.3,
-            rescale_lambda_to_goals=True, outcome_rho=-0.17,
-            xg_rate_kwargs={"use_ewma": True},
-        )
+        # Deployed club config is the single source of truth in prediction_engine;
+        # never inline the kwargs here (they used to drift between call sites).
+        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
         eng.fit(d, elo_history=pd.DataFrame(elo.history))
         return eng
 

@@ -16,7 +16,8 @@ from __future__ import annotations
 import pandas as pd
 
 from mundialytics.statistical_core.competition.state import LeagueState
-from mundialytics.statistical_core.prediction_engine import PredictionEngine
+from mundialytics.statistical_core.prediction_engine import (
+    DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 
 # Default rolling history window for team strength. Older matches are already
 # down-weighted by AttackDefenseModel's time decay; this bound mainly keeps the
@@ -71,17 +72,15 @@ def train_engine_before_cutoff(
             f"before {cutoff.date() if hasattr(cutoff, 'date') else cutoff}."
         )
 
-    # blend_weight_gl default 0.30 (was 0.60): an 8-fold temporal backtest of the
-    # ELO-free engine (scripts/backtest_elo.py) found the goals-AttackDefense
-    # estimator deserves ~70% and GL ~30% — 0.30 beat 0.60 in 8/8 folds
-    # (pooled RPS -0.0022). See [[project_xg_modeling_findings]].
-    # sharpen_gamma_1x2=1.2: the raw 1X2 trio is systematically under-confident;
-    # LOFO-validated sharpening improves RPS/log-loss/ECE together (see
-    # scripts/fit_calibration.py + project_xg_modeling_findings). Only the 1X2
-    # trio is affected — the resume-MC samples from lambdas and stays untouched.
-    engine = PredictionEngine(blend_weight_gl=blend_weight_gl, sharpen_gamma_1x2=1.3,
-                              rescale_lambda_to_goals=True, outcome_rho=-0.17,
-                              xg_rate_kwargs={"use_ewma": True})
+    # Deployed club config (prediction_engine.DEPLOYED_CLUB_ENGINE_KWARGS) with
+    # blend_weight_gl overridable per caller. blend_weight_gl default 0.30 (was
+    # 0.60): an 8-fold temporal backtest of the ELO-free engine
+    # (scripts/backtest_elo.py) found the goals-AttackDefense estimator deserves
+    # ~70% and GL ~30% — 0.30 beat 0.60 in 8/8 folds (pooled RPS -0.0022). See
+    # [[project_xg_modeling_findings]]. The resume-MC samples from lambdas, so the
+    # 1X2 sharpening and outcome_rho in the shared config leave it untouched.
+    engine = PredictionEngine(
+        **{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": blend_weight_gl})
     engine.fit(train)
     return engine
 

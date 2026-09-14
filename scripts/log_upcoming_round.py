@@ -35,7 +35,8 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from mundialytics.statistical_core.prediction_engine import PredictionEngine  # noqa: E402
+from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
+    DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 from mundialytics.props.half_time import HalfTimeModel  # noqa: E402
 from mundialytics.ratings.elo import EloConfig, EloRater  # noqa: E402
 
@@ -330,9 +331,9 @@ def main() -> None:
           f"(hasta {df.date.max():%Y-%m-%d})...", flush=True)
     elo = EloRater(EloConfig(season_reset_fraction=0.40))
     elo.fit(df)
-    eng = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.3,
-                           rescale_lambda_to_goals=True, outcome_rho=-0.17,
-                           xg_rate_kwargs={"use_ewma": True})
+    # Single source of truth (prediction_engine.DEPLOYED_CLUB_ENGINE_KWARGS) so
+    # the logged track record is built with exactly what the app serves.
+    eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
     eng.fit(df, elo_history=pd.DataFrame(elo.history))
     known = set(df.home_team) | set(df.away_team)
 

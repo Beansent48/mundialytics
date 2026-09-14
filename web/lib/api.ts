@@ -25,7 +25,21 @@ export type Fixture = {
   probabilities: Probabilities | null;
 };
 
+export type Outcome = "home" | "draw" | "away";
+
+export type MatchHeadline = {
+  modalOutcome: Outcome;
+  modalOutcomeProbability: number;
+  expectedScore: string;
+  likelyScore: string;
+  byOutcome: Record<
+    Outcome,
+    { score: string; outcomeProbability: number; conditionalProbability: number }
+  >;
+};
+
 export type MatchPrediction = {
+  headline: MatchHeadline;
   probabilities: Probabilities;
   expectedGoals: { home: number; away: number };
   goals: {
