@@ -175,7 +175,17 @@ def apply_role_axes(squads, out, bz) -> None:
             if not np.isfinite(s):
                 continue
             lo, mid, hi = AXIS_SCALE.get(pos[i], AXIS_SCALE["Midfielder"])[ax]
-            v = float(np.interp(s, [0.06, 0.25, 0.50, 0.75], [lo, mid, hi, min(hi + 5, 97)]))
+            # The score `s` is the role-weighted mean of p**GAMMA (GAMMA=2.3), so
+            # s=0.59 is already the ~80th percentile of the position. The old
+            # anchors put `hi` at s=0.50 (~74th pct), which printed a 95 attack on
+            # a merely-good forward (Díaz) — well ABOVE his 88 overall, the real
+            # "locura". Retuned so `hi` sits at s=0.62 and the axis tracks the
+            # overall instead of overshooting it (an attacker reads ~his overall,
+            # the genuine top a couple above). To tighten toward STRICT, push
+            # these anchors right and/or lower the AXIS_SCALE bands.
+            v = float(np.interp(
+                s, [0.06, 0.30, 0.62, 0.85],
+                [lo, mid, hi, min(hi + 5, 96)]))
             got[ax][i] = round(cap_defense(pos[i], v) if ax == "defense" else v, 1)
     for ax in ("attack", "creation", "defense"):
         out[ax] = got[ax]
@@ -958,12 +968,18 @@ POSITION_DEF_CAP = {"Forward": 65.0}
 # the 99th) for that position and axis, interpolated through. The targets are
 # read off the icons and primes — the hand-set cards whose faces read right —
 # and set below them, because an ordinary card should not out-read a rare one.
+# (lo, mid, hi) per position/axis. lo≈p30 floor, mid≈p50, hi (at s=0.62) ≈ a
+# strong regular; the interp lifts the genuine elite a few points above hi.
+# Retuned 2026-09-14 so the printed axis TRACKS the overall instead of
+# overshooting it: an ~80th-pct attacker now reads ~his overall (Díaz 88, not
+# 95), the very top ~92. Kept coherent with overall_from_axes (a card is one
+# object). Sim reads raw_*; overall comes from role_engine_bl.
 AXIS_SCALE = {
-    "Forward":    {"attack": (52.0, 74.0, 93.0), "defense": (28.0, 42.0, 58.0),
-                   "creation": (46.0, 63.0, 86.0)},
-    "Midfielder": {"attack": (38.0, 58.0, 86.0), "defense": (40.0, 58.0, 80.0),
-                   "creation": (48.0, 68.0, 92.0)},
-    "Defender":   {"attack": (28.0, 42.0, 64.0), "defense": (52.0, 74.0, 92.0),
+    "Forward":    {"attack": (52.0, 72.0, 90.0), "defense": (28.0, 42.0, 58.0),
+                   "creation": (46.0, 63.0, 84.0)},
+    "Midfielder": {"attack": (38.0, 56.0, 84.0), "defense": (40.0, 58.0, 80.0),
+                   "creation": (48.0, 68.0, 90.0)},
+    "Defender":   {"attack": (28.0, 42.0, 64.0), "defense": (52.0, 73.0, 90.0),
                    "creation": (42.0, 60.0, 82.0)},
     "Goalkeeper": {"attack": (30.0, 40.0, 55.0), "defense": (58.0, 72.0, 89.0),
                    "creation": (38.0, 50.0, 66.0)},

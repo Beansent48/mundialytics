@@ -457,6 +457,9 @@
     "roleFormula": "Role formula",
     "otherStats": "Other measured stats",
     "noAdvancedData": "No advanced data measured for this player.",
-    "percentileNote": "Percentiles vs his position. The role weights each stat (%)."
+    "percentileNote": "Percentiles vs his position. The role weights each stat (%).",
+    "primeSeason": "The prime season",
+    "careerHighlight": "Career highlight",
+    "noHighlight": "Special card — no current data."
   }
 }

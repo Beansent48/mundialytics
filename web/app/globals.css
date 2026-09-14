@@ -333,6 +333,18 @@
   .mv-card-bronze {
     background: linear-gradient(160deg, #e6b98d, #b9793f 58%, #8a5424);
   }
+  /* Special editions have their OWN identity, not the tier colour, so a prime or
+     an icon never reads as an ordinary current card. Prime = teal ("verde
+     azulado"); icon = the only light/platinum card in a dark app, which nothing
+     else can approach by accident, so the rarest card looks the rarest. */
+  .mv-card-prime {
+    background: linear-gradient(160deg, #7ff0dd, #17a892 55%, #0c5f56);
+    color: #04201d;
+  }
+  .mv-card-icono {
+    background: linear-gradient(160deg, #ffffff, #dfe6f2 52%, #b3bed6);
+    color: #14161c;
+  }
 
   /* An empty slot keeps the silhouette so the pitch reads as eleven cards from
      the first frame — a ghost, not a dashed box. */
