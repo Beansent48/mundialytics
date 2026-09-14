@@ -201,6 +201,8 @@
     "viewCompare": "Versus our call",
     "summaryTitle": "Goals and cards",
     "assistLabel": "assist {player}",
+    "ownGoalTag": "(og)",
+    "penaltyTag": "(pen.)",
     "unattributed": "+{count} unattributed",
     "noEvents": "No goals or cards recorded",
     "noData": "This match's data hasn't been ingested yet.",

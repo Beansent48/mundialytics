@@ -4,13 +4,34 @@ import { Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import type { Match } from "@/lib/api";
+import type { Match, TimelineEventType } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 // Scoreline strings arrive from the API with a plain hyphen, but the real score
 // is rendered with an en dash elsewhere — normalise both before comparing.
 const normScore = (s: string) => s.replace(/[–—]/g, "-").replace(/\s/g, "");
+
+// The mark that leads a timeline row: a ball for any goal, a coloured card for a
+// booking. Kept small and monochrome so the minute and name carry the line.
+function EventMark({ type }: { type: TimelineEventType }) {
+  if (type === "yellow" || type === "red") {
+    return (
+      <span
+        aria-hidden
+        className={cn(
+          "inline-block h-3.5 w-2.5 shrink-0 rounded-[2px]",
+          type === "yellow" ? "bg-warning" : "bg-negative",
+        )}
+      />
+    );
+  }
+  return (
+    <span aria-hidden className="text-[0.8rem] leading-none">
+      ⚽
+    </span>
+  );
+}
 
 /**
  * A match that has been played.
@@ -278,13 +299,69 @@ export function PlayedMatch({ match }: { match: Match }) {
         </>
       ) : null}
 
-      {/* What happened: goals, assists and cards grouped per side. No minutes —
-          the settled source has none — so it reads as a summary, not a clock. */}
+      {/* What happened. A minute-by-minute timeline when ESPN gave us the clock;
+          otherwise the grouped per-side summary, which has no minutes. */}
       {!compare && events ? (
         <section>
           <h2 className="font-display mb-5 text-[1.5rem] leading-tight sm:text-[1.8rem]">
             {t("summaryTitle")}
           </h2>
+          {events.timeline && events.timeline.length ? (
+            <ol className="relative mx-auto flex max-w-xl flex-col gap-3.5 py-1 before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border">
+              {events.timeline.map((e, i) => {
+                const home = e.side === "home";
+                const goalish = e.type !== "yellow" && e.type !== "red";
+                return (
+                  <li
+                    key={`${e.minute}-${e.player}-${e.type}-${i}`}
+                    className="relative grid grid-cols-[1fr_2.6rem_1fr] items-center gap-2"
+                  >
+                    <div
+                      className={cn(
+                        "min-w-0",
+                        home ? "col-start-1 text-right" : "col-start-3 text-left",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "flex items-center gap-2",
+                          home && "flex-row-reverse",
+                        )}
+                      >
+                        <EventMark type={e.type} />
+                        <span
+                          className={cn(
+                            "truncate text-[0.88rem] font-medium",
+                            e.type === "own_goal" && "text-dim",
+                          )}
+                        >
+                          {e.player}
+                          {e.type === "own_goal" ? (
+                            <span className="ml-1 text-[0.7rem] text-dim">
+                              {t("ownGoalTag")}
+                            </span>
+                          ) : null}
+                          {e.type === "penalty" ? (
+                            <span className="ml-1 text-[0.7rem] text-muted">
+                              {t("penaltyTag")}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                      {goalish && e.assist ? (
+                        <p className="mt-0.5 truncate text-[0.75rem] text-muted">
+                          {t("assistLabel", { player: e.assist })}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="col-start-2 justify-self-center rounded-full bg-surface-3 px-1.5 py-0.5 text-center text-[0.62rem] font-semibold tabular-nums text-muted">
+                      {e.minute}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-border bg-border">
             {(
               [
@@ -372,6 +449,7 @@ export function PlayedMatch({ match }: { match: Match }) {
               );
             })}
           </div>
+          )}
         </section>
       ) : null}
 

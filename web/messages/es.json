@@ -201,6 +201,8 @@
     "viewCompare": "Frente a lo que dijimos",
     "summaryTitle": "Goles y tarjetas",
     "assistLabel": "asist. {player}",
+    "ownGoalTag": "(en propia)",
+    "penaltyTag": "(pen.)",
     "unattributed": "+{count} sin goleador",
     "noEvents": "Sin goles ni tarjetas registrados",
     "noData": "Los datos de este partido aún no se han cargado.",

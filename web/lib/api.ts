@@ -69,7 +69,7 @@ export type ActualStats = {
   stats: { key: string; home: number; away: number }[];
 };
 
-/** Who did what, grouped per side. No minutes — the source has none. */
+/** Who did what, grouped per side. No minutes — the aggregated source has none. */
 export type SideEvents = {
   goals: { player: string; count: number }[];
   assists: { player: string; count: number }[];
@@ -78,7 +78,30 @@ export type SideEvents = {
   unattributed: number;
 };
 
-export type MatchEvents = { home: SideEvents; away: SideEvents };
+export type TimelineEventType =
+  | "goal"
+  | "own_goal"
+  | "penalty"
+  | "yellow"
+  | "red";
+
+/** One event on the minute-by-minute timeline, when ESPN supplied the clock. */
+export type TimelineEvent = {
+  /** Match clock as shown, stoppage included ("45'+2'"). */
+  minute: string;
+  side: "home" | "away";
+  type: TimelineEventType;
+  player: string;
+  /** Assister, for goals that had one. */
+  assist: string | null;
+};
+
+export type MatchEvents = {
+  home: SideEvents;
+  away: SideEvents;
+  /** Minute-ordered feed; null when the match has no per-event source. */
+  timeline: TimelineEvent[] | null;
+};
 
 export type Match = Fixture & {
   prediction: MatchPrediction;
