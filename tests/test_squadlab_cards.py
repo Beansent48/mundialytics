@@ -393,11 +393,22 @@ def test_every_formation_is_eleven_players(formation):
 
 
 # ── the Champions field ────────────────────────────────────────────────────────
+def _require_champions_data() -> None:
+    """The draw and the Elo table are external/generated data, not in the repo,
+    so a clean checkout (CI) skips these instead of failing on a missing file —
+    the same contract `_cards()` uses for the catalogue."""
+    from mundialytics.statistical_core.squadlab.champions import CLUBELO, RAW_CL
+
+    if not RAW_CL.exists() or not CLUBELO.exists():
+        pytest.skip("Champions field data not available")
+
+
 def test_the_champions_field_is_thirty_six_teams_of_eight_games():
     """35 teams is not a Champions League: the league phase and the whole
     bracket are built on the field being exactly 36."""
     from mundialytics.statistical_core.squadlab.champions import load_field
 
+    _require_champions_data()
     field = load_field()
     assert len(field["elo"]) == 36, sorted(field["elo"])
     played = pd.concat([field["fixtures"]["home"], field["fixtures"]["away"]]).value_counts()
@@ -408,6 +419,7 @@ def test_the_squad_replaces_a_random_side_and_inherits_its_draw():
     from mundialytics.statistical_core.squadlab.champions import ChampionsRun, load_field
 
     df = _cards()
+    _require_champions_data()
     field = load_field()
     xi = [c.to_profile() for c in C.best_eleven(df, "real madrid")]
     run = ChampionsRun("Tu Equipo", xi, 1800.0, field, rng=np.random.default_rng(2))
@@ -427,6 +439,7 @@ def test_a_full_run_produces_a_champion_and_your_own_matches():
     from mundialytics.statistical_core.squadlab.champions import ChampionsRun, load_field
 
     df = _cards()
+    _require_champions_data()
     field = load_field()
     xi = [c.to_profile() for c in C.best_eleven(df, "bayern munich")]
     res = ChampionsRun("Tu Equipo", xi, 1900.0, field,
@@ -451,6 +464,7 @@ def test_squad_elo_is_monotone_in_squad_quality():
     from mundialytics.statistical_core.squadlab.champions import squad_elo_scale
 
     df = _cards()
+    _require_champions_data()
     elo = pd.read_csv(ROOT / "data/processed/clubelo_local.csv").dropna(subset=["club", "elo"])
     scale = squad_elo_scale(None, df, dict(zip(elo["club"], elo["elo"])))
     prev = -1e9
