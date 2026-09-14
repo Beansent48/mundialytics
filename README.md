@@ -33,29 +33,31 @@ Where the engine sits, in ranked probability score (lower is better):
 |---|---|
 | Uniform 1/3 — no information at all | 0.2356 |
 | League base rates — home advantage only | 0.2308 |
-| **This engine** | **0.2025** |
+| **This engine** | **0.2008** |
 | Bet365 closing odds | 0.1946 |
 
 Between knowing nothing and the best-informed price on the market there is
-0.0362 of RPS. **The engine covers 78% of it.**
+0.0362 of RPS. **The engine covers 83% of it.**
 
 Head to head with the closing line:
 
 | | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
 |---|---|---|---|
-| This engine | 0.2025 | 0.9933 | 0.6806 |
+| This engine | 0.2008 | 0.9881 | 0.6795 |
 | Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
-| gap | +0.0080 | +0.0253 | +0.0095 |
+| gap | +0.0062 | +0.0201 | +0.0085 |
 
-It does **not** beat the closing line — about 4% behind, and the gap holds in
-every season and every league (worst Premier League +0.0099, best Bundesliga
-+0.0060), which is what makes it a ceiling rather than noise. Bet365's closing
-price carries injury news, confirmed lineups and the weight of informed money;
-this engine has public data and nothing else.
+It does **not** beat the closing line — about 3% behind, and the gap holds in
+every season and every league (worst Premier League +0.0083, best Bundesliga and
+LaLiga +0.0039), which is what makes it a ceiling rather than noise. Bet365's
+closing price carries injury news, confirmed lineups and the weight of informed
+money; this engine has public data and nothing else.
 
-Reproduce all of it:
+Reproduce all of it (the benchmark scores the deployed walk-forward cache, so
+generate it first):
 
 ```bash
+python scripts/generate_deployed_walkforward.py   # writes the deployed cache
 python scripts/benchmark_vs_bet365.py
 ```
 
@@ -69,7 +71,7 @@ the time is another. It is:
 Home and away curves track the diagonal across the whole range. Draws never get
 predicted above ~35% — a known property of the sport, not a defect: draws are
 genuinely rarely the favourite. The figure scores all 10,403 walk-forward
-predictions, so its RPS reads 0.2029; the benchmark above uses the 10,080 of them
+predictions, so its RPS reads 0.2013; the benchmark above uses the 10,080 of them
 that have Bet365 odds attached. Regenerate with
 `python scripts/plot_calibration.py`.
 
@@ -140,7 +142,7 @@ Recorded because negative results are the expensive part of the project:
 
 ## Conclusions
 
-- **The club engine works.** Calibrated 1X2 probabilities, 78% of the way from
+- **The club engine works.** Calibrated 1X2 probabilities, 83% of the way from
   an uninformed baseline to the closing line, validated out-of-sample in time.
   That is the part with an external yardstick behind it.
 - **As a betting edge, it does not.** That question was asked properly and the

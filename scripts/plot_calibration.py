@@ -19,7 +19,9 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-PREDS = ROOT / "data/processed/enriched/understat_xg/walkforward_preds.csv"
+# The DEPLOYED cache (full served config), same file the Bet365 benchmark reads,
+# so the picture and the headline RPS describe the model the app actually serves.
+PREDS = ROOT / "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv"
 OUT = ROOT / "docs/img/calibration_1x2.png"
 
 # dataviz reference palette, categorical slots 1-3 (validated all-pairs, light)
