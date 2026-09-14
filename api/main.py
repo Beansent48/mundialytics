@@ -251,18 +251,81 @@ def _scorers(pp, home: str, away: str, pred, n: int = 3) -> dict | None:
 _MARKET_ORDER = ["corners", "yellows", "shots", "sot", "fouls", "booking_pts"]
 
 
-def _team_props(tp, home: str, away: str, pred) -> list[dict] | None:
-    if tp is None:
+def _stat_range(lam, disp, target: float = 0.5) -> dict | None:
+    """The tightest integer band around the mode holding >= `target` of the mass.
+
+    Built from the same Negative-Binomial (mean lam, variance disp*lam) the
+    over/under prices use, so the headline range and the line breakdown tell one
+    story rather than two. Returns {lo, hi, p} — the range and the probability
+    the count lands inside it. `disp` <= ~1.1 falls back to Poisson.
+    """
+    import numpy as np
+    from scipy.stats import nbinom, poisson
+
+    if lam is None:
         return None
-    try:
-        fx = tp.predict_fixture(
-            home, away, lam_home=pred.lambda_home, lam_away=pred.lambda_away
-        )
-    except Exception:
+    lam = float(np.clip(float(lam), 0.2, 40.0))
+    disp = float(disp) if disp and float(disp) > 0 else 1.0
+    sd = (lam * max(disp, 1.0)) ** 0.5
+    cap = int(lam + 8 * sd + 12)
+    n = np.arange(cap + 1)
+    if disp > 1.1:
+        r = lam / (disp - 1.0)
+        pmf = nbinom.pmf(n, r, 1.0 / disp)
+    else:
+        pmf = poisson.pmf(n, lam)
+    s = float(pmf.sum())
+    if s <= 0:
         return None
+    pmf = pmf / s
+    mode = int(pmf.argmax())
+    lo = hi = mode
+    total = float(pmf[mode])
+    while total < target and (lo > 0 or hi < cap):
+        left = float(pmf[lo - 1]) if lo > 0 else -1.0
+        right = float(pmf[hi + 1]) if hi < cap else -1.0
+        if right >= left:
+            hi += 1
+            total += right
+        else:
+            lo -= 1
+            total += left
+    return {"lo": int(lo), "hi": int(hi), "p": round(total, 4)}
+
+
+# advanced-stat key (what the UI shows) -> team-props market (where dispersion lives)
+_STAT_MARKET = {
+    "shots": "shots", "shotsOnTarget": "sot", "corners": "corners",
+    "fouls": "fouls", "yellows": "yellows",
+}
+
+
+def _expected_stats(pred, fx: dict | None) -> list[dict]:
+    """Per-side expected shots/SoT/corners/fouls/cards, each with a most-probable
+    range. The point estimate is the engine's; the range wraps it with the team-
+    props dispersion, so it reads as "≈13, most likely 10–15" rather than a bare
+    number the eye can't calibrate."""
+    vals = {
+        "shots": (pred.expected_shots_home, pred.expected_shots_away),
+        "shotsOnTarget": (pred.expected_sot_home, pred.expected_sot_away),
+        "corners": (pred.expected_corners_home, pred.expected_corners_away),
+        "fouls": (pred.expected_fouls_home, pred.expected_fouls_away),
+        "yellows": (pred.expected_yellows_home, pred.expected_yellows_away),
+    }
+    out = []
+    for key, (h, a) in vals.items():
+        disp = float(((fx or {}).get(_STAT_MARKET[key]) or {}).get("dispersion") or 1.0)
+        out.append({
+            "key": key,
+            "home": round(float(h), 1), "away": round(float(a), 1),
+            "homeRange": _stat_range(h, disp), "awayRange": _stat_range(a, disp),
+        })
+    return out
+
+
+def _team_props(fx: dict | None) -> list[dict] | None:
     if not fx:
         return None
-
     markets = []
     for key in _MARKET_ORDER:
         d = fx.get(key)
@@ -274,6 +337,8 @@ def _team_props(tp, home: str, away: str, pred) -> list[dict] | None:
                 "lambdaHome": d.get("lambda_home"),
                 "lambdaAway": d.get("lambda_away"),
                 "lambdaTotal": d.get("lambda_total"),
+                # the headline: the range the match total most likely lands in
+                "range": _stat_range(d.get("lambda_total"), d.get("dispersion") or 1.0),
                 # each line carries its dominant side: a 26% over is a 74% under,
                 # and showing only the over hides half the information
                 "lines": [
@@ -429,30 +494,28 @@ def _events(row, meta: dict, season: str, df) -> dict | None:
     an own goal, or a name the source never mapped — are surfaced honestly as
     `unattributed` rather than hidden.
     """
-    played = df[
-        (df["competition"] == meta["id"])
-        & (df["season"] == season)
-        & (df["home_team"] == row.home_team)
-        & (df["away_team"] == row.away_team)
-    ]
-    if played.empty:
-        return None
-    r = played.iloc[0]
-    match_date = pd.to_datetime(r.get("date"), errors="coerce")
+    # Read date and score from the calendar row, not the foundation. The
+    # foundation (football-data) lags ESPN by a matchday or two, so keying off it
+    # left the freshest matches -- the ones most likely to be opened -- with
+    # neither summary nor timeline even though ESPN already had every event.
+    match_date = pd.to_datetime(getattr(row, "date", None), errors="coerce")
     if pd.isna(match_date):
         return None
     date_str = match_date.strftime("%Y-%m-%d")
+    home_l, away_l = str(row.home_team).lower(), str(row.away_team).lower()
+    home_goals = int(row.home_goals) if pd.notna(row.home_goals) else 0
+    away_goals = int(row.away_goals) if pd.notna(row.away_goals) else 0
 
     pa = _player_actuals(df)
-    if not len(pa):
-        return None
-    home_l, away_l = str(row.home_team).lower(), str(row.away_team).lower()
-    day = pa[(pa["fecha"] == date_str) & (pa["eq"].isin([home_l, away_l]))]
-    if day.empty:
-        return None
+    day = (pa[(pa["fecha"] == date_str) & (pa["eq"].isin([home_l, away_l]))]
+           if len(pa) else pa)
 
     def side(team_l: str, goals_scored: int) -> dict:
-        s = day[day["eq"] == team_l]
+        s = day[day["eq"] == team_l] if len(day) else day
+        if s.empty:
+            # no per-player rows for this side (aggregate not ingested yet): stay
+            # empty rather than fabricate `goals_scored` unattributed goals
+            return {"goals": [], "assists": [], "yellows": [], "unattributed": 0}
         goals = sorted(
             (
                 {"player": str(p.player), "count": int(p.goals)}
@@ -476,8 +539,8 @@ def _events(row, meta: dict, season: str, df) -> dict | None:
             "unattributed": max(0, int(goals_scored) - attributed),
         }
 
-    home = side(home_l, int(r["home_goals"]))
-    away = side(away_l, int(r["away_goals"]))
+    home = side(home_l, home_goals)
+    away = side(away_l, away_goals)
     timeline = _timeline(row, date_str, df)
     empty = (
         not any(home[k] or away[k] for k in ("goals", "assists", "yellows"))
@@ -494,6 +557,19 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
     pred = _predict(row.home_team, row.away_team, meta["id"])
     if pred is None:
         raise HTTPException(503, "The model could not price this fixture")
+
+    # Team-stat distributions once: they feed both the expected-stat ranges below
+    # and the team-props card, so they must be ready before the payload is built.
+    tp, pp = props_models()
+    fx = None
+    if tp is not None:
+        try:
+            fx = tp.predict_fixture(
+                row.home_team, row.away_team,
+                lam_home=pred.lambda_home, lam_away=pred.lambda_away,
+            )
+        except Exception:
+            fx = None
 
     # The score matrix is the object every other market is read from; sending it
     # whole lets the client show the correct-score grid without a second call.
@@ -547,23 +623,11 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
             for i in pred.top_scorelines[:8]
         ],
         "scoreMatrix": [[round(float(v), 5) for v in r] for r in matrix.values],
-        "expectedStats": [
-            {"key": "shots", "home": round(pred.expected_shots_home, 1),
-             "away": round(pred.expected_shots_away, 1)},
-            {"key": "shotsOnTarget", "home": round(pred.expected_sot_home, 1),
-             "away": round(pred.expected_sot_away, 1)},
-            {"key": "corners", "home": round(pred.expected_corners_home, 1),
-             "away": round(pred.expected_corners_away, 1)},
-            {"key": "fouls", "home": round(pred.expected_fouls_home, 1),
-             "away": round(pred.expected_fouls_away, 1)},
-            {"key": "yellows", "home": round(pred.expected_yellows_home, 1),
-             "away": round(pred.expected_yellows_away, 1)},
-        ],
+        "expectedStats": _expected_stats(pred, fx),
     }
 
-    tp, pp = props_models()
     base["scorers"] = _scorers(pp, row.home_team, row.away_team, pred)
-    base["teamProps"] = _team_props(tp, row.home_team, row.away_team, pred)
+    base["teamProps"] = _team_props(fx)
     base["actual"] = _actual(row, meta, season, df) if base["played"] else None
     base["events"] = _events(row, meta, season, df) if base["played"] else None
     return base

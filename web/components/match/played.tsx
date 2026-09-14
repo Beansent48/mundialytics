@@ -4,32 +4,72 @@ import { Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import type { Match, TimelineEventType } from "@/lib/api";
+import type { Match, StatRange, TimelineEventType } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
+
+// One side of the stat comparison: did the real value land in the range we called
+// most likely, and with what probability. Green tick when it did, amber cross when
+// the match went somewhere we thought less likely.
+function RangeHit({ actual, range }: { actual: number; range: StatRange | null }) {
+  if (!range) return <span className="text-[0.68rem] text-dim">—</span>;
+  const inside = actual >= range.lo && actual <= range.hi;
+  const Icon = inside ? Check : X;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[0.62rem] font-semibold tabular-nums",
+        inside ? "bg-positive/15 text-positive" : "bg-warning/15 text-warning",
+      )}
+    >
+      <Icon className="h-3 w-3 shrink-0" strokeWidth={2.75} aria-hidden />
+      {range.lo}–{range.hi}
+      <span className="font-medium opacity-70">{pct(range.p)}</span>
+    </span>
+  );
+}
 // Scoreline strings arrive from the API with a plain hyphen, but the real score
 // is rendered with an en dash elsewhere — normalise both before comparing.
 const normScore = (s: string) => s.replace(/[–—]/g, "-").replace(/\s/g, "");
 
-// The mark that leads a timeline row: a ball for any goal, a coloured card for a
-// booking. Kept small and monochrome so the minute and name carry the line.
+// The mark that leads a timeline row: a drawn football for any goal, a crisp
+// card for a booking. A real vector, not an emoji, so it renders identically on
+// every device and sits at a size the layout controls.
 function EventMark({ type }: { type: TimelineEventType }) {
   if (type === "yellow" || type === "red") {
     return (
       <span
         aria-hidden
         className={cn(
-          "inline-block h-3.5 w-2.5 shrink-0 rounded-[2px]",
+          "inline-block h-[15px] w-[11px] shrink-0 rounded-[2.5px] shadow-sm",
           type === "yellow" ? "bg-warning" : "bg-negative",
         )}
       />
     );
   }
+  const own = type === "own_goal";
   return (
-    <span aria-hidden className="text-[0.8rem] leading-none">
-      ⚽
-    </span>
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className={cn("h-[15px] w-[15px] shrink-0", own ? "text-dim" : "text-text")}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinejoin="round"
+    >
+      <circle cx="8" cy="8" r="6.6" />
+      <path
+        d="M8 5.6l2.28 1.66-.87 2.68H6.59l-.87-2.68z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M8 5.6V1.4M10.28 7.26l3.9-1.27M9.41 9.94l2.4 3.3M6.59 9.94l-2.4 3.3M5.72 7.26l-3.9-1.27"
+        strokeWidth="0.9"
+      />
+    </svg>
   );
 }
 
@@ -307,56 +347,58 @@ export function PlayedMatch({ match }: { match: Match }) {
             {t("summaryTitle")}
           </h2>
           {events.timeline && events.timeline.length ? (
-            <ol className="relative mx-auto flex max-w-xl flex-col gap-3.5 py-1 before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border">
+            <ol className="relative mx-auto flex max-w-lg flex-col gap-4 py-1 before:absolute before:inset-y-1 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border">
               {events.timeline.map((e, i) => {
                 const home = e.side === "home";
                 const goalish = e.type !== "yellow" && e.type !== "red";
                 return (
                   <li
                     key={`${e.minute}-${e.player}-${e.type}-${i}`}
-                    className="relative grid grid-cols-[1fr_2.6rem_1fr] items-center gap-2"
+                    className="relative grid grid-cols-[1fr_2.75rem_1fr] items-start gap-x-2"
                   >
-                    <div
-                      className={cn(
-                        "min-w-0",
-                        home ? "col-start-1 text-right" : "col-start-3 text-left",
-                      )}
-                    >
+                    <div className={cn("min-w-0", home ? "col-start-1" : "col-start-3")}>
                       <div
                         className={cn(
-                          "flex items-center gap-2",
-                          home && "flex-row-reverse",
+                          "flex items-center gap-1.5",
+                          home ? "flex-row-reverse" : "flex-row",
                         )}
                       >
                         <EventMark type={e.type} />
                         <span
                           className={cn(
-                            "truncate text-[0.88rem] font-medium",
+                            "truncate text-[0.9rem] font-medium leading-5",
                             e.type === "own_goal" && "text-dim",
                           )}
                         >
                           {e.player}
                           {e.type === "own_goal" ? (
-                            <span className="ml-1 text-[0.7rem] text-dim">
+                            <span className="ml-1 text-[0.7rem] font-normal text-dim">
                               {t("ownGoalTag")}
                             </span>
                           ) : null}
                           {e.type === "penalty" ? (
-                            <span className="ml-1 text-[0.7rem] text-muted">
+                            <span className="ml-1 text-[0.7rem] font-normal text-muted">
                               {t("penaltyTag")}
                             </span>
                           ) : null}
                         </span>
                       </div>
                       {goalish && e.assist ? (
-                        <p className="mt-0.5 truncate text-[0.75rem] text-muted">
+                        <p
+                          className={cn(
+                            "mt-0.5 truncate text-[0.76rem] text-muted",
+                            home ? "pr-[1.375rem] text-right" : "pl-[1.375rem]",
+                          )}
+                        >
                           {t("assistLabel", { player: e.assist })}
                         </p>
                       ) : null}
                     </div>
-                    <span className="col-start-2 justify-self-center rounded-full bg-surface-3 px-1.5 py-0.5 text-center text-[0.62rem] font-semibold tabular-nums text-muted">
-                      {e.minute}
-                    </span>
+                    <div className="col-start-2 flex justify-center">
+                      <span className="z-[1] inline-flex min-w-[2.1rem] justify-center rounded-full border border-border bg-surface px-1.5 py-0.5 text-[0.64rem] font-semibold leading-4 tabular-nums text-muted">
+                        {e.minute}
+                      </span>
+                    </div>
                   </li>
                 );
               })}
@@ -392,9 +434,7 @@ export function PlayedMatch({ match }: { match: Match }) {
                             right && "flex-row-reverse",
                           )}
                         >
-                          <span aria-hidden className="text-[0.8rem]">
-                            ⚽
-                          </span>
+                          <EventMark type="goal" />
                           <span className="font-medium">{g.player}</span>
                           {g.count > 1 ? (
                             <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[0.62rem] font-semibold tabular-nums text-muted">
@@ -410,9 +450,7 @@ export function PlayedMatch({ match }: { match: Match }) {
                             right && "flex-row-reverse",
                           )}
                         >
-                          <span aria-hidden className="text-[0.8rem]">
-                            ⚽
-                          </span>
+                          <EventMark type="goal" />
                           <span>{t("unattributed", { count: s.unattributed })}</span>
                         </li>
                       ) : null}
@@ -461,7 +499,6 @@ export function PlayedMatch({ match }: { match: Match }) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {actual.stats.map((s) => {
               const p = predByKey.get(s.key);
-              const err = p ? Math.abs(p.home - s.home) + Math.abs(p.away - s.away) : 0;
               return (
                 <div
                   key={s.key}
@@ -485,33 +522,26 @@ export function PlayedMatch({ match }: { match: Match }) {
                           {p.home}
                         </span>
                         <span className="text-[0.55rem] font-semibold uppercase tracking-[0.08em]">
-                          {t("predicted")}
+                          {t("mostLikely")}
                         </span>
                         <span className="text-[0.82rem] font-medium tabular-nums">
                           {p.away}
                         </span>
                       </div>
-                      <p className="mt-2 text-center">
-                        <span
-                          className={cn(
-                            "inline-block rounded-full px-2 py-0.5 text-[0.6rem] font-semibold tabular-nums",
-                            err <= 1
-                              ? "bg-positive/15 text-positive"
-                              : err <= 3
-                                ? "bg-warning/15 text-warning"
-                                : "bg-negative/15 text-negative",
-                          )}
-                        >
-                          {t("deltaLabel", { value: err.toFixed(1) })}
-                        </span>
-                      </p>
+                      {/* did the real value land in the range we called most likely? */}
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <RangeHit actual={s.home} range={p.homeRange} />
+                        <RangeHit actual={s.away} range={p.awayRange} />
+                      </div>
                     </div>
                   ) : null}
                 </div>
               );
             })}
           </div>
-          <p className="mt-4 text-[0.78rem] text-dim">{t("statsNote")}</p>
+          <p className="mt-4 text-[0.78rem] text-dim">
+            {compare ? t("rangeNote") : t("statsNote")}
+          </p>
         </section>
       ) : null}
 
