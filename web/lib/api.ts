@@ -51,7 +51,19 @@ export type MatchPrediction = {
   };
   scorelines: { score: string; p: number }[];
   scoreMatrix: number[][];
-  expectedStats: { key: string; home: number; away: number }[];
+  expectedStats: ExpectedStat[];
+};
+
+/** Most-probable integer band [lo, hi] and the probability the count lands in it. */
+export type StatRange = { lo: number; hi: number; p: number };
+
+export type ExpectedStat = {
+  key: string;
+  home: number;
+  away: number;
+  /** Most-probable range per side; null when the model can't price the stat. */
+  homeRange: StatRange | null;
+  awayRange: StatRange | null;
 };
 
 export type Scorer = { player: string; p: number; minutes: number };
@@ -61,6 +73,8 @@ export type TeamMarket = {
   lambdaHome: number | null;
   lambdaAway: number | null;
   lambdaTotal: number | null;
+  /** Headline: the range the match total most likely falls in. */
+  range: StatRange | null;
   lines: { line: number; over: number; side: "over" | "under"; p: number }[];
 };
 

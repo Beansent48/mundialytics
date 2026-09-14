@@ -186,7 +186,9 @@
     "goalsTitle": "Mercados de goles",
     "scorelinesTitle": "Marcadores más probables",
     "teamTitle": "Córners, tarjetas y tiros",
-    "teamNote": "cada línea muestra su lado dominante",
+    "teamNote": "rango más probable; despliega para ver todas las líneas",
+    "mostLikely": "Más probable",
+    "breakdown": "Ver todas las líneas",
     "markets": {
       "corners": "Córners",
       "yellows": "Tarjetas amarillas",
@@ -222,6 +224,7 @@
     "error": "error de {value}",
     "deltaLabel": "Δ {value}",
     "statsNote": "Estadísticas reales del dataset liquidado, junto a lo que el modelo esperaba antes del pitido inicial.",
+    "rangeNote": "✓ indica que el valor real cayó dentro del rango más probable que dimos; el % es la probabilidad que le asignábamos.",
     "metaUpcoming": "{home} vs {away}: {h}% local, {d}% empate, {a}% visitante. Probabilidades de un modelo ajustado sobre 45.938 partidos.",
     "metaPlayed": "{home} {score} {away} — el resultado junto a lo que nuestro modelo predijo antes del partido."
   },

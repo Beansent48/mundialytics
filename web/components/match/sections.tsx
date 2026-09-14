@@ -171,31 +171,70 @@ export async function TeamMarkets({ match }: { match: Match }) {
                 </p>
               ) : null}
             </div>
-            <ul className="mt-4 flex flex-col gap-2.5">
-              {m.lines.map((ln) => (
-                <li key={ln.line} className="flex items-center gap-3">
-                  <span className="w-14 shrink-0 text-[0.78rem] font-semibold uppercase">
-                    {ln.side === "over" ? "O" : "U"} {ln.line}
-                  </span>
-                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
-                    <span
-                      className={cn(
-                        "block h-full rounded-full",
-                        ln.p >= 0.62
-                          ? "bg-positive"
-                          : ln.side === "over"
-                            ? "bg-brand"
-                            : "bg-warning",
-                      )}
-                      style={{ width: `${ln.p * 100}%` }}
-                    />
-                  </span>
-                  <span className="w-11 text-right text-[0.8rem] font-medium">
-                    {pct(ln.p)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+
+            {/* Headline: the range the total most likely lands in, and how much
+                of the distribution sits inside it. */}
+            {m.range ? (
+              <div className="mt-3.5 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[0.62rem] font-semibold uppercase tracking-[0.09em] text-dim">
+                    {t("mostLikely")}
+                  </p>
+                  <p className="mt-1 text-[1.55rem] font-semibold leading-none tabular-nums">
+                    {m.range.lo}
+                    <span className="mx-0.5 text-muted">–</span>
+                    {m.range.hi}
+                  </p>
+                </div>
+                <span className="rounded-full bg-brand/12 px-2.5 py-1 text-[0.78rem] font-semibold tabular-nums text-brand">
+                  {pct(m.range.p)}
+                </span>
+              </div>
+            ) : null}
+
+            {/* The full over/under breakdown, folded away by default. */}
+            <details className="group mt-4 border-t border-border pt-3">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-[0.76rem] font-medium text-muted transition-colors hover:text-text [&::-webkit-details-marker]:hidden">
+                {t("breakdown")}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 16 16"
+                  className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 6l4 4 4-4" />
+                </svg>
+              </summary>
+              <ul className="mt-3 flex flex-col gap-2.5">
+                {m.lines.map((ln) => (
+                  <li key={ln.line} className="flex items-center gap-3">
+                    <span className="w-14 shrink-0 text-[0.78rem] font-semibold uppercase">
+                      {ln.side === "over" ? "O" : "U"} {ln.line}
+                    </span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                      <span
+                        className={cn(
+                          "block h-full rounded-full",
+                          ln.p >= 0.62
+                            ? "bg-positive"
+                            : ln.side === "over"
+                              ? "bg-brand"
+                              : "bg-warning",
+                        )}
+                        style={{ width: `${ln.p * 100}%` }}
+                      />
+                    </span>
+                    <span className="w-11 text-right text-[0.8rem] font-medium">
+                      {pct(ln.p)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           </div>
         ))}
       </div>

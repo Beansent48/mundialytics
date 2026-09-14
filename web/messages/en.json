@@ -186,7 +186,9 @@
     "goalsTitle": "Goal markets",
     "scorelinesTitle": "Likeliest scorelines",
     "teamTitle": "Corners, cards and shots",
-    "teamNote": "each line shows its dominant side",
+    "teamNote": "most likely range; expand for every line",
+    "mostLikely": "Most likely",
+    "breakdown": "Show all lines",
     "markets": {
       "corners": "Corners",
       "yellows": "Yellow cards",
@@ -222,6 +224,7 @@
     "error": "off by {value}",
     "deltaLabel": "Δ {value}",
     "statsNote": "Real statistics from the settled dataset, next to what the model expected before kick-off.",
+    "rangeNote": "✓ means the real value landed inside the range we called most likely; the % is the probability we gave it.",
     "metaUpcoming": "{home} vs {away}: {h}% home, {d}% draw, {a}% away. Probabilities from a model fitted on 45,938 matches.",
     "metaPlayed": "{home} {score} {away} — the result next to what our model predicted before kick-off."
   },
