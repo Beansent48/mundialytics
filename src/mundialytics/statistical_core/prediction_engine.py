@@ -29,6 +29,35 @@ from mundialytics.features.team_features import build_goal_training_frame
 from mundialytics.statistical_core.schemas import canonical_name
 
 
+# ── Deployed club-engine configuration (single source of truth) ────────────────
+# Every place that serves club predictions — the HTTP API, the pre-kickoff
+# logger, the Resultados walk-forward cache, the competition layer, the round's
+# scorer ranking — MUST build the engine from this one dict, so the served
+# probabilities, the logged track record and the published backtest can never
+# quietly diverge by a stray kwarg. Before this existed the config was
+# copy-pasted across ~9 call sites and outcome_rho was updated in some but not
+# all of them.
+#
+# outcome_rho -0.06 + goal_temper 1.05 (2026-09-14): the old -0.06 replaced a
+# -0.17 that over-corrected toward draws — it fits the exact-score distribution
+# better on all 5 walk-forward folds (scoreline log-loss 2.9258->2.916) while
+# nudging 1X2 RPS 0.2022->0.2019 and O/U2.5 log-loss 0.6795->0.6785, none
+# regressing. See scripts/experiment_scoreline_calibration.py.
+#
+# Override a single field with dict-unpacking, e.g. a different blend weight:
+#     PredictionEngine(**{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": w})
+# PredictionEngine copies xg_rate_kwargs internally, so sharing this dict is safe.
+DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
+    "blend_weight_gl": 0.30,
+    "ad_rho": -0.07,
+    "sharpen_gamma_1x2": 1.3,
+    "rescale_lambda_to_goals": True,
+    "outcome_rho": -0.06,
+    "goal_temper": 1.05,
+    "xg_rate_kwargs": {"use_ewma": True},
+}
+
+
 # ── Match prediction dataclass ─────────────────────────────────────────────────
 
 @dataclass

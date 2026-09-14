@@ -15,7 +15,10 @@ export async function Verdict({ match }: { match: Match }) {
   const t = await getTranslations("match");
   const p = match.prediction.probabilities;
   const xg = match.prediction.expectedGoals;
-  const top = match.prediction.scorelines[0];
+  // The most likely score *given the leading outcome* — not the global modal
+  // exact score, which is a near-constant low draw (~1-1) for every fixture and
+  // reads as "the model has no opinion". See the API headline builder.
+  const likely = match.prediction.headline.likelyScore;
 
   const outcomes = [
     { key: "home", label: match.home, p: p.home, color: "var(--home)" },
@@ -61,7 +64,7 @@ export async function Verdict({ match }: { match: Match }) {
       <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-border bg-border sm:grid-cols-4">
         {[
           { k: t("expectedGoals"), v: `${xg.home.toFixed(2)} – ${xg.away.toFixed(2)}` },
-          { k: t("likeliestScore"), v: top ? top.score : "—" },
+          { k: t("likeliestScore"), v: likely },
           { k: t("over25"), v: pct(match.prediction.goals.over25) },
           { k: t("btts"), v: pct(match.prediction.goals.btts) },
         ].map((m) => (

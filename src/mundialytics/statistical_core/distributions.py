@@ -115,6 +115,43 @@ class ScoreDistribution:
                 rows.append({"score": f"{h}-{a}", "probability": float(self.matrix.loc[h, a])})
         return sorted(rows, key=lambda x: float(x["probability"]), reverse=True)[:n]
 
+    def most_likely_by_outcome(self) -> dict[str, dict[str, float | str]]:
+        """Most likely exact score *within* each 1X2 region.
+
+        The global argmax of a product-Poisson matrix is almost always 1-1 or
+        1-0 — a true but uninformative headline, because the mass is spread over
+        ~40 cells and even a heavy favourite peaks below ~12% on any single
+        score. Users read "1-1" as "the model has no opinion", when the 1X2
+        marginal often has a clear favourite. So report the modal score
+        *conditional* on each outcome (home win / draw / away win): "if the home
+        side win it's probably 2-1", alongside that outcome's probability. Each
+        entry carries the outcome probability (``p_outcome``), the score's own
+        share of the whole matrix (``p_score``) and its share within the region
+        (``p_conditional``)."""
+        values = self.matrix.to_numpy(dtype=float)
+        idx = self.matrix.index.to_numpy(dtype=int)
+        cols = self.matrix.columns.to_numpy(dtype=int)
+        h = idx[:, None]
+        a = cols[None, :]
+        regions = {
+            "home": (h > a, self.p_home_win),
+            "draw": (h == a, self.p_draw),
+            "away": (h < a, self.p_away_win),
+        }
+        out: dict[str, dict[str, float | str]] = {}
+        for name, (mask, p_outcome) in regions.items():
+            region = np.where(mask, values, -1.0)
+            flat = int(np.argmax(region))
+            i, j = divmod(flat, region.shape[1])
+            p_score = float(values[i, j])
+            out[name] = {
+                "score": f"{int(idx[i])}-{int(cols[j])}",
+                "p_outcome": float(p_outcome),
+                "p_score": p_score,
+                "p_conditional": float(p_score / p_outcome) if p_outcome > 0 else 0.0,
+            }
+        return out
+
     def to_long_frame(self, match_id: str | None = None) -> pd.DataFrame:
         rows = []
         for h in self.matrix.index:
