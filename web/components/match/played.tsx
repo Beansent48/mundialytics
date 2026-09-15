@@ -56,7 +56,7 @@ function EventMark({ type }: { type: TimelineEventType }) {
         aria-hidden
         className={cn(
           "inline-block h-[15px] w-[11px] shrink-0 rounded-[2.5px] shadow-sm",
-          type === "yellow" ? "bg-warning" : "bg-negative",
+          type === "yellow" ? "bg-card-yellow" : "bg-negative",
         )}
       />
     );
@@ -347,7 +347,7 @@ export function PlayedMatch({ match }: { match: Match }) {
                           >
                             <span
                               aria-hidden
-                              className="inline-block h-3.5 w-2.5 shrink-0 rounded-[2px] bg-warning"
+                              className="inline-block h-3.5 w-2.5 shrink-0 rounded-[2px] bg-card-yellow"
                             />
                             <span>{y}</span>
                           </li>
