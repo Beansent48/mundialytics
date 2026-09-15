@@ -1,10 +1,26 @@
 import { Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Fragment } from "react";
 
-import type { Match, StatRange, TimelineEventType } from "@/lib/api";
+import { Reveal } from "@/components/ui/reveal";
+import type { Match, StatRange, TimelineEvent, TimelineEventType } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
+
+// "45'+2'" -> 45.02, "90'" -> 90 — a sortable scalar, used only to split the
+// timeline at half-time (the API sends the display string, not the number).
+const minuteValue = (m: string) => {
+  const s = m.replace(/'/g, "").trim();
+  if (!s) return -1;
+  if (s.includes("+")) {
+    const [b, e] = s.split("+");
+    return (Number(b) || 0) + (Number(e) || 0) / 100;
+  }
+  return Number(s) || 0;
+};
+const isGoal = (t: TimelineEventType) =>
+  t === "goal" || t === "penalty" || t === "own_goal";
 
 // One side of the stat comparison: did the real value land in the range we called
 // most likely, and with what probability. Green tick when it did, amber cross when
@@ -67,6 +83,72 @@ function EventMark({ type }: { type: TimelineEventType }) {
         strokeWidth="0.9"
       />
     </svg>
+  );
+}
+
+// A stop on the central spine: kick-off, half-time (with the score at the break)
+// and full-time. Gives the column the shape of a real match instead of a loose
+// list of minutes.
+function SpineMarker({ label }: { label: string }) {
+  return (
+    <li className="grid grid-cols-[1fr_auto_1fr] items-center">
+      <span className="col-start-2 z-[1] inline-flex justify-center whitespace-nowrap rounded-full border border-border bg-surface px-2.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.12em] text-dim">
+        {label}
+      </span>
+    </li>
+  );
+}
+
+// One event. The minute badge and the player's name share a single grid row and
+// are both vertically centred in it, so they always line up; the assist drops to
+// a second row in the same side column and never nudges the badge. A fixed centre
+// track keeps the badge on the spine and the two rows' columns aligned.
+function TimelineRow({ e, t }: { e: TimelineEvent; t: ReturnType<typeof useTranslations> }) {
+  const home = e.side === "home";
+  return (
+    <li className="grid grid-cols-[1fr_3rem_1fr] items-center gap-x-3">
+      <div
+        className={cn(
+          "row-start-1 flex min-w-0 items-center gap-1.5",
+          home ? "col-start-1 flex-row-reverse" : "col-start-3",
+        )}
+      >
+        <EventMark type={e.type} />
+        <span
+          className={cn(
+            "truncate text-[0.9rem] font-medium leading-5",
+            e.type === "own_goal" && "text-dim",
+          )}
+        >
+          {e.player}
+          {e.type === "own_goal" ? (
+            <span className="ml-1 text-[0.7rem] font-normal text-dim">
+              {t("ownGoalTag")}
+            </span>
+          ) : null}
+          {e.type === "penalty" ? (
+            <span className="ml-1 text-[0.7rem] font-normal text-muted">
+              {t("penaltyTag")}
+            </span>
+          ) : null}
+        </span>
+      </div>
+      <div className="col-start-2 row-start-1 flex justify-center">
+        <span className="z-[1] inline-flex min-w-[2.4rem] justify-center whitespace-nowrap rounded-full border border-border bg-surface px-1.5 py-0.5 text-[0.64rem] font-semibold leading-4 tabular-nums text-muted">
+          {e.minute}
+        </span>
+      </div>
+      {isGoal(e.type) && e.assist ? (
+        <p
+          className={cn(
+            "row-start-2 truncate text-[0.76rem] text-muted",
+            home ? "col-start-1 pr-[1.625rem] text-right" : "col-start-3 pl-[1.625rem]",
+          )}
+        >
+          {t("assistLabel", { player: e.assist })}
+        </p>
+      ) : null}
+    </li>
   );
 }
 
@@ -143,81 +225,54 @@ export function PlayedMatch({ match }: { match: Match }) {
   const predByKey = new Map(pred.expectedStats.map((s) => [s.key, s]));
   const hits = calls.filter((c) => c.hit).length;
 
+  // Timeline: split at half-time, and read the score at the break off the events.
+  const timeline = events?.timeline ?? [];
+  const htIndex = timeline.findIndex((e) => minuteValue(e.minute) >= 46);
+  const htHome = timeline.filter(
+    (e) => isGoal(e.type) && e.side === "home" && minuteValue(e.minute) < 46,
+  ).length;
+  const htAway = timeline.filter(
+    (e) => isGoal(e.type) && e.side === "away" && minuteValue(e.minute) < 46,
+  ).length;
+
+  // Possession is a share of one whole — a split bar, not a grid cell. Everything
+  // else keeps the compare grid with its most-likely range.
+  const possession = actual?.stats.find((s) => s.key === "possession") ?? null;
+  const gridStats = actual?.stats.filter((s) => s.key !== "possession") ?? [];
+
+  const eyebrow = "text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-brand";
+  const heading = "font-display text-[1.5rem] leading-tight sm:text-[1.8rem]";
+
   return (
-    <div className="flex flex-col gap-14">
-      <section>
-        <h1 className="font-display text-[1.9rem] leading-[1.1] sm:text-[2.7rem]">
-          {match.home}
+    <div className="flex flex-col gap-16">
+      <header>
+        <h1 className="font-display text-[1.9rem] leading-[1.12] sm:text-[2.7rem]">
+          <span className={outcome === "2" ? "text-dim" : undefined}>{match.home}</span>
           <span className="mx-3 tabular-nums">
             {score.home} – {score.away}
           </span>
-          {match.away}
+          <span className={outcome === "1" ? "text-dim" : undefined}>{match.away}</span>
         </h1>
-      </section>
+      </header>
 
       {/* 1 · What happened. A minute-by-minute timeline when ESPN gave us the
              clock; otherwise the grouped per-side summary, which has no minutes. */}
       {events ? (
-        <section>
-          <h2 className="font-display mb-5 text-[1.5rem] leading-tight sm:text-[1.8rem]">
-            {t("summaryTitle")}
-          </h2>
-          {events.timeline && events.timeline.length ? (
-            <ol className="relative mx-auto flex max-w-lg flex-col gap-4 py-1 before:absolute before:inset-y-1 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border">
-              {events.timeline.map((e, i) => {
-                const home = e.side === "home";
-                const goalish = e.type !== "yellow" && e.type !== "red";
-                return (
-                  <li
-                    key={`${e.minute}-${e.player}-${e.type}-${i}`}
-                    className="relative grid grid-cols-[1fr_2.75rem_1fr] items-start gap-x-2"
-                  >
-                    <div className={cn("min-w-0", home ? "col-start-1" : "col-start-3")}>
-                      <div
-                        className={cn(
-                          "flex items-center gap-1.5",
-                          home ? "flex-row-reverse" : "flex-row",
-                        )}
-                      >
-                        <EventMark type={e.type} />
-                        <span
-                          className={cn(
-                            "truncate text-[0.9rem] font-medium leading-5",
-                            e.type === "own_goal" && "text-dim",
-                          )}
-                        >
-                          {e.player}
-                          {e.type === "own_goal" ? (
-                            <span className="ml-1 text-[0.7rem] font-normal text-dim">
-                              {t("ownGoalTag")}
-                            </span>
-                          ) : null}
-                          {e.type === "penalty" ? (
-                            <span className="ml-1 text-[0.7rem] font-normal text-muted">
-                              {t("penaltyTag")}
-                            </span>
-                          ) : null}
-                        </span>
-                      </div>
-                      {goalish && e.assist ? (
-                        <p
-                          className={cn(
-                            "mt-0.5 truncate text-[0.76rem] text-muted",
-                            home ? "pr-[1.375rem] text-right" : "pl-[1.375rem]",
-                          )}
-                        >
-                          {t("assistLabel", { player: e.assist })}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="col-start-2 flex justify-center">
-                      <span className="z-[1] inline-flex min-w-[2.1rem] justify-center rounded-full border border-border bg-surface px-1.5 py-0.5 text-[0.64rem] font-semibold leading-4 tabular-nums text-muted">
-                        {e.minute}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
+        <Reveal as="section">
+          <p className={eyebrow}>{t("sectionMatch")}</p>
+          <h2 className={cn(heading, "mb-6 mt-2")}>{t("summaryTitle")}</h2>
+          {timeline.length ? (
+            <ol className="relative mx-auto flex max-w-lg flex-col gap-4 py-1 before:absolute before:inset-y-2 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border">
+              <SpineMarker label={t("kickoff")} />
+              {timeline.map((e, i) => (
+                <Fragment key={`${e.minute}-${e.player}-${e.type}-${i}`}>
+                  {i === htIndex && htIndex > 0 ? (
+                    <SpineMarker label={`${t("halfTime")} · ${htHome}–${htAway}`} />
+                  ) : null}
+                  <TimelineRow e={e} t={t} />
+                </Fragment>
+              ))}
+              <SpineMarker label={t("fullTime")} />
             </ol>
           ) : (
             <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-border bg-border">
@@ -304,15 +359,14 @@ export function PlayedMatch({ match }: { match: Match }) {
               })}
             </div>
           )}
-        </section>
+        </Reveal>
       ) : null}
 
       {/* 2 · What we said. The outcome as a probability bar with reality lit up. */}
-      <section>
-        <div className="mb-5 flex items-baseline gap-3">
-          <h2 className="font-display text-[1.5rem] leading-tight sm:text-[1.8rem]">
-            {t("callsTitle")}
-          </h2>
+      <Reveal as="section">
+        <p className={eyebrow}>{t("sectionCall")}</p>
+        <div className="mb-6 mt-2 flex items-baseline gap-3">
+          <h2 className={heading}>{t("callsTitle")}</h2>
           <span className="text-[0.78rem] text-dim">
             {t("callsScore", { hits, total: calls.length })}
           </span>
@@ -369,14 +423,9 @@ export function PlayedMatch({ match }: { match: Match }) {
           </span>
           {t("favouriteWas", { pick: pick.label, p: pct(pick.p) })}
         </p>
-      </section>
 
-      {/* 3 · The scoreline: what we thought was likeliest, versus reality. */}
-      <section>
-        <h3 className="mb-4 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">
-          {t("scoreboardTitle")}
-        </h3>
-        <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface">
+        {/* The scoreline: what we thought was likeliest, versus reality. */}
+        <div className="mt-8 overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface">
           <div className="grid grid-cols-2 divide-x divide-border">
             <div className="px-5 py-5">
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-dim">
@@ -402,18 +451,13 @@ export function PlayedMatch({ match }: { match: Match }) {
                 : t("scorelineOutside")}
             </span>
             <span className="tabular-nums">
-              {t("goalsExpectedReal", {
-                expected: xgTotal.toFixed(1),
-                real: total,
-              })}
+              {t("goalsExpectedReal", { expected: xgTotal.toFixed(1), real: total })}
             </span>
           </div>
         </div>
-      </section>
 
-      {/* 4 · Every headline market, one card each. */}
-      <section>
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* Every headline market, one card each. */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {calls.map((c) => (
             <div
               key={c.market}
@@ -425,9 +469,7 @@ export function PlayedMatch({ match }: { match: Match }) {
                 </p>
                 <div className="mt-1.5 flex items-baseline gap-2">
                   <span className="text-[1.05rem] font-semibold">{c.said}</span>
-                  <span className="text-[0.78rem] tabular-nums text-dim">
-                    {pct(c.conf)}
-                  </span>
+                  <span className="text-[0.78rem] tabular-nums text-dim">{pct(c.conf)}</span>
                 </div>
                 <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3">
                   <div
@@ -455,20 +497,38 @@ export function PlayedMatch({ match }: { match: Match }) {
             </div>
           ))}
         </div>
-      </section>
+      </Reveal>
 
-      {/* 5 · Real match stats beside what the model expected, each with a
-             hit/miss against the range we called most likely. Possession has no
-             model counterpart, so it shows real-only. */}
+      {/* 3 · Real match stats beside what the model expected. Possession leads as
+             a split bar; the rest carry a hit/miss against the range we called. */}
       {actual?.stats.length ? (
-        <section>
-          <h2 className="font-display mb-5 text-[1.5rem] leading-tight sm:text-[1.8rem]">
-            {t("statsTitle")}
-          </h2>
+        <Reveal as="section">
+          <p className={eyebrow}>{t("sectionStats")}</p>
+          <h2 className={cn(heading, "mb-6 mt-2")}>{t("statsTitle")}</h2>
+
+          {possession ? (
+            <div className="mb-4">
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-[0.95rem] font-semibold tabular-nums text-home">
+                  {possession.home}%
+                </span>
+                <span className="text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-dim">
+                  {t("markets.possession")}
+                </span>
+                <span className="text-[0.95rem] font-semibold tabular-nums text-away">
+                  {possession.away}%
+                </span>
+              </div>
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-surface-3">
+                <div style={{ width: `${possession.home}%`, background: "var(--home)" }} />
+                <div style={{ width: `${possession.away}%`, background: "var(--away)" }} />
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {actual.stats.map((s) => {
+            {gridStats.map((s) => {
               const p = predByKey.get(s.key);
-              const suffix = s.key === "possession" ? "%" : "";
               return (
                 <div
                   key={s.key}
@@ -477,14 +537,12 @@ export function PlayedMatch({ match }: { match: Match }) {
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[1.05rem] font-semibold text-home tabular-nums">
                       {s.home}
-                      {suffix}
                     </span>
                     <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-dim">
                       {t(`markets.${s.key}`)}
                     </span>
                     <span className="text-[1.05rem] font-semibold text-away tabular-nums">
                       {s.away}
-                      {suffix}
                     </span>
                   </div>
                   {p ? (
@@ -500,7 +558,6 @@ export function PlayedMatch({ match }: { match: Match }) {
                           {p.away}
                         </span>
                       </div>
-                      {/* did the real value land in the range we called most likely? */}
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <RangeHit actual={s.home} range={p.homeRange} />
                         <RangeHit actual={s.away} range={p.awayRange} />
@@ -512,7 +569,7 @@ export function PlayedMatch({ match }: { match: Match }) {
             })}
           </div>
           <p className="mt-4 text-[0.78rem] text-dim">{t("rangeNote")}</p>
-        </section>
+        </Reveal>
       ) : null}
     </div>
   );
