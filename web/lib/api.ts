@@ -416,7 +416,12 @@ async function request<T>(path: string, revalidate = 300): Promise<T> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       signal: controller.signal,
-      next: { revalidate },
+      // One shared tag on every cached response so the daily data refresh can
+      // invalidate them all at once (see app/api/revalidate). The per-call
+      // `revalidate` still bounds staleness on its own; the tag is what lets an
+      // out-of-band refresh push fresh fixtures, timelines and standings the
+      // moment they land instead of waiting for the window to lapse.
+      next: { revalidate, tags: ["data"] },
     });
     if (!res.ok) {
       throw new ApiError(`${path} returned ${res.status}`, res.status);
