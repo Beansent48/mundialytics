@@ -89,6 +89,26 @@ $state = [ordered]@{
 $state | ConvertTo-Json -Depth 4 |
     Out-File -FilePath (Join-Path $root 'data\processed\logs\last_run.json') -Encoding utf8
 
+# Push the fresh data to the web layer. Every API response the site fetches
+# carries a shared "data" cache tag, and this GET invalidates it, so the new
+# matchday -- scores, event timelines, standings -- appears the instant the
+# refresh finishes instead of waiting out each page's own revalidate window.
+# Best-effort: if the site is not running (or the call fails) the per-page
+# windows still refresh on their own, so a failure here never fails the run.
+# Point MUNDIALYTICS_WEB_URL at the deployed origin if it is not localhost:3000,
+# and set REVALIDATE_SECRET (same value on the web app) to require auth.
+if ($code -eq 0) {
+    $webUrl = if ($env:MUNDIALYTICS_WEB_URL) { $env:MUNDIALYTICS_WEB_URL } else { 'http://localhost:3000' }
+    $revUrl = "$webUrl/api/revalidate"
+    if ($env:REVALIDATE_SECRET) { $revUrl += "?secret=$($env:REVALIDATE_SECRET)" }
+    try {
+        Invoke-RestMethod -Uri $revUrl -Method Get -TimeoutSec 15 | Out-Null
+        Write-Host "Revalidated web cache at $webUrl"
+    } catch {
+        Write-Warning "Web cache revalidation skipped ($($_.Exception.Message))"
+    }
+}
+
 # Retain the 30 most recent runs (each is a .log plus its sibling .stderr).
 Get-ChildItem $logDir -Filter 'update_*.log*' |
     Sort-Object LastWriteTime -Descending |
