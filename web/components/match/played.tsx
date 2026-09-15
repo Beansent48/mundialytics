@@ -379,10 +379,20 @@ export function PlayedMatch({ match }: { match: Match }) {
               <div
                 key={o.id}
                 className={cn(
-                  "relative flex flex-col items-center justify-center text-white transition-[flex-grow] duration-700 ease-[var(--ease-out-quint)]",
-                  !happened && "opacity-35",
+                  "relative flex flex-col items-center justify-center transition-[flex-grow] duration-700 ease-[var(--ease-out-quint)]",
+                  // The outcome that happened is full colour with white on top; the
+                  // others are a pale tint of their colour with legible muted text —
+                  // dimming the whole segment with opacity left white text unreadable
+                  // over the pale result in the light theme.
+                  happened ? "text-white" : "text-muted",
                 )}
-                style={{ flexGrow: o.p, flexBasis: 0, background: o.color }}
+                style={{
+                  flexGrow: o.p,
+                  flexBasis: 0,
+                  background: happened
+                    ? o.color
+                    : `color-mix(in srgb, ${o.color} 16%, var(--surface))`,
+                }}
               >
                 <span className="text-[1.15rem] font-semibold leading-none sm:text-[1.5rem]">
                   {pct(o.p)}
