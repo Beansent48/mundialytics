@@ -59,11 +59,16 @@ export async function PositionMatrix({
                     key={j}
                     className="px-1 py-1.5 text-center tabular-nums"
                     style={{
+                      // Cap the tint so the strongest cell stays mid-toned in both
+                      // themes, which lets a single theme-aware ink (--text: near
+                      // black on light, near white on dark) read on every cell.
+                      // A fixed #fff was unreadable on the pale tints of the light
+                      // theme.
                       background:
                         v > 0.005
-                          ? `color-mix(in oklab, var(--brand) ${Math.round((v / max) * 92)}%, var(--surface))`
+                          ? `color-mix(in oklab, var(--brand) ${Math.round((v / max) * 68)}%, var(--surface))`
                           : "var(--surface)",
-                      color: v / max > 0.45 ? "#fff" : "var(--text-dim)",
+                      color: "var(--text)",
                     }}
                     title={`${team} · ${matrix.positions[j]} · ${(v * 100).toFixed(1)}%`}
                   >
