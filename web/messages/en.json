@@ -196,7 +196,8 @@
       "sot": "Shots on target",
       "fouls": "Fouls",
       "booking_pts": "Booking points",
-      "shotsOnTarget": "On target"
+      "shotsOnTarget": "On target",
+      "possession": "Possession"
     },
     "viewLabel": "View",
     "viewReal": "What happened",

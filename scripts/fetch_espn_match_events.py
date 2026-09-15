@@ -46,6 +46,7 @@ DIR = ROOT / "data/external/advanced/espn"
 OUT_P = DIR / "espn_player_match_current.csv"
 OUT_M = DIR / "espn_matches_current.csv"
 OUT_E = DIR / "espn_player_events_current.csv"
+OUT_T = DIR / "espn_team_match_current.csv"
 ALIASES = ROOT / "data/curated/fixture_team_aliases.csv"
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/{code}"
 
@@ -63,6 +64,14 @@ STATS = {
     "goalAssists": "assists", "yellowCards": "yellow_cards",
     "redCards": "red_cards", "ownGoals": "own_goals",
     "appearances": "appearances", "subIns": "sub_ins",
+}
+
+# ESPN team boxscore stat name -> our column. Team-level totals (possession,
+# corners, fouls) that never appear per player; read from the same summary call.
+TEAM_STATS = {
+    "possessionPct": "possession", "totalShots": "shots",
+    "shotsOnTarget": "sot", "wonCorners": "corners",
+    "foulsCommitted": "fouls", "yellowCards": "yellows", "redCards": "reds",
 }
 
 
@@ -175,6 +184,36 @@ def roster_rows(s: dict, game: dict, canon) -> list[dict]:
     return players
 
 
+def team_rows(s: dict, game: dict, canon) -> list[dict]:
+    """Team-level totals for one match, from the summary's boxscore.
+
+    Possession, corners and fouls are only ever team totals -- they never appear
+    in the per-player roster -- so they come from `boxscore.teams[].statistics`,
+    the same summary payload already fetched for the roster and timeline. Each
+    entry is a flat {name, value}; some feeds nest them under a group's `stats`,
+    so both shapes are handled.
+    """
+    rows = []
+    for tm in (s.get("boxscore") or {}).get("teams", []) or []:
+        team = canon((tm.get("team") or {}).get("displayName", ""))
+        raw: dict = {}
+        for st in tm.get("statistics", []) or []:
+            if isinstance(st, dict) and "stats" in st:
+                for x in st.get("stats") or []:
+                    raw[x.get("name")] = x.get("value", x.get("displayValue"))
+            else:
+                raw[st.get("name")] = st.get("value", st.get("displayValue"))
+        if not raw:
+            continue
+        row = {"event_id": game["event_id"], "competition": game["competition"],
+               "date": game["date"], "team": team}
+        for k, col in TEAM_STATS.items():
+            v = raw.get(k)
+            row[col] = pd.to_numeric(v, errors="coerce") if v is not None else pd.NA
+        rows.append(row)
+    return rows
+
+
 def event_rows(s: dict, game: dict, canon) -> list[dict]:
     """Minute-by-minute timeline for one match, from the summary's `keyEvents`.
 
@@ -251,8 +290,15 @@ def main() -> None:
     if "assist" not in old_e.columns:
         old_e = pd.DataFrame()
     have_e = set(old_e["event_id"].astype(str)) if "event_id" in old_e.columns else set()
+    old_t = (pd.read_csv(OUT_T, low_memory=False)
+             if (OUT_T.exists() and not args.rebuild) else pd.DataFrame())
+    # Team totals were added later; an older file predates the `possession` column,
+    # so drop it and rebuild once so every match gains its team stats at once.
+    if "possession" not in old_t.columns:
+        old_t = pd.DataFrame()
+    have_t = set(old_t["event_id"].astype(str)) if "event_id" in old_t.columns else set()
 
-    games, players, events = [], [], []
+    games, players, events, teams = [], [], [], []
     for code, comp in LEAGUES.items():
         try:
             g = list_matches(code, comp, lo, hi, canon)
@@ -263,7 +309,9 @@ def main() -> None:
         # One summary request per match, fetched only when the roster OR the
         # timeline is still missing, and parsed for whichever is.
         todo = [x for x in g
-                if x["event_id"] not in have or x["event_id"] not in have_e]
+                if x["event_id"] not in have
+                or x["event_id"] not in have_e
+                or x["event_id"] not in have_t]
         n_ok = 0
         for x in todo:
             try:
@@ -277,6 +325,8 @@ def main() -> None:
                     n_ok += 1
             if x["event_id"] not in have_e:
                 events += event_rows(s, x, canon)
+            if x["event_id"] not in have_t:
+                teams += team_rows(s, x, canon)
             time.sleep(0.25)
         print(f"  {comp:15s} {len(g):3d} partidos "
               f"({len(g) - len(todo)} en cache, {n_ok} descargados)")
@@ -313,10 +363,20 @@ def main() -> None:
         ).sort_values(["date", "event_id", "minute_num"], kind="stable")
         edf.to_csv(OUT_E, index=False)
 
+    tdf = pd.DataFrame(teams)
+    if len(old_t) and "event_id" in old_t.columns:
+        tdf = pd.concat([old_t, tdf], ignore_index=True)
+    if len(tdf):
+        tdf = tdf.drop_duplicates(subset=["event_id", "team"], keep="last") \
+                 .sort_values(["date", "event_id"], kind="stable")
+        tdf.to_csv(OUT_T, index=False)
+
     app = pd.to_numeric(pdf.get("appearances"), errors="coerce").fillna(0)
     print(f"\nESCRITO {OUT_P.name}: {len(pdf):,} filas jugador-partido "
           f"({int((app > 0).sum()):,} con minutos) - {pdf['player'].nunique():,} jugadores")
     print(f"        {OUT_M.name}: {len(gdf):,} partidos")
+    if len(tdf):
+        print(f"        {OUT_T.name}: {len(tdf):,} filas equipo-partido")
     for c in ("goals", "shots", "assists", "yellow_cards", "red_cards"):
         if c in pdf.columns:
             tot = int(pd.to_numeric(pdf[c], errors="coerce").fillna(0).sum())

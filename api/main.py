@@ -355,13 +355,91 @@ def _team_props(fx: dict | None) -> list[dict] | None:
     return markets or None
 
 
+# The ESPN team boxscore, loaded once per data version like the timeline feed.
+_TEAM_STATS: dict[str, pd.DataFrame] = {}
+
+
+def _team_stats(df) -> pd.DataFrame:
+    key = str(df["date"].max())[:10]
+    cached = _TEAM_STATS.get(key)
+    if cached is not None:
+        return cached
+    f = ROOT / "data/external/advanced/espn/espn_team_match_current.csv"
+    ts = pd.DataFrame()
+    if f.exists():
+        try:
+            ts = pd.read_csv(f, low_memory=False)
+        except Exception:
+            ts = pd.DataFrame()
+    if len(ts) and {"date", "team"} <= set(ts.columns):
+        ts = ts.copy()
+        ts["fecha"] = pd.to_datetime(ts["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        ts["eq"] = ts["team"].astype(str).str.lower()
+    else:
+        ts = pd.DataFrame()  # missing or old-schema file
+    _TEAM_STATS.clear()  # only the current data version is ever needed
+    _TEAM_STATS[key] = ts
+    return ts
+
+
+# (UI key, CSV column). Possession leads: it is the stat everyone reads first and
+# the only one with no model counterpart, so it shows real-only, no range.
+_ESPN_STAT_KEYS = [
+    ("possession", "possession"), ("shots", "shots"), ("shotsOnTarget", "sot"),
+    ("corners", "corners"), ("fouls", "fouls"), ("yellows", "yellows"),
+]
+
+
+def _actual_from_espn(row, df) -> dict | None:
+    """Real team stats for a current-season match from the ESPN boxscore.
+
+    Preferred over the foundation for matches ESPN covers: it is as fresh as the
+    timeline (so the newest round shows stats the foundation has not ingested yet)
+    and carries possession, which football-data never had. Keyed on date + team,
+    exactly like the timeline, so the canonical names line up.
+    """
+    ts = _team_stats(df)
+    if not len(ts):
+        return None
+    match_date = pd.to_datetime(getattr(row, "date", None), errors="coerce")
+    if pd.isna(match_date):
+        return None
+    date_str = match_date.strftime("%Y-%m-%d")
+    home_l, away_l = str(row.home_team).lower(), str(row.away_team).lower()
+    day = ts[(ts["fecha"] == date_str) & (ts["eq"].isin([home_l, away_l]))]
+    h, a = day[day["eq"] == home_l], day[day["eq"] == away_l]
+    if h.empty or a.empty:
+        return None
+    hr, ar = h.iloc[0], a.iloc[0]
+    stats = []
+    for ui_key, col in _ESPN_STAT_KEYS:
+        hv, av = hr.get(col), ar.get(col)
+        if pd.isna(hv) or pd.isna(av):
+            continue
+        if ui_key == "possession":  # a percentage, not a count
+            stats.append({"key": ui_key, "home": round(float(hv)), "away": round(float(av))})
+        else:
+            stats.append({"key": ui_key, "home": float(hv), "away": float(av)})
+    if not stats:
+        return None
+    hg = int(row.home_goals) if pd.notna(row.home_goals) else 0
+    ag = int(row.away_goals) if pd.notna(row.away_goals) else 0
+    return {"goals": {"home": hg, "away": ag}, "stats": stats}
+
+
 def _actual(row, meta: dict, season: str, df) -> dict | None:
     """The real match stats, when the foundation has ingested them.
 
     Kept separate from the score: the calendar settles a result the night it is
     played, but shots and cards arrive with the next data refresh, and inventing
     zeros in that window would grade the model against numbers nobody measured.
+    ESPN's boxscore is tried first for the current season (fresher and with
+    possession); the foundation covers older seasons ESPN's current file does not.
     """
+    espn = _actual_from_espn(row, df)
+    if espn is not None:
+        return espn
+
     played = df[
         (df["competition"] == meta["id"])
         & (df["season"] == season)
