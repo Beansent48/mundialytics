@@ -184,7 +184,7 @@ function EventRow({ event, onLeft }: { event: SquadMatchEvent; onLeft: boolean }
         aria-hidden
         className={cn(
           "size-2.5 shrink-0 rounded-[2px]",
-          event.type === "goal" ? "rounded-full bg-text" : "bg-warning",
+          event.type === "goal" ? "rounded-full bg-text" : "bg-card-yellow",
         )}
       />
       <span className="truncate">
@@ -264,7 +264,7 @@ function FullTime({ fixture }: { fixture: SquadFixture }) {
                   </span>
                 ) : null}
                 {r.cards ? (
-                  <span aria-hidden className="size-2.5 rounded-[2px] bg-warning" />
+                  <span aria-hidden className="size-2.5 rounded-[2px] bg-card-yellow" />
                 ) : null}
                 <span
                   className={cn(
