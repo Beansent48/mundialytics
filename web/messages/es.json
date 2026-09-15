@@ -196,7 +196,8 @@
       "sot": "Tiros a puerta",
       "fouls": "Faltas",
       "booking_pts": "Booking points",
-      "shotsOnTarget": "A puerta"
+      "shotsOnTarget": "A puerta",
+      "possession": "Posesión"
     },
     "viewLabel": "Vista",
     "viewReal": "Lo que pasó",
