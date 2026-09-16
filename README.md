@@ -78,13 +78,13 @@ that have Bet365 odds attached. Regenerate with
 ## How it works
 
 ```
-football-data.co.uk ─┐
-Understat / StatsBomb ├─→ canonical match schema ─→ features ─→ models ─→ markets
-ClubElo / FBref / ESPN ┘     (entity resolution)        │          │
-                                                        │          ├─ 1X2 / O-U / BTTS
-                              internal Elo ─────────────┤          ├─ half-time markets
-                              walk-forward form ────────┤          ├─ team props
-                              xG-rate predictor ────────┘          └─ player props
+football-data.co.uk ──┐
+Understat / Sofascore  ├─→ canonical match schema ─→ features ─→ models ─→ markets
+StatsBomb / ClubElo    │      (entity resolution)        │          │
+FBref / ESPN ──────────┘                                 │          ├─ 1X2 / O-U / BTTS
+                             internal Elo ───────────────┤          ├─ half-time markets
+                             walk-forward form ──────────┤          ├─ team props
+                             xG-rate predictor ──────────┘          └─ player props
 ```
 
 - **Goal model** — Dixon-Coles double Poisson: per-team attack/defence strengths
@@ -290,8 +290,11 @@ Listed because half-finished work is normal and hiding it helps nobody.
   histories were never downloaded, and the ClubElo API is currently returning
   502. Audit it with `python scripts/audit_european_elo_coverage.py`; full
   write-up in [`docs/EUROPEAN_ELO_COVERAGE.md`](docs/EUROPEAN_ELO_COVERAGE.md).
-- **xG coverage** — ~97% of matches. Bundesliga 2024/25 is the notable hole, an
-  upstream scraper bug rather than a missing source.
+- **xG coverage** — ~97% of historical matches (Bundesliga 2024/25 is the notable
+  hole, an upstream scraper bug rather than a missing source). Understat stopped
+  publishing after 2025/26, so current-season xG now comes live from Sofascore's
+  per-shot data, aggregated to match level and feeding the same rolling xG-rate
+  form (`scripts/build_sofascore_xg_matches.py`; 100% of played 2026/27 matches).
 - **SquadLab special cards** (award and memorable-match player variants) need
   season-split player data that isn't built yet.
 
@@ -350,8 +353,9 @@ docs/                   design docs and full version history
 
 Research project, run in **paper mode** — no money has ever been staked on it.
 Everything comes from free public sources: football-data.co.uk (results and
-odds), Understat and StatsBomb Open Data (xG and events), ClubElo, FBref, and
-ESPN's public JSON (current-season fixtures and per-player match stats).
+odds), Understat and StatsBomb Open Data (historical xG and events), Sofascore
+(current-season xG, from its shot data), ClubElo, FBref, and ESPN's public JSON
+(current-season fixtures and per-player match stats).
 
 No source is trusted alone. Every one of them has failed at some point — an API
 returning 502 for days, a season never published, a scraper stalling mid-fetch,
