@@ -41,6 +41,9 @@ SHOTS_CSV = ROOT / "data/external/advanced/understat/understat_shots.csv"
 PLAYER_CSV = ROOT / "data/external/advanced/understat/understat_player_match.csv"
 FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 TEAM_MATCH = ROOT / "data/processed/understat_team_match_xg.csv"
+# Live current-season xG from Sofascore (Understat froze 2026-05-24). Same schema
+# as TEAM_MATCH; augment_foundation_with_xg concats both before the join.
+SOFA_TEAM_MATCH = ROOT / "data/processed/sofascore_team_match_xg.csv"
 
 
 def season_codes(today: date) -> tuple[str, str]:
@@ -174,14 +177,23 @@ def augment_foundation_with_xg() -> None:
     xg_cols = ["home_xg", "away_xg", "home_npxg", "away_npxg",
                "home_xg_op", "away_xg_op", "home_xg_sp", "away_xg_sp"]
     found = found.drop(columns=[c for c in xg_cols if c in found.columns])
-    tm = pd.read_csv(TEAM_MATCH)[["date", "home_team_fd", "away_team_fd"] + xg_cols]
+    cols = ["date", "home_team_fd", "away_team_fd"] + xg_cols
+    # Understat carries the history; Sofascore carries the current season (Understat
+    # froze 2026-05-24). Concat both, Understat first so it wins any overlap.
+    sources = [pd.read_csv(TEAM_MATCH)[cols]]
+    if SOFA_TEAM_MATCH.exists():
+        sources.append(pd.read_csv(SOFA_TEAM_MATCH)[cols])
+    tm = pd.concat(sources, ignore_index=True)
     tm = tm.rename(columns={"home_team_fd": "home_team", "away_team_fd": "away_team"})
     tm["date"] = pd.to_datetime(tm["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    tm = tm.drop_duplicates(subset=["date", "home_team", "away_team"])
+    tm = tm.drop_duplicates(subset=["date", "home_team", "away_team"], keep="first")
     merged = found.merge(tm, on=["date", "home_team", "away_team"], how="left")
     merged.to_csv(FOUND, index=False)
     cov = merged["home_xg"].notna().mean()
-    print(f"    foundation: {len(merged)} matches, xG coverage {cov:.1%}", flush=True)
+    cur_mask = merged["date"] >= "2026-07-01"
+    cur_cov = merged.loc[cur_mask, "home_xg"].notna().mean() if cur_mask.any() else float("nan")
+    print(f"    foundation: {len(merged)} matches, xG coverage {cov:.1%} "
+          f"(current season {cur_cov:.1%})", flush=True)
 
 
 def main() -> None:
@@ -212,6 +224,14 @@ def main() -> None:
         print("\n=== 2/8 Understat SKIPPED ===", flush=True)
 
     run_step("3/8 Understat xG aggregation", [PY, "scripts/build_understat_xg_matches.py"])
+
+    # Live current-season xG from Sofascore (Understat froze 2026-05-24). Optional:
+    # a Sofascore outage must not break the daily refresh -- the augment step falls
+    # back to whatever sofascore_team_match_xg.csv already holds. Timeout caps a
+    # hung API pull the way the FBref step is capped.
+    run_step("3b/8 Sofascore xG (current season)",
+             [PY, "scripts/build_sofascore_xg_matches.py"],
+             optional=True, timeout=600)
 
     prev_rows = len(pd.read_csv(FOUND, low_memory=False)) if FOUND.exists() else None
     backup_found = FOUND.with_suffix(".csv.prev")
