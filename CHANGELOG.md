@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.50.4 — Live current-season xG via Sofascore; ESPN calendar fix
+
+### Added
+- `scripts/build_sofascore_xg_matches.py`: current-season match-level team xG from
+  Sofascore's per-shot `shotmap` JSON (Opta-grade), aggregated to home/away
+  xg/npxg/open-play/set-piece — same schema as the Understat builder. 197/197
+  played 2026/27 matches, 100% merge onto the foundation.
+- `src/mundialytics/enrichment/sofascore_team_aliases.py`: Sofascore → foundation
+  team-name map (52 aliases).
+
+### Changed
+- `scripts/update_season.py`: new optional, timeout-capped step 3b runs the
+  Sofascore xG build; `augment_foundation_with_xg` now concats Understat (history)
+  + Sofascore (current season) before the join, restoring fresh xG-rate form that
+  had been frozen since Understat stopped publishing on 2026-05-24.
+- `src/mundialytics/providers/espn_fixtures.py`: ESPN dropped the
+  `YYYYMMDD-YYYYMMDD` date-range query (now returns 400), which silently emptied
+  the whole fixtures calendar (matchday page and `/fixtures` failed). Now requests
+  `?dates=<startYear>`; restores 288–379 fixtures per league.
+
+### Validation
+- Current-season walk-forward (n=194): 1X2 RPS −0.0014, log-loss −0.0038,
+  accuracy +2.1 pts vs frozen xG form (historical form gain remains ~0.0039 RPS,
+  5/5 folds).
+- Rationale: FBref via soccerdata bypasses its 403 but is served pages stripped of
+  xG columns (dead end); Sofascore's JSON API is reachable and carries per-shot xG.
+- Test suite green after the soccerdata install (which bumped pytest 9.0.3 → 9.1.1).
+
+### Known Limitations
+- `scripts/enrich_matches_with_xg.py` (the `canonical_matches_with_xg` used by the
+  `--full` walk-forward cache) still reads Understat-only xG; the deployed engine
+  reads the foundation directly and is unaffected.
+
+
 ## v0.50.3 — FBref Team-Match Normalization Repair
 
 - Fixed soccerdata/FBref team-match raw normalization for flattened columns such as `Standard.1` and `Performance.2`.
