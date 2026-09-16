@@ -77,8 +77,9 @@ def fetch_season_fixtures(
         return alias.get(name, canonical_team_name(name))
 
     y1 = int(str(season)[:4])
-    url = (f"{_BASE.format(code=code)}"
-           f"?dates={y1}0701-{y1 + 1}0630&limit=1000")
+    # ESPN stopped accepting an explicit YYYYMMDD-YYYYMMDD range (it now 400s);
+    # `dates=<start year>` returns the whole European season instead (2026-09-16).
+    url = f"{_BASE.format(code=code)}?dates={y1}&limit=1000"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=timeout) as fh:
