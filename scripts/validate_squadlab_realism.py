@@ -35,7 +35,7 @@ from mundialytics.statistical_core.squadlab import calibration_constants as CC  
 
 # reuse the exact reconstruction the calibration uses (same best-XI, same idx)
 from fit_squad_lambda_calibration_season_scoped import (  # noqa: E402
-    BIG5_COMP_IDS, MIN_TEAM_MATCHES, POSITION_SLOTS, _discover_season_matches, _team_strength)
+    MIN_TEAM_MATCHES, POSITION_SLOTS, _discover_season_matches, _team_strength)
 
 
 def _expected_points(a, d, opp_params, mu, ha, max_goals=10) -> float:

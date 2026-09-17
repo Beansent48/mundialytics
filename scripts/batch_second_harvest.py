@@ -146,7 +146,6 @@ def main() -> None:
         adl = {r.match_id: ad.expected_goals(r.home_team, r.away_team, int(getattr(r,"neutral",0) or 0), r.competition)[:2]
                for r in test.itertuples(index=False)}
         tr_rows = lr[lr.date < s_start]; te_rows = lr[lr.match_id.isin(set(test.match_id))]
-        line=f"{s}  "
         for name, feats in VARIANTS.items():
             tr = tr_rows.dropna(subset=feats+["xg_for"]); te = te_rows.dropna(subset=feats)
             kw = {}

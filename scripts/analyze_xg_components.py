@@ -10,7 +10,6 @@ over blend weights is cheap.
 
 import argparse
 import json
-import sys
 from itertools import product
 from pathlib import Path
 

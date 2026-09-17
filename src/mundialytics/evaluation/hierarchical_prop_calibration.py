@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from typing import Iterable
 
 import numpy as np
@@ -11,7 +9,6 @@ from mundialytics.evaluation.prop_calibration import (
     PlattCalibrator,
     binary_metrics,
     make_calibrators,
-    reliability_table,
     temporal_split_predictions,
     _clip_prob,
 )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error, mean_squared_error
+from sklearn.metrics import log_loss, mean_absolute_error, mean_squared_error
 
 
 def rank_probability_score(pred_matrix: np.ndarray | pd.DataFrame, obs_matrix: np.ndarray | pd.DataFrame) -> float:

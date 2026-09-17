@@ -171,7 +171,6 @@ def load_2425() -> pd.DataFrame:
     d = pd.read_csv(SRC / "fbref_players_2425.csv", low_memory=False)
     n90 = pd.to_numeric(d["90s"], errors="coerce")
     npxg = pd.to_numeric(d["npxG"], errors="coerce")
-    shots = pd.to_numeric(d["Sh"], errors="coerce")
     goals = pd.to_numeric(d["Gls"], errors="coerce")
     pens = pd.to_numeric(d["PK"], errors="coerce").fillna(0)
     return pd.DataFrame({

@@ -250,7 +250,7 @@ def main() -> None:
         if backup_found.exists():
             FOUND.write_bytes(backup_found.read_bytes())
             print("    rolled back to the previous foundation; models untouched.", flush=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
     finally:
         backup_found.unlink(missing_ok=True)
 

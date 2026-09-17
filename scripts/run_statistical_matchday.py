@@ -158,13 +158,13 @@ def main(argv: list[str] | None = None) -> int:
     demo_odds_detected = not odds.empty and "bookmaker" in odds.columns and odds["bookmaker"].astype(str).str.lower().eq("demo_book").any()
     if demo_odds_detected and args.no_demo_picks and not betting_edges.empty:
         betting_edges = betting_edges.copy()
-        was_recommended = betting_edges["recommended"] == True
+        was_recommended = betting_edges["recommended"].eq(True)
         betting_edges.loc[was_recommended, "recommended"] = False
         betting_edges.loc[was_recommended, "stake_virtual"] = 0.0
         betting_edges.loc[was_recommended, "warnings"] = betting_edges.loc[was_recommended, "warnings"].astype(str).replace({"nan": ""}).str.strip(";") + ";demo_odds_pick_blocked"
         betting_edges.loc[was_recommended, "reason"] = "not_recommended: demo odds detected; real value picks are blocked by --no-demo-picks. " + betting_edges.loc[was_recommended, "reason"].astype(str)
         audit["demo_picks_blocked"] = int(was_recommended.sum())
-    recommended_picks = betting_edges[betting_edges["recommended"] == True].copy() if not betting_edges.empty else betting_edges.copy()
+    recommended_picks = betting_edges[betting_edges["recommended"].eq(True)].copy() if not betting_edges.empty else betting_edges.copy()
     if demo_odds_detected:
         audit["warnings"].append("demo_odds_detected_do_not_use_for_real_value")
 
@@ -293,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         if audit["player_identity_audit"]["unresolved_rows"]:
             audit["warnings"].append("player_identity_unresolved_rows_present")
     if not betting_edges.empty:
-        bad_rec_mask = (betting_edges["recommended"] == True) & betting_edges["warnings"].astype(str).str.contains("sample_size_zero_no_player_pick|identity_unresolved|identity_ambiguous", regex=True, na=False)
+        bad_rec_mask = (betting_edges["recommended"].eq(True)) & betting_edges["warnings"].astype(str).str.contains("sample_size_zero_no_player_pick|identity_unresolved|identity_ambiguous", regex=True, na=False)
         audit["blocked_bad_player_pick_recommendations"] = int(bad_rec_mask.sum())
         if int(bad_rec_mask.sum()) > 0:
             audit["warnings"].append("bad_player_pick_recommendation_not_blocked")

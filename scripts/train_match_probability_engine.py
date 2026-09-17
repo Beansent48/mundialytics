@@ -11,12 +11,10 @@ import numpy as np
 from sklearn.linear_model import PoissonRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
-from scipy.stats import poisson
 import joblib
 import json
 import warnings
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 warnings.filterwarnings('ignore')
 

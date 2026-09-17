@@ -26,7 +26,7 @@ CFG = dict(blend_weight_gl=0.30, sharpen_gamma_1x2=1.3, outcome_rho=-0.17, resca
 
 def metrics(pr):
     o = pr["oc"].to_numpy()
-    ph, pdw, pa = pr.ph.to_numpy(float), pr.pd.to_numpy(float), pr.pa.to_numpy(float)
+    ph, pdw = pr.ph.to_numpy(float), pr.pd.to_numpy(float)
     yh, yd = (o == "home").astype(float), (o == "draw").astype(float)
     rps = (0.5 * ((ph - yh) ** 2 + (ph + pdw - yh - yd) ** 2)).mean()
     over = pr.over.to_numpy(float); po = np.clip(pr.po.to_numpy(float), 1e-9, 1 - 1e-9)

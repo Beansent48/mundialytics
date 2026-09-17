@@ -49,7 +49,6 @@ def build_snapshot_feature_table(odds: pd.DataFrame) -> pd.DataFrame:
         if col not in odds.columns:
             odds[col] = ""
     group_cols = ["match_id", "bookmaker", "market_key", "scope", "subject_team", "subject_player", "line", "side"]
-    base = odds[group_cols].drop_duplicates().copy()
     odds_pivot = odds.pivot_table(index=group_cols, columns="snapshot_label", values="bookmaker_odds", aggfunc="last").reset_index()
     imp_pivot = odds.pivot_table(index=group_cols, columns="snapshot_label", values="implied_probability_raw", aggfunc="last").reset_index()
     # Flatten columns.

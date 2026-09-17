@@ -80,34 +80,6 @@ RATE_WEIGHTS = {"aerial_pct": 0.205, "challenge_pct": 0.138, "dribbled_past_p90"
 # so it counts against him. Weakly, which is why its weight is the smallest.
 DRIBBLED_IS_BAD = True
 
-def elo_per_rating_point() -> float:
-    """How many Elo points one rating point is worth, from the real clubs.
-
-    Already measured elsewhere and reused rather than re-chosen: the squad-to-Elo
-    line in squadlab/champions.py is fitted on 96 clubs' own best elevens, and
-    its slope is exactly this conversion. Inverting it turns a league's Elo gap
-    into rating points — so the Premier League being 347 Elo above Serie B
-    becomes a defined number of rating points, not a knob.
-
-    The first attempt fitted the league weight against the OLD ratings and got
-    0.14, i.e. almost nothing. That was circular: those ratings are mostly the
-    plateau this script exists to remove, so of course they barely move with
-    league. A rating system cannot be asked how much it knows about leagues when
-    the answer is "nothing".
-    """
-    try:
-        from mundialytics.statistical_core.squadlab.cards import load_cards
-        from mundialytics.statistical_core.squadlab.champions import squad_elo_scale
-
-        elo = pd.read_csv(CLUBELO).dropna(subset=["club", "elo"])
-        scale = squad_elo_scale(None, load_cards(), dict(zip(elo["club"], elo["elo"])))
-        if scale.slope_mean > 1.0:
-            return float(scale.slope_mean)
-    except Exception:
-        pass
-    return 29.4      # the value that fit measured, kept as a documented fallback
-
-
 # A rating plateau is a rating that was never computed. These are the values the
 # old pipeline parks unmeasured players on; they define who to REPLACE, and they
 # are excluded from the target distribution so the new scale is not fitted to
@@ -272,7 +244,6 @@ def build() -> pd.DataFrame:
     # Combine BEFORE mapping, not after. Adding the league on top of a value
     # already drawn from an all-leagues distribution counts the division twice —
     # it put five Premier League centre backs on the 96 ceiling together.
-    per_pt = elo_per_rating_point()
     ref_sd = float(np.std(ref)) or 1.0
     # How much the level he plays at is worth is itself measured: regress the
     # ratings that WERE computed on their clubs' Elo. Converting the full Elo

@@ -37,7 +37,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -533,7 +532,6 @@ class PlayerStrengthModel:
         if "competition_c" not in df.columns and "competition" in df.columns:
             df["competition_c"] = df["competition"]
 
-        pos_groups = df["position_group"].fillna("Unknown")
         stat_cols = [c for c in df.columns if c.endswith("_per_match")]
         for stat in stat_cols:
             if stat not in df.columns:

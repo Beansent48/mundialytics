@@ -9,7 +9,6 @@ object with clean methods for:
 from __future__ import annotations
 
 import itertools
-import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any

@@ -159,7 +159,6 @@ def apply_role_axes(squads, out, bz) -> None:
     the band maximum, they keep the small gap their profiles actually have.
     Keepers keep their old axes. Only touched when the flag is on."""
     idx = _role_ratings_index()
-    n = len(squads)
     pos = [str(p) for p in out["position"]]
     got = {"attack": list(out["attack"]), "creation": list(out["creation"]),
            "defense": list(out["defense"])}

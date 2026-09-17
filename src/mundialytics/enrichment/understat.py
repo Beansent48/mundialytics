@@ -76,7 +76,7 @@ def _extract_understat_var(html: str, variable: str) -> Any:
         # Inline object assignment
         rf"(?:var\s+)?{re.escape(variable)}\s*=\s*(?P<data>\{{.*?\}})\s*;",
         # Encoded with decodeURIComponent
-        rf"decodeURIComponent\('(?P<data>%5B.*?)'\)",
+        r"decodeURIComponent\('(?P<data>%5B.*?)'\)",
         # JSON inside script tag with variable on its own line
         rf"{re.escape(variable)}\s*=\s*JSON\.parse\(decodeURIComponent\('(?P<data>.*?)'\)\)",
     ]

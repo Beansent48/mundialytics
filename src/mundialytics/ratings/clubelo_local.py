@@ -31,7 +31,6 @@ and flagged stale, never presented as if freshly computed.
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 SEED_DIR = "data/external/clubelo/daily"

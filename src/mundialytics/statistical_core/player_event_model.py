@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from mundialytics.identity.player_resolver import PlayerIdentityResolution, PlayerIdentityResolver
+from mundialytics.identity.player_resolver import PlayerIdentityResolver
 from mundialytics.statistical_core.calibration import safe_probability
 from mundialytics.statistical_core.distributions import probability_for_count_line
 from mundialytics.statistical_core.schemas import canonical_name, standardize_current_players

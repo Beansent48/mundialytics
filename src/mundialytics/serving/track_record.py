@@ -2,11 +2,10 @@
 Settling the prediction log against real results.
 
 This lives in one place on purpose. The log is the product's whole claim to
-honesty, and two front ends computing "how often were we right" with two copies
-of this code would eventually disagree — at which point neither number means
-anything. The Streamlit app and the HTTP API both import from here.
+honesty, and two copies of "how often were we right" would eventually disagree
+— at which point neither number means anything. The HTTP API imports from here.
 
-Nothing in this module knows about Streamlit or about any language: it takes
+Nothing in this module knows about HTTP or about any language: it takes
 dataframes and gives back one row per settled prediction.
 """
 from __future__ import annotations

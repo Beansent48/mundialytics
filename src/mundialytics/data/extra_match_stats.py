@@ -10,7 +10,6 @@ The module is intentionally conservative:
   same table.
 """
 
-from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
@@ -393,7 +392,7 @@ def parse_statsbomb_event_json(paths: Iterable[Path | str], source_name: str = "
                 "match_id": str(match_id),
                 "date": date,
                 "competition": competition,
-                "season": "",
+                "season": season,
                 "home_team": home_team,
                 "away_team": away_team,
                 "team": team,

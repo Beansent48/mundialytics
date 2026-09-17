@@ -113,7 +113,6 @@ def _prefilter_line_signals(
         work = work[work["target_quality"].astype(str).str.lower().isin(wanted_q)].copy()
     if max_rows and int(max_rows) > 0 and len(work) > int(max_rows):
         # Deterministic stratified cap: keep strongest probabilities per signal group/market where possible.
-        sort_cols = [c for c in ["signal_group", "market", "model_probability"] if c in work.columns]
         if "model_probability" in work.columns:
             work["_prob_sort"] = pd.to_numeric(work["model_probability"], errors="coerce")
             group_col = "signal_group" if "signal_group" in work.columns else ("market" if "market" in work.columns else None)

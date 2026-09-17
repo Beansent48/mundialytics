@@ -19,8 +19,6 @@ touching any deployed code.
 EVALUATION ONLY. Odds are used solely as a yardstick, never as model input.
 """
 
-import glob
-import re
 import sys
 from pathlib import Path
 
@@ -68,7 +66,6 @@ def main() -> None:
     for ssn, s in m.groupby("season"):
         idx = s.index.to_numpy()
         ph, pa = P[idx, 0].mean(), P[idx, 2].mean()
-        mh, ma = M[idx, 0].mean(), M[idx, 2].mean()
         ah, aa = (y[idx] == 0).mean(), (y[idx] == 2).mean()
         print(f"  {ssn:12s} {len(s):5d}  {ph:.3f}/{ah:.3f} ({ph-ah:+.3f})  "
               f"{pa:.3f}/{aa:.3f} ({pa-aa:+.3f})   "

@@ -147,11 +147,6 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = _resolve(args.out_dir) or ROOT / "outputs/market_coverage_audit_current"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    event_cols = _columns(events_path)
-    extra_cols = _columns(extra_stats_path)
-    goalkeeper_cols = _columns(goalkeeper_stats_path)
-    # Event markets can be trained/evaluated from player-event rows, team-match market stats, or player goalkeeper stats.
-    event_cols_combined = set(event_cols) | set(extra_cols) | set(goalkeeper_cols)
     match_cols = _columns(match_path)
     rows = []
 

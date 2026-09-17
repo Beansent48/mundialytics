@@ -7,7 +7,6 @@ other seasons and applied to the held-out one. Reports ECE + RPS + log-loss
 before/after. Isolated: no engine changes.
 """
 
-import sys
 from pathlib import Path
 
 import numpy as np

@@ -1,16 +1,15 @@
 """
 Fitted models for the HTTP API.
 
-The configuration below is a *copy* of the one the Streamlit app serves, down to
-every keyword. That is deliberate and it matters: two front ends quoting
-different probabilities for the same fixture would make the track record
-meaningless, and the benchmark on the landing page would stop describing what
-visitors actually see. If the deployed chain ever changes, it changes in both
-places in the same commit.
+The club engine is built from `DEPLOYED_CLUB_ENGINE_KWARGS`, the same dict the
+pre-kickoff logger and the walk-forward benchmark use. That matters: a site
+quoting different probabilities from the ones logged and benchmarked would make
+the track record meaningless, and the benchmark on the landing page would stop
+describing what visitors actually see.
 
-The joblib cache is shared with the Streamlit app on purpose — same directory,
-same key — so whichever process starts first pays the ~3 minute fit and the
-other one loads it in under a second.
+Fits are cached with joblib under data/processed/cache, keyed on the data and a
+hash of the engine code, so only the first start after a change pays the
+~3 minute fit.
 """
 from __future__ import annotations
 

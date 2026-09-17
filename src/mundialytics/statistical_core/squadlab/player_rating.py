@@ -12,7 +12,7 @@ calibration constants. Calibrated only by "does the distribution look sane".
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 

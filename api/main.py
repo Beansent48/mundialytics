@@ -1,15 +1,15 @@
 """
 Mundialytics HTTP API.
 
-Serves the same fitted engine the Streamlit app serves, over JSON, so the web
-front end can render fixtures and match analysis without importing pandas.
+Serves the deployed club engine over JSON, so the web front end (web/) can
+render fixtures and match analysis without importing pandas.
 
 Run it:
     .venv/Scripts/python.exe -m uvicorn api.main:app --port 8000 --reload
 
-The first request pays the model fit (~3 min) unless the joblib cache is warm,
-which it is whenever the Streamlit app has been opened since the last data
-update — the two share the cache directory and the key.
+The first request pays the model fit (~3 min) unless the joblib cache is warm;
+the cache key folds in the data size, its last date and a hash of the engine
+code, so it survives restarts and invalidates itself on either change.
 """
 from __future__ import annotations
 
@@ -1181,7 +1181,6 @@ def awards(competition: str) -> dict:
     return out
 
 # ── SquadLab ───────────────────────────────────────────────────────────────────
-from pydantic import BaseModel, Field  # noqa: E402
 
 
 class SeasonRequest(BaseModel):

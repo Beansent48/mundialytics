@@ -24,7 +24,7 @@ from sklearn.linear_model import PoissonRegressor
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from calibrate_elo_lambda import FD_TO_CLUBELO, clubelo_name, fetch_history  # noqa: E402
+from calibrate_elo_lambda import clubelo_name, fetch_history  # noqa: E402
 
 MARKETS = {
     "corners": ("home_corners", "away_corners", [8.5, 9.5, 10.5]),

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +10,6 @@ import numpy as np
 import pandas as pd
 
 from mundialytics.statistical_core.evaluation import (
-    _evaluation_summary,
     _score_match_predictions,
     apply_match_calibration,
     build_historical_match_results,

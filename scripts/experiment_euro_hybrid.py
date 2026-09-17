@@ -22,7 +22,7 @@ from mundialytics.statistical_core.distributions import outcome_probabilities  #
 from mundialytics.statistical_core.prediction_engine import PredictionEngine  # noqa: E402
 
 from validate_european_mapping import (  # noqa: E402
-    CALIB, ALIASES, download_results, fetch_history, norm, resolve_names)
+    download_results, fetch_history, resolve_names)
 
 # ClubElo name -> foundation name for big-5 clubs (reverse of the calibration map)
 CLUBELO_TO_FD = {

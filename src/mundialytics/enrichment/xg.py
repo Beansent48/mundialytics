@@ -5,7 +5,7 @@ from typing import Any
 
 import pandas as pd
 
-from mundialytics.data_quality.team_registry import normalize_provider_name, provider_alias_map
+from mundialytics.data_quality.team_registry import normalize_provider_name
 
 
 XG_ENRICHMENT_VERSION = "v0.49.6_xg_enrichment"
@@ -157,8 +157,7 @@ def enrich_matches_with_xg(
     canonical_xg = canonical_xg.copy()
     canonical_xg["match_join_key"] = xg_key
 
-    # Prefer explicit match_id when available; otherwise date/team key.
-    xg_by_id = canonical_xg.dropna(subset=["provider_match_id"]).copy()
+    # Joined on the date/team key only (one xG row per key).
     xg_by_key = canonical_xg.drop_duplicates("match_join_key", keep="first").copy()
 
     enriched = match_df.merge(
