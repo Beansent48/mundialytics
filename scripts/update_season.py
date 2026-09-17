@@ -15,6 +15,7 @@ Understat writes are append + dedupe):
   5. re-attach the xG columns to the foundation (the builder predates xG)
   6. refresh canonical_matches_with_xg (walk-forward context joins)
   7. prune the fitted-props cache (the app refits + recaches on next load)
+  7m. pre-compute the league forecasts and Golden Boot races the web serves
   8. [--full] regenerate the deployed-chain walk-forward cache (Resultados page)
 
 The engines and props models need no manual retrain: they fit from the
@@ -335,6 +336,13 @@ def main() -> None:
                  [PY, "scripts/log_upcoming_round.py"])
     else:
         print("\n=== 7b/8 upcoming-round logging SKIPPED ===", flush=True)
+
+    # League forecasts and Golden Boot races cost ~30 s each and are keyed on the
+    # matches played, so this refresh has just invalidated them. Computing them
+    # here means no visitor waits past the web client's 20 s timeout — which
+    # rendered the league page as a 404 for the first one after every refresh.
+    run_step("7m/8 warm league + awards caches (web)",
+             [PY, "scripts/warm_api_caches.py"], optional=True, timeout=900)
 
     if args.full:
         run_step("8/8 deployed walk-forward cache (Resultados)",

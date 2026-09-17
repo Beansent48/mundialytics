@@ -165,8 +165,23 @@ def _load_player_props():
     import joblib
     files = sorted(glob.glob(str(ROOT / "data/processed/cache/props_models_*.joblib")))
     if not files:
-        print("  player props: sin cache (arranca la app una vez para generarla)")
-        return None
+        # update_season prunes the fitted-model caches right before this step, so
+        # an unattended run never found one here and logged no player market at
+        # all between 2026-09-05 and 2026-09-17. Fit it instead, through the same
+        # function the app uses, so the cache key and the squads match what the
+        # site serves (and the app then starts warm).
+        print("  player props: sin cache -> ajustando como la app...", flush=True)
+        try:
+            if str(ROOT) not in sys.path:
+                sys.path.insert(0, str(ROOT))
+            from api.engine import props_models
+            _, pp = props_models()
+        except Exception as exc:
+            print(f"  player props: no se pudo ajustar ({str(exc)[:60]})")
+            return None
+        print("  player props: OK (recien ajustado)" if pp is not None
+              else "  player props: el ajuste no trae modelo de jugador")
+        return pp
     try:
         _, pp = joblib.load(files[-1])
     except Exception as exc:
