@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from mundialytics.ratings.clubelo_local import (  # noqa: E402
-    EloParams, expected_home, goal_diff_multiplier)
+    expected_home, goal_diff_multiplier)
 
 FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 OUT = ROOT / "data/processed/local_elo_params.json"

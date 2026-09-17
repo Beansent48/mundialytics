@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
 from mundialytics.betting.odds_contract import (
-    ODDS_INPUT_COLUMNS,
     join_key_columns,
     standard_model_line_frame,
     standard_odds_input_frame,

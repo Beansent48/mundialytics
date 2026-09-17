@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -12,7 +11,7 @@ import pandas as pd
 
 from mundialytics.statistical_core.distributions import probability_for_count_line, parse_numeric_line
 from mundialytics.statistical_core.player_event_model import PLAYER_MARKETS, POSITION_PRIORS, _position_key
-from mundialytics.statistical_core.schemas import canonical_name, standardize_fixtures, write_json
+from mundialytics.statistical_core.schemas import canonical_name, write_json
 from mundialytics.statistical_core.team_stats_model import EVENT_ALIASES, TeamStatsModel, build_team_match_stat_frame
 
 

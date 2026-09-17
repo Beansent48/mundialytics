@@ -15,7 +15,6 @@ rolling+EWMA, opp mirror, is_home, goals-delta + lambda-delta, NB):
 Same folds/eval as always; anything beating DEPLOYED consistently gets in.
 """
 
-import sys
 import time
 from pathlib import Path
 
@@ -55,7 +54,7 @@ def bll(y, p):
 def add_positions(full: pd.DataFrame) -> pd.DataFrame:
     """Walk-forward league position + games played BEFORE each match."""
     full = full.sort_values("date").copy()
-    ph, pa, gh = [], [], []
+    ph = []
     for (_, _), g in full.groupby(["competition", "season"], sort=False):
         pts: dict = {}
         played: dict = {}

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import math
 import pandas as pd
 
 from mundialytics.betting.odds_contract import (
     fair_odds_from_probability,
     min_acceptable_odds_from_probability,
     standard_model_line_frame,
-    standard_odds_input_frame,
     merge_model_lines_with_odds,
 )
 

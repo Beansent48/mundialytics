@@ -363,7 +363,7 @@ def _format_count(value: Any) -> str:
 def _recommended_picks(betting_edges: pd.DataFrame) -> pd.DataFrame:
     if betting_edges is None or betting_edges.empty or "recommended" not in betting_edges.columns:
         return pd.DataFrame()
-    return betting_edges[betting_edges["recommended"] == True].copy()
+    return betting_edges[betting_edges["recommended"].eq(True)].copy()
 
 
 def _build_executive_summary(match_predictions: pd.DataFrame) -> pd.DataFrame:

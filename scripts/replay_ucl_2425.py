@@ -12,7 +12,6 @@ Elo used: pre-tournament (2024-09-01) — walk-forward honest.
 """
 
 import sys
-from io import StringIO
 from pathlib import Path
 
 import numpy as np

@@ -15,7 +15,6 @@ per-(game,team) aggregate for the harness. Diagnostics: AUC, calibration by xG
 bin, and the per-season goals/xG ratio for OURS vs Understat's (drift check).
 """
 
-import sys
 from pathlib import Path
 
 import numpy as np

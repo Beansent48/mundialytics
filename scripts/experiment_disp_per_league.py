@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import nbinom, poisson
+from scipy.stats import nbinom
 from sklearn.linear_model import PoissonRegressor
 
 ROOT = Path(__file__).resolve().parents[1]

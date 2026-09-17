@@ -87,8 +87,7 @@ ROLE_WEIGHTS = {
 # How many of each card kind the shortlist carries, per position. The catalogue
 # holds 138 primes and 62 icons against 2,811 current players, but sorting the
 # lot by rating floats every special to the top and a draft becomes "take the
-# eleven legends" — the shortlist has to carry the scarcity the pack odds carry
-# in the Streamlit draft.
+# eleven legends" — the shortlist has to carry the scarcity the pack odds carry.
 POOL_MIX = {"actual": 34, "prime": 4, "icono": 2}
 
 # The player-profile file and the results file spell competitions differently.

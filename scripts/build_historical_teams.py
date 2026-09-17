@@ -42,7 +42,6 @@ untouched.
 Output: data/processed/historical_teams.csv
 """
 
-import dataclasses
 import re
 import sys
 import unicodedata

@@ -122,7 +122,7 @@ def main() -> None:
     y = np.where(m.hg > m.ag, 0, np.where(m.hg == m.ag, 1, 2))
 
     r_model, r_mkt = rps3(y, P), rps3(y, M)
-    print(f"\n=== PUNTO DE PARTIDA ===")
+    print("\n=== PUNTO DE PARTIDA ===")
     print(f"  modelo   RPS {r_model:.4f}   logloss {logloss(y, P):.4f}")
     print(f"  Bet365   RPS {r_mkt:.4f}   logloss {logloss(y, M):.4f}")
     print(f"  brecha   {r_model - r_mkt:+.4f}  ({(r_model - r_mkt) / r_mkt * 100:+.1f}%)")
@@ -131,7 +131,7 @@ def main() -> None:
     Pr = oracle_recalibrated(P, y)
     r_recal = rps3(y, Pr)
     closed = (r_model - r_recal) / (r_model - r_mkt) * 100
-    print(f"\n=== 1. ¿ES CALIBRACION? (techo de recalibrar, OOF) ===")
+    print("\n=== 1. ¿ES CALIBRACION? (techo de recalibrar, OOF) ===")
     print(f"  modelo recalibrado  RPS {r_recal:.4f}  ({r_recal - r_model:+.4f})")
     print(f"  cierra {closed:.0f}% de la brecha")
     print("  -> " + ("CALIBRACION: recalibrar es rentable" if closed > 25 else
@@ -139,7 +139,7 @@ def main() -> None:
                      " la brecha es INFORMACION que el mercado tiene y nosotros no"))
 
     # ── 2. do we hold orthogonal information? ────────────────────────────────
-    print(f"\n=== 2. ¿TENEMOS INFO QUE EL MERCADO NO TIENE? (mezcla, NO desplegable) ===")
+    print("\n=== 2. ¿TENEMOS INFO QUE EL MERCADO NO TIENE? (mezcla, NO desplegable) ===")
     best_w, best_r = 0.0, r_mkt
     for w in np.arange(0, 1.01, 0.05):
         B = w * P + (1 - w) * M
@@ -160,7 +160,7 @@ def main() -> None:
     m["y"] = y
     m["fav"] = M.max(axis=1)
 
-    print(f"\n=== 3. ¿DONDE PERDEMOS? (perdida media vs mercado) ===")
+    print("\n=== 3. ¿DONDE PERDEMOS? (perdida media vs mercado) ===")
     print("  por resultado real:")
     for k, lbl in [(0, "local gana"), (1, "empate"), (2, "visitante gana")]:
         s = m[m.y == k]
@@ -182,7 +182,7 @@ def main() -> None:
               f"   (modelo {s.rps_model.mean():.4f} vs mkt {s.rps_mkt.mean():.4f})")
 
     # ── 4. are we systematically over/under-confident? ───────────────────────
-    print(f"\n=== 4. SESGO DE CONFIANZA (media de nuestras probs vs mercado vs real) ===")
+    print("\n=== 4. SESGO DE CONFIANZA (media de nuestras probs vs mercado vs real) ===")
     for i, lbl in [(0, "local"), (1, "empate"), (2, "visitante")]:
         print(f"  {lbl:10s} modelo {P[:, i].mean():.4f} | mercado {M[:, i].mean():.4f} "
               f"| real {(y == i).mean():.4f}")

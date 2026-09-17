@@ -108,7 +108,7 @@ def main() -> None:
             base_ll = ll
         folds = " ".join(f"{s[-2:]}{'+' if bll(y[seas==s], p[seas==s]) < base_ll else ''}"
                          for s in bp.TEST_SEASONS) if name != "deployed (.7xa+.3as)" else ""
-        print(f"  {name:22s}: LL {ll:.4f} (d {ll-base_ll:+.4f})", flush=True)
+        print(f"  {name:22s}: LL {ll:.4f} (d {ll-base_ll:+.4f})  {folds}", flush=True)
 
 
 if __name__ == "__main__":

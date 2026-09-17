@@ -37,7 +37,6 @@ def ll3(y_idx, P):
 def main() -> None:
     w = pd.read_csv(CACHE)
     w["y"] = np.where(w.hg > w.ag, 0, np.where(w.hg == w.ag, 1, 2))
-    seasons = sorted(w.season.unique())
 
     res = {"raw": {"rps": [], "ll": []}, "cal": {"rps": [], "ll": []}}
     bias_rows = []

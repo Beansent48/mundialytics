@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mundialytics.statistical_core.attack_defense_model import AttackDefenseModel
 from mundialytics.statistical_core.player_strength import PlayerStrengthModel
 from mundialytics.statistical_core.prediction_engine import PredictionEngine
 from mundialytics.statistical_core.squadlab.calendar import generate_double_round_robin

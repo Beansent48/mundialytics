@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -390,7 +389,6 @@ def _predict_prop_rows(train: pd.DataFrame, target: pd.DataFrame, config: dict[s
     target["position_key"] = target["position"].map(_position_key)
     train["position_group"] = train["position_key"].map(_position_group)
     target["position_group"] = target["position_key"].map(_position_group)
-    profile_cols = ["player_id_global", "player", "position_key", "position_group", "team_type", "gender", "competition_context"]
     agg = {"minutes": "sum", "started": "mean"}
     for col in event_cols.values():
         agg[col] = "sum"

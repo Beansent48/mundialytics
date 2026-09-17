@@ -18,7 +18,6 @@ Run: .venv/Scripts/python.exe scripts/build_local_clubelo.py
 
 import glob
 import json
-import re
 import sys
 from pathlib import Path
 

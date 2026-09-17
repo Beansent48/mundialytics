@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from mundialytics.statistical_core.match_model import MatchOutcomeModel, _team_match_goal_frame
-from mundialytics.statistical_core.schemas import canonical_name, standardize_fixtures, write_json
+from mundialytics.statistical_core.schemas import canonical_name, write_json
 
 
 @dataclass(frozen=True)

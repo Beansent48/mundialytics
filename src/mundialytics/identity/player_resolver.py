@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from mundialytics.identity.normalization import canonical_player_name, canonical_team_name, normalize_text, player_tokens

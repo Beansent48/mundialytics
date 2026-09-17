@@ -48,7 +48,8 @@ def main() -> None:
     train, test = d[d.date < args.cutoff], d[d.date >= args.cutoff]
     print(f"train {len(train)} internationals (<{args.cutoff}) | test {len(test)}")
 
-    # same configuration the Streamlit app builds for the national scope
+    # the national-scope configuration (separate from the club one: strengths
+    # are not comparable across the two contexts)
     elo = EloRater(EloConfig(season_reset_fraction=0.35, k_base=28.0))
     elo.fit(train)
     eng = PredictionEngine(blend_weight_gl=0.45, ad_rho=-0.06)

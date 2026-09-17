@@ -23,7 +23,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-from scipy.stats import poisson
 
 from mundialytics.statistical_core.calibration import recency_weights
 from mundialytics.statistical_core.distributions import (

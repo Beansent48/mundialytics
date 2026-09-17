@@ -113,7 +113,6 @@ def main() -> None:
         lh=np.concatenate(lh); la=np.concatenate(la)
         return az.score(pooled, az.arm_probs(lh,la)), preds
     oos2, p2 = lofo(["ad","xr"]); oos3, p3 = lofo(["gl","ad","xr"])
-    oracle3 = config_score(c, learn_w(c, ["gl","ad","xr"]))
 
     print("===== 1X2 RPS by config =====")
     print(f"  base-rate climatology            {base_rps:.4f}")
@@ -121,7 +120,7 @@ def main() -> None:
     print(f"  OOS-learned  ad+xr               {oos2['rps']:.4f}")
     print(f"  OOS-learned  gl+ad+xr            {oos3['rps']:.4f}")
     print(f"  in-sample oracle gl+ad+xr        {config_score(c, learn_w(c,['gl','ad','xr']))['rps']:.4f}  (upper bound)")
-    print(f"  learned weights per fold (gl+ad+xr): " + "; ".join(f"{s}:{tuple(round(v,2) for v in w.values())}" for (d,w),s in zip(p3,seasons)))
+    print("  learned weights per fold (gl+ad+xr): " + "; ".join(f"{s}:{tuple(round(v,2) for v in w.values())}" for (d,w),s in zip(p3,seasons)))
 
     print("\n===== DEPLOYED — full statistical value =====")
     skill_block(c, deployed, base)

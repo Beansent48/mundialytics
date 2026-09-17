@@ -254,7 +254,6 @@ def build_simulation_evaluation_html_report(
     out.parent.mkdir(parents=True, exist_ok=True)
     metrics = outputs.metrics
     summary = metrics.get("metrics", {})
-    baseline_summary = metrics.get("baselines", {})
     warnings = metrics.get("warnings", [])
 
     css = """

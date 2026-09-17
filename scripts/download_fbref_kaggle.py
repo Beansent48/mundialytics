@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import argparse
 import io
-import sys
 import urllib.request
 import zipfile
 from pathlib import Path

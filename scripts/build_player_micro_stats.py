@@ -50,7 +50,7 @@ OUT = ROOT / "data/processed/player_micro_stats.csv"
 # The recency and minutes conventions are shared with the attacking builder so
 # the two stay consistent; import rather than re-declare.
 from build_player_attack_fbref import (  # noqa: E402
-    SEASON_RECENCY, MIN_90S, LEAGUE_2526, _pos, align_positions, league_elo, LEAGUE_W,
+    SEASON_RECENCY, MIN_90S, LEAGUE_2526, _pos, align_positions, league_elo,
 )
 
 CRED_90S = 10.0     # minutes credibility: a percentile is shrunk toward 0.5 by this
@@ -84,7 +84,7 @@ def load_2526() -> pd.DataFrame:
     d = d.sort_values("90s_", ascending=False).drop_duplicates("player")
     nu = (_num(d["minutes_under"]) / 90.0).clip(lower=0.5)      # Understat 90s
     ns = (_num(d["minutesPlayed"]) / 90.0).clip(lower=0.5)      # SofaScore 90s
-    npg, npxg = _num(d["np_goals_under"]), _num(d["np_xg_under"])
+    npxg = _num(d["np_xg_under"])
     out = pd.DataFrame({
         "player": d["player"], "season": "2526", "league": d["league"].map(LEAGUE_2526).fillna(d["league"]),
         "position": d["pos_"].map(_pos), "n90": _num(d["90s_"]),

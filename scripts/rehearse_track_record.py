@@ -25,7 +25,6 @@ Run: .venv/Scripts/python.exe scripts/rehearse_track_record.py
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]

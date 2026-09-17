@@ -13,7 +13,6 @@ from mundialytics.statistical_core.player_event_model import PlayerEventModel
 from mundialytics.statistical_core.reporting import build_daily_html_report
 from mundialytics.statistical_core.team_stats_model import TeamStatsModel
 from mundialytics.statistical_core.tournament_simulator import TournamentSimulationConfig, TournamentSimulator
-import pytest
 
 
 def _fixtures() -> pd.DataFrame:

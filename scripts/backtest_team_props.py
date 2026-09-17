@@ -53,7 +53,6 @@ def bll(y, p):
 def main() -> None:
     df = pd.read_csv(FOUND, low_memory=False)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    seasons = sorted(df["season"].dropna().unique())
     df = df[df["season"] >= SEASONS_FROM].copy()
 
     for market, (hc, ac, lines) in MARKETS.items():

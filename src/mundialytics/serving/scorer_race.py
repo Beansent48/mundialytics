@@ -2,9 +2,9 @@
 The top-scorer race.
 
 Who ends the season as the league's leading scorer, simulated from the fixtures
-still to be played. Shared by the Streamlit app and the HTTP API for the same
-reason the settlement code is: two front ends running two copies of a Monte
-Carlo will quote two different favourites, and a product that disagrees with
+still to be played. Kept out of the HTTP layer for the same reason the
+settlement code is: two copies of a Monte Carlo will quote two different
+favourites, and a product that disagrees with
 itself about who is winning the Golden Boot has no business publishing either
 number.
 """

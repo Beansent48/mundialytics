@@ -13,7 +13,7 @@ import json
 import matplotlib.pyplot as plt
 from pathlib import Path
 from sklearn.metrics import log_loss, brier_score_loss
-from sklearn.calibration import calibration_curve   # <-- import correcto
+from sklearn.calibration import calibration_curve
 import warnings
 warnings.filterwarnings('ignore')
 

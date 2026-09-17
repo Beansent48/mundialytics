@@ -123,7 +123,7 @@ def benchmark(pr: pd.DataFrame) -> None:
     y = np.where(pr.hg > pr.ag, 0, np.where(pr.hg == pr.ag, 1, 2))
     P = pr[["ph", "pd", "pa"]].to_numpy()
     P = P / P.sum(axis=1, keepdims=True)
-    print(f"\n=== NUESTRO RENDIMIENTO EN SEGUNDAS ===")
+    print("\n=== NUESTRO RENDIMIENTO EN SEGUNDAS ===")
     print(f"  RPS global {rps3(y, P):.4f}   (Big5 desplegado: 0.2007)")
 
     # ── benchmark vs Bet365 ──────────────────────────────────────────────────
@@ -146,7 +146,7 @@ def benchmark(pr: pd.DataFrame) -> None:
     print(f"  nosotros  RPS {r_us:.4f}")
     print(f"  Bet365    RPS {r_mkt:.4f}")
     print(f"  BRECHA    {gap:+.4f}  ({gap / r_mkt * 100:+.1f}%)")
-    print(f"  -- Big5 de referencia: brecha +0.0062 (+3.2%) --")
+    print("  -- Big5 de referencia: brecha +0.0062 (+3.2%) --")
     verdict = ("MEJOR que en Big5: aqui el mercado es mas blando"
                if gap / r_mkt < 0.032 else
                "IGUAL O PEOR que en Big5: el mercado no es mas blando aqui")

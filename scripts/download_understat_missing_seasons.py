@@ -12,7 +12,6 @@ Run with the project venv (has soccerdata; Understat needs a one-time tls-client
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pandas as pd

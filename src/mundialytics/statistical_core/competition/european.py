@@ -519,7 +519,7 @@ class EuropeanTournament:
                     t["leg2_home"] = a
                 if pd.notna(r.hg):
                     t["legs_played"] += 1
-                    ha, hb = (a, b)
+                    ha = a
                     t["agg_a" if ha == t["a"] else "agg_b"] += int(r.hg)
                     t["agg_b" if ha == t["a"] else "agg_a"] += int(r.ag)
             expected_legs = 1 if rnd == "final" else 2

@@ -1,9 +1,8 @@
 """
 Turning a chosen eleven into rosters the season simulator can play with.
 
-Shared by the Streamlit app and the HTTP API. Both need the same two things and
-both would get them subtly wrong on their own — in particular the cloning rule,
-which is load-bearing rather than cosmetic.
+Kept out of the HTTP layer so the rules live in one tested place — in
+particular the cloning rule, which is load-bearing rather than cosmetic.
 """
 from __future__ import annotations
 
