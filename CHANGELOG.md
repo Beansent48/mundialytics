@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.51.0 — Repository cleanup (2026-09-17)
+
+### Fixed
+- `data/extra_match_stats.parse_statsbomb_event_json` parsed each match's season
+  and then wrote an empty `season` column; it now writes the parsed value.
+- Two UEFA clubs had no rating alias (Union SG → St Gillis, Iberia Tbilisi →
+  Saburtalo, its pre-2023 name in ClubElo).
+- `scripts/evaluate_league_forecast.py` hand-copied the pre-2026-09-14 club
+  config; it now builds from `DEPLOYED_CLUB_ENGINE_KWARGS`. Re-run: the Brier
+  scores are unchanged to four decimals (0.0168 / 0.0425 / 0.0684).
+- Web: `npm run lint` failed with 7 `react-hooks/set-state-in-effect` errors.
+  Fetching components now key their result on the request (no synchronous resets
+  inside effects); favourites read localStorage through `useSyncExternalStore`;
+  hydration guards share a `useMounted` hook. Lint and `tsc` are clean.
+
+### Changed
+- `features/team_features.py` and `enrichment/advanced.py` build new columns in
+  one concat instead of ~40–100 single inserts — the source of the ~1,100 pandas
+  `PerformanceWarning`s in the test run. Output verified identical
+  (`assert_frame_equal`, exact) on the deployed engine's 92,070 team rows and on
+  47 real provider files.
+- Dependencies: dropped `statsmodels` and `plotly` (never imported); declared
+  `fastapi`, `uvicorn` and `pydantic` (the API); `pyproject` gains `api`, `data`
+  (soccerdata, for the refresh) and `dev` extras. `requirements-lock.txt` is now
+  labelled as the known-good version set rather than posing as a lock.
+- Removed ~90 unused imports and ~25 unused variables across src/, api/ and
+  scripts/ (ruff F401/F841/F811/F541/E712/B904 clean outside the legacy set).
+- Comments and docstrings no longer describe the Streamlit app removed on
+  2026-09-09.
+
+### Docs & CI
+- README: current test counts, corrected claims (per-competition shrinkage was
+  tried, no goalkeeper-quality layer, ClubElo API outage dated), layout now lists
+  `serving/`, `api/` and `web/`.
+- The 95 version-era documents moved to `docs/archive/` with an index in
+  `docs/README.md`; `web/README.md` replaces the create-next-app template.
+- CI runs a second job for the web app: `npm ci`, lint, typecheck.
+- `src/*.egg-info` is no longer versioned.
+
+
 ## v0.50.4 — Live current-season xG via Sofascore; ESPN calendar fix
 
 ### Added
@@ -32,6 +72,59 @@
 - `scripts/enrich_matches_with_xg.py` (the `canonical_matches_with_xg` used by the
   `--full` walk-forward cache) still reads Understat-only xG; the deployed engine
   reads the foundation directly and is unaffected.
+
+
+## Development summary — 2026-06-29 → 2026-09-15 (between v0.50.3 and v0.50.4)
+
+Built commit by commit without per-version entries; grouped here from the git
+history.
+
+### Match engine
+- `AttackDefenseModel` (per-league Dixon-Coles MLE), `PredictionEngine` as the
+  single match/tournament interface, Elo with season reset (0.40, walk-forward
+  tuned).
+- Dedicated xG-rate predictor with walk-forward form, then EWMA form — the
+  largest accuracy gain in the project (5/5 and 6/6 temporal folds).
+- 1X2 sharpening (gamma 1.3), xG→goals lambda rescale, draw correction; the
+  draw correction was later softened (`outcome_rho` −0.17 → −0.06, `goal_temper`
+  1.05) and the deployed configuration moved to one source,
+  `DEPLOYED_CLUB_ENGINE_KWARGS` (2026-09-14).
+- Negative results recorded: own-xG, GBT stacking, opponent-adjusted form,
+  venue-split form, vector calibration, set-piece model, per-competition
+  shrinkage, second divisions and early prices as a market edge.
+
+### Validation
+- Walk-forward benchmark against Bet365 closing odds on the deployed model
+  (RPS 0.2008 vs 0.1946), reliability diagram, and out-of-sample measurement of
+  the national, European, league-forecast, half-time and props layers.
+- `pytest tests/` became a real gate (11 failures → 0, 3 latent bugs fixed;
+  legacy import-broken tests quarantined).
+
+### Markets
+- Player props (6 markets, penalty-taker split) and team props (totals, team-side
+  lines, booking points, referee effect, Platt calibration).
+- Half-time markets: HT result, HT over/under, HT/FT.
+
+### Competitions
+- League forecasting from the current table; Champions/Europa/Conference
+  simulator (Swiss format), resumable from any bracket state; local ClubElo
+  roll-forward after the ClubElo API outage.
+
+### Track record and operations
+- Predictions logged before kick-off and settled afterwards (the earlier
+  retroactive rows quarantined); player markets logged and settled.
+- `scripts/update_season.py` one-command refresh with integrity check and
+  rollback; daily Windows task via `scripts/run_update.ps1`.
+- ESPN as the fixtures and player-stats backbone after fixturedownload went dark;
+  FBref via Kaggle; current squads from ESPN rosters.
+
+### Product
+- Streamlit app (June–September), replaced by a Next.js front end over a FastAPI
+  service (2026-09-06; Streamlit removed 2026-09-09).
+- SquadLab: role-based player ratings, FUT-style card draft, match-by-match
+  Champions League simulation, historical all-time sides.
+- Played-match page with minute-by-minute timeline and team stats; web cache
+  invalidated automatically by the daily refresh.
 
 
 ## v0.50.3 — FBref Team-Match Normalization Repair

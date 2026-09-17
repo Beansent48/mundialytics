@@ -1,6 +1,6 @@
 # Reproducible data-source plan. No source is mandatory: each adapter should
-# write into the same canonical CSV schemas documented in docs/REPRODUCIBLE_SCOPE.md
-# and docs/EVENT_DATA_PIPELINE.md.
+# write into the same canonical CSV schemas documented in docs/archive/REPRODUCIBLE_SCOPE.md
+# and docs/archive/EVENT_DATA_PIPELINE.md.
 
 national_teams:
   historical_results:

@@ -17,9 +17,9 @@ cannot be back-fitted.
 
 ![Match view](docs/img/app.png)
 
-*One fixture: 1X2, the full score matrix, goal markets and expected team stats —
-every one of them read off the same score distribution, so they cannot disagree
-with each other.*
+*One fixture in the web app: 1X2, expected goals, likely scorers, goal markets and
+the likeliest scorelines. The match markets are all read off the same score
+distribution, so they cannot disagree with each other.*
 
 ## The headline result
 
@@ -230,8 +230,9 @@ competitions with small fits: Euro qualification runs +0.31/+0.42 and the AFC
 Asian Cup +0.92/+0.94 on 51 matches. `AttackDefenseModel` fits μ and home
 advantage *per competition*, and the Asian Cup gets about 115 training matches
 to do it with — small-sample over-fitting, not a broken home-advantage term.
-Shrinking those per-competition parameters toward the global fit is the obvious
-next experiment.
+Shrinking those per-competition parameters toward the pooled fit was the obvious
+next experiment; it fixes the Asian Cup but does not survive five temporal folds
+(see What didn't work).
 
 One caveat that cost a day to learn: `AttackDefenseModel` keeps a
 per-competition μ and home advantage, and an unrecognised competition name falls
@@ -257,7 +258,7 @@ the SquadLab calibration reported under In progress.
 |---|---|
 | Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
-| Odds layer | ingestion, de-vigging, market mapping, value, staking |
+| Odds layer | odds contract and readiness checks, de-vigging, value, pick policy |
 | Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
 | Live logging | every prediction written pre-kickoff and settled afterwards |
 
@@ -271,8 +272,8 @@ Listed because half-finished work is normal and hiding it helps nobody.
 - **SquadLab** — now a playable draft, not just a simulator. Open tiered packs,
   draft an eleven from ACTUAL / PRIME / ICON player cards (with re-rolls), pick a
   formation, and play the **real Champions League** with your side dropped into an
-  actual bracket, resolved match by match on the same engine. Simulator, calendar,
-  the historical all-time catalogue and goalkeeper-quality layer all work. The
+  actual bracket, resolved match by match on the same engine. Simulator, calendar
+  and the historical all-time catalogue all work. The
   card axes are mapped per position-quantile (attack/defence/creation live on
   different scales), and the squad's rating maps onto team strength through a
   calibration that is precise on attack (R² = 0.68) and modest on defence
@@ -287,8 +288,8 @@ Listed because half-finished work is normal and hiding it helps nobody.
   problem, which was the first guess and was wrong: none of the 46 blocked clubs
   is present on disk under any spelling. They are champions of smaller
   associations — Cyprus, Israel, Bulgaria, Czechia, the Nordics — whose Elo
-  histories were never downloaded, and the ClubElo API is currently returning
-  502. Audit it with `python scripts/audit_european_elo_coverage.py`; full
+  histories were never downloaded, and the ClubElo API has been returning 502
+  since early September (still down on 2026-09-17). Audit it with `python scripts/audit_european_elo_coverage.py`; full
   write-up in [`docs/EUROPEAN_ELO_COVERAGE.md`](docs/EUROPEAN_ELO_COVERAGE.md).
 - **xG coverage** — ~97% of historical matches (Bundesliga 2024/25 is the notable
   hole, an upstream scraper bug rather than a missing source). Understat stopped
@@ -306,6 +307,9 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
 pytest tests/                    # clean-checkout suite
+
+# Only for the daily data refresh (brings soccerdata + Selenium):
+pip install -e ".[data]"
 
 # The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes:
 uvicorn api.main:app --port 8000
@@ -327,26 +331,27 @@ results and forward predictions stay current without a manual run.
 
 ```
 src/mundialytics/
-├── statistical_core/   probability engine, simulator, squadlab, competitions
-├── models/             goals, events, minutes, xG rate
-├── features/           rolling team features, player baselines
+├── statistical_core/   probability engine, simulators, squadlab, competitions
+├── models/             goal, result and minutes models, xG rate
+├── features/           rolling team features, team match stats
 ├── ratings/            internal Elo, local ClubElo
+├── props/              player, team and half-time markets
 ├── evaluation/         RPS, Brier, log loss, walk-forward backtesting
-├── props/              player and team prop markets
-├── betting/            odds, de-vig, value, staking, market mapping
+├── serving/            track record, scorer race, SquadLab rosters (for the API)
+├── betting/            odds contract, de-vig, value, pick policy (dormant)
 ├── data/               canonical schema, provider adapters, loaders
 ├── data_quality/       team registry, entity guardrails, leakage-safe snapshots
-├── identity/           player and team identity resolution across providers
+├── identity/           player and team identity, current squads
 ├── enrichment/         xG, ClubElo and advanced-stat joins
-├── providers/          external API configuration
-├── matchday/           per-matchday orchestration
-├── reports/            daily picks, paper ledger, match reports
-└── simulation/         tournament Monte Carlo
+├── providers/          ESPN fixtures, external API configuration
+└── matchday/, reports/ earlier matchday builder and paper-ledger reports
 
+api/                    FastAPI service the web app reads from
+web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  165 tests green on a clean checkout; 39 more
+tests/                  194 tests green on a clean checkout; 74 more
                         skip unless the local dataset is built
-docs/                   design docs and full version history
+docs/                   README figures, one current note, archived history
 ```
 
 ## Scope and data
@@ -363,10 +368,9 @@ a fixture host going dark — so the fixture calendar and the player-settlement
 layer each read from two providers, and cross-source agreement is a test rather
 than an assumption.
 
-Full version-by-version history: [`docs/README_FULL.md`](docs/README_FULL.md)
-and [`CHANGELOG.md`](CHANGELOG.md). Design decisions:
-[`docs/MODEL_DESIGN.md`](docs/MODEL_DESIGN.md) and
-[`docs/DECISIONS.md`](docs/DECISIONS.md).
+Release notes: [`CHANGELOG.md`](CHANGELOG.md). The earlier design notes,
+per-version specs and the long chronological README are kept, partly in Spanish,
+under [`docs/archive/`](docs/README.md#archive).
 
 ## License
 

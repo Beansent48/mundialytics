@@ -251,7 +251,7 @@ def audit_data_sources(
         "next_phase": {
             "recommended_version": "v0.49.2_dataset_foundation",
             "goal": "collect and normalize real historical/current data before model changes or visual dashboards",
-            "required_docs": ["docs/NEXT_DATA_FOUNDATION_REQUIREMENTS.md"],
+            "required_docs": ["docs/archive/internal/NEXT_DATA_FOUNDATION_REQUIREMENTS.md"],
         },
     }
 

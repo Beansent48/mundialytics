@@ -39,8 +39,9 @@ plain `pytest` from the repo root would try to collect them.
 
 **Most scripts need data that isn't in the repo.** `data/raw/`, `data/external/`
 and most of `data/processed/` are gitignored (they're large and re-downloadable).
-Run the `download_` scripts first, or see
-[`docs/DATA_DOWNLOADS.md`](../docs/DATA_DOWNLOADS.md). The exception is
+`python scripts/update_season.py` fetches what the live pipeline needs; the older
+per-source download commands are in
+[`docs/archive/DATA_DOWNLOADS.md`](../docs/archive/DATA_DOWNLOADS.md). The exception is
 `data/processed/logs/predictions_log.csv`, which is versioned deliberately: it is
 the forward-test track record and losing it would mean losing the only
 un-backfittable evidence in the project.
