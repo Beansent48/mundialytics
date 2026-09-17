@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
+import { useMounted } from "@/lib/use-mounted";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,11 +21,11 @@ export function RandomLine({
   lines: string[];
   className?: string;
 }) {
-  const [index, setIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    setIndex(Math.floor(Math.random() * lines.length));
-  }, [lines.length]);
+  const mounted = useMounted();
+  // Drawn once per mount; the server's own draw is never shown, so it cannot
+  // disagree with the hydrated markup.
+  const [draw] = useState(() => Math.random());
+  const index = mounted && lines.length ? Math.floor(draw * lines.length) : null;
 
   return (
     <p

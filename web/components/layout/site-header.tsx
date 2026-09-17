@@ -25,7 +25,10 @@ const NAV = [
 export function SiteHeader() {
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // The menu belongs to the page it was opened on, so navigating closes it
+  // without an effect.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
   // Transparent over the hero, solid once you leave it — the header should not
   // draw a line across a full-bleed opening image.
   const [scrolled, setScrolled] = useState(false);
@@ -36,8 +39,6 @@ export function SiteHeader() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  useEffect(() => setOpen(false), [pathname]);
 
   return (
     <header
@@ -86,7 +87,7 @@ export function SiteHeader() {
             type="button"
             aria-label={open ? t("close") : t("menu")}
             aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpenOn(open ? null : pathname)}
             className="flex size-9 items-center justify-center rounded-full border border-border bg-surface text-muted transition-colors hover:text-text lg:hidden"
           >
             {open ? <X className="size-4" /> : <Menu className="size-4" />}

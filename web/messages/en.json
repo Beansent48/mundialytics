@@ -19,9 +19,7 @@
     "signIn": "Sign in",
     "signUp": "Create account",
     "settings": "Settings",
-    "preferences": "Preferences",
     "favorites": "Favourites",
-    "signOut": "Sign out",
     "soon": "Coming soon"
   },
   "theme": {
@@ -115,13 +113,7 @@
       "caption": "Real output of the deployed engine — LaLiga, matchday 4."
     }
   },
-  "common": {
-    "loading": "Loading",
-    "error": "Something went wrong",
-    "retry": "Try again"
-  },
   "notFound": {
-    "code": "404",
     "title": "This page does not exist",
     "body": "The address you asked for is not part of Mundialytics. It may be an old link, or a typo.",
     "home": "Back to the start",
@@ -199,9 +191,6 @@
       "shotsOnTarget": "On target",
       "possession": "Possession"
     },
-    "viewLabel": "View",
-    "viewReal": "What happened",
-    "viewCompare": "Versus our call",
     "summaryTitle": "Goals and cards",
     "sectionMatch": "The match",
     "sectionCall": "Our call",
@@ -213,24 +202,18 @@
     "ownGoalTag": "(og)",
     "penaltyTag": "(pen.)",
     "unattributed": "+{count} unattributed",
-    "noEvents": "No goals or cards recorded",
-    "noData": "This match's data hasn't been ingested yet.",
     "callsTitle": "Versus our call",
     "callsScore": "{hits} of {total} right",
     "happened": "happened",
     "favouriteWas": "Our favourite was {pick} ({p})",
     "realWas": "real: {value}",
     "realLabel": "real",
-    "scoreboardTitle": "Scoreline",
     "scorelineRank": "#{rank} likeliest scoreline · {p}",
     "scorelineOutside": "Outside the likeliest scorelines",
     "goalsExpectedReal": "{expected} expected · {real} real",
     "goalCount": "{count} goals",
     "statsTitle": "Match statistics",
     "predicted": "we said",
-    "error": "off by {value}",
-    "deltaLabel": "Δ {value}",
-    "statsNote": "Real statistics from the settled dataset, next to what the model expected before kick-off.",
     "rangeNote": "✓ means the real value landed inside the range we called most likely; the % is the probability we gave it.",
     "metaUpcoming": "{home} vs {away}: {h}% home, {d}% draw, {a}% away. Probabilities from a model fitted on 45,938 matches.",
     "metaPlayed": "{home} {score} {away} — the result next to what our model predicted before kick-off."

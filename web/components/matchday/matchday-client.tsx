@@ -196,9 +196,12 @@ function DayView({ today }: { today: string }) {
   const locale = useLocale();
   const [selected, setSelected] = useState(today);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [day, setDay] = useState<DayFixtures | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  // Keyed on the date it answers; the previous day's list is kept on failure.
+  const [result, setResult] = useState<{
+    date: string;
+    day: DayFixtures | null;
+    failed: boolean;
+  } | null>(null);
 
   useEffect(() => {
     api
@@ -209,17 +212,21 @@ function DayView({ today }: { today: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setFailed(false);
     api
       .fixturesDay(selected)
-      .then((d) => !cancelled && setDay(d))
-      .catch(() => !cancelled && setFailed(true))
-      .finally(() => !cancelled && setLoading(false));
+      .then((d) => !cancelled && setResult({ date: selected, day: d, failed: false }))
+      .catch(() => {
+        if (cancelled) return;
+        setResult((prev) => ({ date: selected, day: prev?.day ?? null, failed: true }));
+      });
     return () => {
       cancelled = true;
     };
   }, [selected]);
+
+  const loading = result?.date !== selected;
+  const failed = !loading && (result?.failed ?? false);
+  const day = result?.day ?? null;
 
   const label =
     selected === today
