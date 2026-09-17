@@ -48,7 +48,7 @@ coverage from 80% to 84% and improved the held-out RPS from 0.2104 to 0.2044.
 those the fix is downloading their history. The remaining 15 are not in the
 snapshot either and need checking against ClubElo's own naming.
 
-This is blocked on the upstream API:
+This is blocked on the upstream API, still down when last checked on 2026-09-17:
 
 ```
 $ curl -s -o /dev/null -w "%{http_code}" http://api.clubelo.com/Slavia
