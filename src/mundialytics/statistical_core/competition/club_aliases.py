@@ -112,6 +112,8 @@ CLUB_ALIASES.update({
     "agf": "Aarhus",                     # Aarhus Gymnastikforening
     "hapoel be'er": "Beer-Sheva",        # Hapoel Be'er Sheva
     "union st.-gilloise": "St Gillis",   # NOT Union Berlin, which fuzzy-matches
+    "union sg": "St Gillis",
+    "iberia tbilisi": "Saburtalo",       # renamed Iberia 1999; ClubElo keeps the old name
     "inter d'escaldes": "Escaldes",      # NOT "Atletic Club Escaldes", another Andorran side
     "riga fc": "FK Riga",
     # ClubElo writes the plain "o" here, so our transliteration (which correctly
