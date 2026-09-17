@@ -9,7 +9,7 @@ import re
 
 import pandas as pd
 
-from mundialytics.data_quality.team_registry import normalize_provider_name, provider_alias_map
+from mundialytics.data_quality.team_registry import normalize_provider_name
 
 
 ADVANCED_DATA_VERSION = "v0.50.3_fbref_team_match_normalization_repair"
@@ -928,13 +928,15 @@ def _canonicalize_match_provider_csv(df: pd.DataFrame, *, provider: str) -> pd.D
         "home_keeper_save_pct": ["home_keeper_save_pct", "home_save_pct"],
         "away_keeper_save_pct": ["away_keeper_save_pct", "away_save_pct"],
     }
-    out = pd.DataFrame(index=df.index)
+    picked: dict[str, object] = {}
     for col in ADVANCED_MATCH_COLUMNS:
         if col == "provider":
-            out[col] = provider
+            picked[col] = provider
             continue
         c = _pick_column(df, aliases.get(col, [col]))
-        out[col] = df[c] if c else pd.NA
+        picked[col] = df[c] if c else pd.NA
+    # built in one go: ~100 single-column inserts fragment the frame
+    out = pd.DataFrame(picked, index=df.index)
 
     for side in ["home", "away"]:
         xg = pd.to_numeric(out.get(f"{side}_xg"), errors="coerce")
