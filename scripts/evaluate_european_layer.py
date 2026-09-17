@@ -72,10 +72,13 @@ def load_matches() -> pd.DataFrame:
         name = Path(f).stem                      # raw_champions-league_2023
         comp, season = name.split("_")[1], int(name.split("_")[2])
         d = pd.read_csv(f)
-        if "Result" not in d.columns:
+        if not {"Result", "Date", "Home Team", "Away Team"} <= set(d.columns):
             continue
-        for r in d.itertuples():
-            res = str(getattr(r, "Result", "") or "")
+        # By name, not by position: files written from ESPN carry no "Match
+        # Number"/"Location" columns, so positional itertuples fields (_5, _6)
+        # only ever matched the fixturedownload layout.
+        for res, date, home, away in zip(d["Result"], d["Date"], d["Home Team"], d["Away Team"]):
+            res = "" if pd.isna(res) else str(res)
             if "-" not in res:
                 continue
             try:
@@ -84,8 +87,8 @@ def load_matches() -> pd.DataFrame:
                 continue
             rows.append({
                 "comp": comp, "season": season,
-                "date": pd.to_datetime(getattr(r, "Date"), dayfirst=True, errors="coerce"),
-                "home": getattr(r, "_5"), "away": getattr(r, "_6"),
+                "date": pd.to_datetime(date, dayfirst=True, errors="coerce"),
+                "home": home, "away": away,
                 "hg": hg, "ag": ag,
             })
     return pd.DataFrame(rows).dropna(subset=["date"])

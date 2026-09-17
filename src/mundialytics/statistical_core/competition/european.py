@@ -200,23 +200,21 @@ def fetch_espn_uefa(competition: str, year: int) -> pd.DataFrame | None:
     club's own fixtures (8 in the Champions and Europa, 6 in the Conference).
     The knockout stage is named from `season.slug`, which ESPN does provide.
     """
-    import json
-    import urllib.request
+    from datetime import date
+
+    from mundialytics.providers.espn_fixtures import fetch_scoreboard_events
 
     code = ESPN_UEFA_CODES.get(competition)
     if not code:
         return None
-    url = (f"https://site.api.espn.com/apis/site/v2/sports/soccer/{code}"
-           f"/scoreboard?dates={year}0701-{year + 1}0630&limit=1000")
+    # one July-June season across two calendar-year requests (see the helper)
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=45) as fh:
-            data = json.load(fh)
+        events = fetch_scoreboard_events(code, date(year, 7, 1), date(year + 1, 6, 30))
     except Exception:
         return None
 
     rows = []
-    for ev in data.get("events", []) or []:
+    for ev in events:
         try:
             c = ev["competitions"][0]
         except (KeyError, IndexError):
