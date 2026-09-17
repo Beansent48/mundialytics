@@ -26,9 +26,29 @@
   (soccerdata, for the refresh) and `dev` extras. `requirements-lock.txt` is now
   labelled as the known-good version set rather than posing as a lock.
 - Removed ~90 unused imports and ~25 unused variables across src/, api/ and
-  scripts/ (ruff F401/F841/F811/F541/E712/B904 clean outside the legacy set).
+  scripts/ (ruff F401/F841/F811/F541/E712/B904 clean across the repo).
 - Comments and docstrings no longer describe the Streamlit app removed on
   2026-09-09.
+
+### Removed
+- The legacy chain that had been broken since the initial commit, where several
+  base modules arrived as stubs (`data/adapters/espn.py` and `sofascore.py` were
+  four lines returning empty frames): the 13 `src/` modules that failed to
+  import, the stubs and helpers only they used, 20 scripts that crashed on
+  import (each confirmed by running it), and the 21 test files quarantined in
+  `tests/conftest.py`, whose ignore list is gone. None of it was reachable from
+  the API, the daily refresh or any script the README points to. Every
+  remaining `src/` module (130) imports.
+- Dead but importable modules: `betting/staking.py`, `data/sources_catalog.py`,
+  `evaluation/backtesting.py`, `evaluation/calibration.py`, `simulation/` (a
+  second, unused `TournamentSimulator`; the live one is
+  `statistical_core/tournament_simulator.py`) and
+  `statistical_core/squadlab/goalkeeper_quality.py`, never wired in.
+- Web: the unused `components/matchday/upcoming.tsx` and the create-next-app
+  SVGs in `public/`.
+- Data files nothing reads: smoke fixtures in `data/tmp/`, 2024 generated inputs,
+  unused samples and templates, a smoke identity map and a manual provider alias
+  seed.
 
 ### Docs & CI
 - README: current test counts, corrected claims (per-competition shrinkage was
