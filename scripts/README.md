@@ -7,12 +7,11 @@ or research runs kept for reproducibility — **you only need the handful below.
 
 | Command | What it does |
 |---|---|
-| `python scripts/update_season.py` | The one command that matters. Refreshes results, re-fits, re-predicts and logs the upcoming round. Everything else is a stage of this. |
+| `python scripts/update_season.py` | The one command that matters. Downloads new results, rebuilds the modelling foundation (integrity check + rollback), settles the logged markets and logs the upcoming round before kick-off. `--full` also regenerates the walk-forward cache below. `scripts/run_update.ps1` runs it daily as a Windows scheduled task. |
+| `python scripts/generate_deployed_walkforward.py` | Walk-forward predictions of the deployed engine over 2020/21–2025/26 — the file the benchmark and the calibration figure score. |
 | `python scripts/benchmark_vs_bet365.py` | Reproduces the headline number: engine vs Bet365 closing odds, RPS and log loss, split by season and league. |
 | `python scripts/plot_calibration.py` | Regenerates the reliability diagram in the README. |
-| `python scripts/run_statistical_matchday.py` | Predictions for a single matchday, with the full market set. |
-| `python scripts/predict_match.py` | One fixture, one report. |
-| `uvicorn api.main:app --port 8000` + `npm --prefix web run dev` | The web UI (Next.js in `web/`) over all of the above. |
+| `uvicorn api.main:app --port 8000` + `npm --prefix web run dev` | The web UI (Next.js in `web/`), including the single-fixture analysis the API serves at `/match/{competition}/{fixture}`. |
 
 ## Everything else, by prefix
 
@@ -20,15 +19,21 @@ The naming is systematic, so the prefix tells you what a script is:
 
 | Prefix | Count | What it is |
 |---|---|---|
-| `download_` `fetch_` `import_` | ~30 | Ingestion from public sources (football-data.co.uk, Understat, StatsBomb, ClubElo, FBref). |
-| `build_` | ~30 | Dataset construction: canonical schema, features, model-ready snapshots, registries. |
-| `train_` `fit_` `calibrate_` | ~12 | Model fitting and Platt calibration. |
-| `evaluate_` `validate_` `backtest_` `measure_` | ~25 | Offline evaluation. Always temporal out-of-sample. |
-| `experiment_` | ~15 | Research runs. **Several of these are negative results** kept on purpose — see the "What didn't work" section of the main README. |
-| `diagnose_` | ~10 | Investigations into a specific failure or gap, e.g. `diagnose_market_gap.py`. |
-| `audit_` `quality_gate` `run_data_audit` | ~6 | Data-quality gates. |
-| `oddspapi_` | ~16 | Odds-provider adapter: fixtures, historical odds, market mapping. |
-| `predict_` `run_` `simulate_` | ~20 | Prediction and simulation entry points. |
+| `download_` `fetch_` `import_` | 25 | Ingestion from public sources (football-data.co.uk, ESPN, Sofascore, StatsBomb, ClubElo, FBref, Understat). |
+| `build_` | 29 | Dataset construction: foundation, features, xG, squads, ratings, SquadLab cards. |
+| `train_` `fit_` `calibrate_` | 13 | Model fitting and calibration. |
+| `evaluate_` `validate_` `backtest_` `measure_` | 27 | Offline evaluation. Always temporal out-of-sample. |
+| `experiment_` | 20 | Research runs. **Several of these are negative results** kept on purpose — see the "What didn't work" section of the main README. |
+| `diagnose_` | 6 | Investigations into a specific failure or gap, e.g. `diagnose_market_gap.py`. |
+| `audit_` `quality_gate` `run_data_audit` | 7 | Data-quality gates. |
+| `oddspapi_` | 15 | Odds-provider adapter from the betting phase (dormant): fixtures, historical odds, market mapping. |
+| `predict_` `run_` `simulate_` | 15 | Prediction and simulation entry points, mostly from the earlier manual-input workflow. |
+
+Some of the older entry points predate the deployed engine and are kept for the
+record rather than for use: `run_statistical_matchday.py` is the World Cup-era
+runner over hand-written fixture and lineup CSVs (`data/input/`), and
+`predict_match.py` loads a v0.4 model bundle that no longer unpickles with a
+current scikit-learn. For a fixture today, use the API.
 
 ## Two things that will trip you up
 
