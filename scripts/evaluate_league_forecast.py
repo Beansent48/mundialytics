@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Out-of-sample evaluation of the LEAGUE forecasting layer.
 
 For each completed Big 5 league-season: stop at a cutoff matchday, forecast the
@@ -18,6 +16,7 @@ how many teams get each outcome.
 
     python scripts/evaluate_league_forecast.py [--cutoff-matchday 19] [--sims 4000]
 """
+from __future__ import annotations
 
 import argparse
 import sys
@@ -41,19 +40,18 @@ from mundialytics.statistical_core.competition.resume_simulator import (  # noqa
 )
 from mundialytics.statistical_core.competition.standings import compute_standings  # noqa: E402
 from mundialytics.statistical_core.engine_utils import load_clubs_data  # noqa: E402
-from mundialytics.statistical_core.prediction_engine import PredictionEngine  # noqa: E402
+from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
+    DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 from mundialytics.statistical_core.schemas import canonical_name  # noqa: E402
 
 LEAGUES = ["Premier League", "LaLiga", "Serie A", "Bundesliga", "Ligue 1"]
 
 
 def build_engine(train: pd.DataFrame) -> PredictionEngine:
-    """The configuration the Streamlit app deploys for clubs."""
+    """The deployed club configuration, from its single source of truth."""
     elo = EloRater(EloConfig(season_reset_fraction=0.40))
     elo.fit(train)
-    eng = PredictionEngine(blend_weight_gl=0.30, ad_rho=-0.07, sharpen_gamma_1x2=1.3,
-                           rescale_lambda_to_goals=True, outcome_rho=-0.17,
-                           xg_rate_kwargs={"use_ewma": True})
+    eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
     eng.fit(train, elo_history=pd.DataFrame(elo.history))
     return eng
 
