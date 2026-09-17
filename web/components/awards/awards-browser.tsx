@@ -18,25 +18,30 @@ import { cn } from "@/lib/utils";
 export function AwardsBrowser({ competitions }: { competitions: Competition[] }) {
   const t = useTranslations("awards");
   const [slug, setSlug] = useState(competitions[0]?.slug ?? "");
-  const [race, setRace] = useState<ScorerRace | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  // Keyed on the league it answers, so switching leagues reads as loading
+  // until that league's own answer lands — no reset inside the effect.
+  const [result, setResult] = useState<{
+    slug: string;
+    race: ScorerRace | null;
+    failed: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    setLoading(true);
-    setFailed(false);
-    setRace(null);
     api
       .awards(slug)
-      .then((r) => !cancelled && setRace(r))
-      .catch(() => !cancelled && setFailed(true))
-      .finally(() => !cancelled && setLoading(false));
+      .then((r) => !cancelled && setResult({ slug, race: r, failed: false }))
+      .catch(() => !cancelled && setResult({ slug, race: null, failed: true }));
     return () => {
       cancelled = true;
     };
   }, [slug]);
+
+  const current = result?.slug === slug ? result : null;
+  const loading = current === null;
+  const failed = current?.failed ?? false;
+  const race = current?.race ?? null;
 
   const lead = race?.players[0]?.p ?? 1;
   const favourite = race?.players[0];

@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# web/
 
-## Getting Started
+The Mundialytics front end: Next.js 16 (App Router, Turbopack) with next-intl
+(English at `/`, Spanish at `/es`), Tailwind 4 and next-themes. It holds no
+model logic — every number comes from the FastAPI service in [`../api`](../api).
 
-First, run the development server:
+## Running it
+
+The API has to be up first; the first request after a data update pays the
+engine fit (~3 min), and pages show a "warming up" state until it lands.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+uvicorn api.main:app --port 8000     # from the repo root
+npm --prefix web install
+npm --prefix web run dev             # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variable | Default | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Where the API lives |
+| `REVALIDATE_SECRET` | unset | Guards `GET /api/revalidate`; unset means localhost callers only |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Every API fetch is tagged `data`, so the daily refresh
+(`scripts/run_update.ps1`) calls `/api/revalidate` once and the new matchday
+shows up without restarting the server.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Layout
 
-## Learn More
+```
+app/[locale]/        pages: matchday + match view, leagues, competitions,
+                     results (track record), awards, squadlab
+app/api/revalidate/  cache invalidation hook for the data refresh
+components/          one folder per page area, plus ui/ and layout/
+lib/api.ts           typed API client (timeouts, revalidate windows)
+messages/            en.json / es.json — same keys in both
+i18n/, proxy.ts      locale routing
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Checks
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+npx tsc --noEmit
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Both run in CI on every push.

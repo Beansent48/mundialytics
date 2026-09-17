@@ -19,9 +19,7 @@
     "signIn": "Iniciar sesión",
     "signUp": "Crear cuenta",
     "settings": "Ajustes",
-    "preferences": "Preferencias",
     "favorites": "Favoritos",
-    "signOut": "Cerrar sesión",
     "soon": "Muy pronto"
   },
   "theme": {
@@ -115,13 +113,7 @@
       "caption": "Salida real del motor desplegado — LaLiga, jornada 4."
     }
   },
-  "common": {
-    "loading": "Cargando",
-    "error": "Algo ha ido mal",
-    "retry": "Reintentar"
-  },
   "notFound": {
-    "code": "404",
     "title": "Esta página no existe",
     "body": "La dirección que has pedido no forma parte de Mundialytics. Puede que el enlace sea antiguo, o que haya un typo.",
     "home": "Volver al inicio",
@@ -199,9 +191,6 @@
       "shotsOnTarget": "A puerta",
       "possession": "Posesión"
     },
-    "viewLabel": "Vista",
-    "viewReal": "Lo que pasó",
-    "viewCompare": "Frente a lo que dijimos",
     "summaryTitle": "Goles y tarjetas",
     "sectionMatch": "El partido",
     "sectionCall": "Nuestra predicción",
@@ -213,24 +202,18 @@
     "ownGoalTag": "(en propia)",
     "penaltyTag": "(pen.)",
     "unattributed": "+{count} sin goleador",
-    "noEvents": "Sin goles ni tarjetas registrados",
-    "noData": "Los datos de este partido aún no se han cargado.",
     "callsTitle": "Frente a lo que dijimos",
     "callsScore": "{hits} de {total} acertadas",
     "happened": "ocurrió",
     "favouriteWas": "Nuestro favorito era {pick} ({p})",
     "realWas": "real: {value}",
     "realLabel": "real",
-    "scoreboardTitle": "Marcador",
     "scorelineRank": "Marcador n.º {rank} más probable · {p}",
     "scorelineOutside": "Fuera de tus marcadores más probables",
     "goalsExpectedReal": "{expected} esperados · {real} reales",
     "goalCount": "{count} goles",
     "statsTitle": "Estadísticas del partido",
     "predicted": "dijimos",
-    "error": "error de {value}",
-    "deltaLabel": "Δ {value}",
-    "statsNote": "Estadísticas reales del dataset liquidado, junto a lo que el modelo esperaba antes del pitido inicial.",
     "rangeNote": "✓ indica que el valor real cayó dentro del rango más probable que dimos; el % es la probabilidad que le asignábamos.",
     "metaUpcoming": "{home} vs {away}: {h}% local, {d}% empate, {a}% visitante. Probabilidades de un modelo ajustado sobre 45.938 partidos.",
     "metaPlayed": "{home} {score} {away} — el resultado junto a lo que nuestro modelo predijo antes del partido."

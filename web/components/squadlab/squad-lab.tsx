@@ -32,6 +32,8 @@ type Slot = { position: string; index: number; key: string };
 
 /** Attack at the top, keeper at the bottom — the way a formation is written. */
 const PITCH_ROWS = ["Forward", "Midfielder", "Defender", "Goalkeeper"] as const;
+// Knockout rounds in the order a squad plays them.
+const ROUND_ORDER = ["playoff", "r16", "qf", "sf", "final"] as const;
 
 function buildSlots(slots: Record<string, number>): Slot[] {
   const out: Slot[] = [];
@@ -455,7 +457,6 @@ function SeasonView({
   }, [season.leaguePhase]);
 
   // The squad's own knockout ties, in order, plus the final for the champion.
-  const ROUND_ORDER = ["playoff", "r16", "qf", "sf", "final"] as const;
   const ownTies = useMemo(() => {
     const out: BracketTie[] = [];
     for (const r of ROUND_ORDER) {

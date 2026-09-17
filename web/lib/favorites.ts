@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * Followed teams and competitions.
@@ -16,56 +18,81 @@ export type Favorites = { teams: string[]; competitions: string[] };
 
 const EMPTY: Favorites = { teams: [], competitions: [] };
 
-function read(): Favorites {
-  if (typeof window === "undefined") return EMPTY;
+function parse(raw: string | null): Favorites {
+  if (!raw) return EMPTY;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return EMPTY;
     const parsed = JSON.parse(raw) as Partial<Favorites>;
     return {
       teams: Array.isArray(parsed.teams) ? parsed.teams : [],
       competitions: Array.isArray(parsed.competitions) ? parsed.competitions : [],
     };
   } catch {
-    // A private window, cleared site data, or a value someone hand-edited.
+    // A value someone hand-edited.
     return EMPTY;
   }
 }
 
+// Used only when storage refuses a write (full, or blocked in a private
+// window), so a toggle still works for the rest of the session.
+let memory: Favorites | null = null;
+// The store must hand React the same object until the stored value changes.
+let cachedRaw: string | null = null;
+let cached: Favorites = EMPTY;
+
+function getSnapshot(): Favorites {
+  if (memory) return memory;
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(KEY);
+  } catch {
+    // A private window or cleared site data.
+  }
+  if (raw !== cachedRaw) {
+    cachedRaw = raw;
+    cached = parse(raw);
+  }
+  return cached;
+}
+
+const getServerSnapshot = () => EMPTY;
+
+// Writes in this tab don't fire "storage", so toggles notify directly.
+const listeners = new Set<() => void>();
+
+function subscribe(onChange: () => void) {
+  // Keep two open tabs in step.
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === KEY) onChange();
+  };
+  listeners.add(onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
 export function useFavorites() {
-  // Starts empty on both server and client so the first paint matches, then
-  // loads on mount. Reading storage during render would desync hydration.
-  const [favorites, setFavorites] = useState<Favorites>(EMPTY);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setFavorites(read());
-    setReady(true);
-
-    // Keep two open tabs in step.
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) setFavorites(read());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  // Empty on the server and during hydration so the first paint matches, then
+  // the stored list. Reading storage during render would desync hydration.
+  const favorites = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const ready = useMounted();
 
   const toggle = useCallback((kind: keyof Favorites, value: string) => {
-    setFavorites((prev) => {
-      const list = prev[kind];
-      const next = {
-        ...prev,
-        [kind]: list.includes(value)
-          ? list.filter((v) => v !== value)
-          : [...list, value],
-      };
-      try {
-        window.localStorage.setItem(KEY, JSON.stringify(next));
-      } catch {
-        // Storage full or blocked: the toggle still works for this session.
-      }
-      return next;
-    });
+    const prev = getSnapshot();
+    const list = prev[kind];
+    const next = {
+      ...prev,
+      [kind]: list.includes(value)
+        ? list.filter((v) => v !== value)
+        : [...list, value],
+    };
+    try {
+      window.localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {
+      memory = next;
+    }
+    listeners.forEach((notify) => notify());
   }, []);
 
   const has = useCallback(

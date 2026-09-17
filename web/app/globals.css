@@ -7,8 +7,8 @@
  *
  * 1. Nothing hard-codes a colour. Every surface, border and text tone is a
  *    token defined once per theme, so light and dark stay in step and a palette
- *    change is one file. The Streamlit app drifted precisely because pages
- *    picked their own hexes.
+ *    change is one file. The earlier Streamlit UI drifted precisely because
+ *    pages picked their own hexes.
  * 2. The brand accent (violet) is deliberately outside the semantic set.
  *    Green means "it went well", red "it did not", blue and red mean home and
  *    away — those are data encodings and must never double as branding, or a

@@ -35,28 +35,40 @@ export function CompetitionBrowser({
 
   const [slug, setSlug] = useState(competitions[0]?.slug ?? "");
   const [round, setRound] = useState<number | null>(null);
-  const [data, setData] = useState<Round | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  // The last answer, keyed on the competition and round it answers. The
+  // previous round stays on screen while the next one loads.
+  const [result, setResult] = useState<{
+    key: string;
+    data: Round | null;
+    failed: boolean;
+  } | null>(null);
+  const key = `${slug}|${round ?? ""}`;
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    setLoading(true);
-    setFailed(false);
+    const requested = `${slug}|${round ?? ""}`;
     api
       .round(slug, undefined, round ?? undefined)
       .then((r) => {
         if (cancelled) return;
-        setData(r);
+        // Filed under the round it turned out to be, so letting the API pick
+        // the upcoming round does not flash a second loading state.
+        setResult({ key: `${slug}|${r.matchday}`, data: r, failed: false });
         setRound(r.matchday);
       })
-      .catch(() => !cancelled && setFailed(true))
-      .finally(() => !cancelled && setLoading(false));
+      .catch(() => {
+        if (cancelled) return;
+        setResult((prev) => ({ key: requested, data: prev?.data ?? null, failed: true }));
+      });
     return () => {
       cancelled = true;
     };
   }, [slug, round]);
+
+  const loading = result?.key !== key;
+  const failed = !loading && (result?.failed ?? false);
+  const data = result?.data ?? null;
 
   // Followed competitions first, order otherwise untouched.
   const ordered = ready

@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { LOCALE_NAMES, routing, type Locale } from "@/i18n/routing";
+import { useMounted } from "@/lib/use-mounted";
 import { cn } from "@/lib/utils";
 
 const itemClass =
@@ -46,8 +46,7 @@ export function AccountMenu() {
 
   // The server cannot know the stored theme, so the checkmark is only rendered
   // once mounted; otherwise the first paint disagrees with the DOM.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   const themes = [
     { value: "light", label: tTheme("light"), icon: Sun },
