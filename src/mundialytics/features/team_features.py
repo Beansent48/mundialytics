@@ -24,19 +24,31 @@ def add_pre_match_rolling_features(team_rows: pd.DataFrame, windows: tuple[int, 
         if c.endswith(("_for", "_against")) and c not in {"team_for", "team_against"}
     ]
     numeric_cols = sorted(set(base_numeric_cols + inferred_numeric_cols))
+    # New columns are collected and joined once: inserting them one at a time
+    # fragments the frame (pandas PerformanceWarning, ~40 inserts per call).
+    new_cols: dict[str, pd.Series] = {}
+
+    def _put(name: str, values) -> None:
+        if name in df.columns:
+            df[name] = values
+        else:
+            new_cols[name] = values
+
     for col in numeric_cols:
         if col not in df.columns:
             continue
         df[col] = pd.to_numeric(df[col], errors="coerce")
         for w in windows:
-            df[f"{col}_last{w}"] = (
+            _put(f"{col}_last{w}", (
                 df.groupby("team", group_keys=False)[col]
                 .apply(lambda s: s.shift(1).rolling(w, min_periods=1).mean())
-            )
-    df["goal_diff_last5"] = df.get("goals_for_last5", 0) - df.get("goals_against_last5", 0)
-    df["xg_diff_last5"] = df.get("xg_for_last5", 0) - df.get("xg_against_last5", 0)
-    df["shot_diff_last5"] = df.get("shots_for_last5", 0) - df.get("shots_against_last5", 0)
-    return df
+            ))
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+    new_cols = {}
+    _put("goal_diff_last5", df.get("goals_for_last5", 0) - df.get("goals_against_last5", 0))
+    _put("xg_diff_last5", df.get("xg_for_last5", 0) - df.get("xg_against_last5", 0))
+    _put("shot_diff_last5", df.get("shots_for_last5", 0) - df.get("shots_against_last5", 0))
+    return pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1).copy()
 
 
 def apply_rolling_feature_shrinkage(df: pd.DataFrame, *, prior_matches: float = 10.0) -> pd.DataFrame:
