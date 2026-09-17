@@ -24,7 +24,9 @@ day at either host is survivable.
 from __future__ import annotations
 
 import json
+import time
 import urllib.request
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -41,6 +43,46 @@ _ALIASES = Path("data/curated/fixture_team_aliases.csv")
 
 COLUMNS = ["match_id", "competition", "season", "date", "matchday",
            "home_team", "away_team", "completed", "home_goals", "away_goals"]
+
+
+def fetch_scoreboard_events(
+    code: str,
+    start: date,
+    end: date,
+    timeout: int = 45,
+    tries: int = 1,
+) -> list[dict]:
+    """Every ESPN scoreboard event for one competition dated within [start, end].
+
+    ESPN stopped accepting an explicit YYYYMMDD-YYYYMMDD range on 2026-09-16 (it
+    answers 400). `dates=<year>` still works, but it means the CALENDAR year: for
+    LaLiga `dates=2026` is January-December 2026, i.e. the second half of 2025/26
+    plus the first half of 2026/27. A July-June season therefore takes both years
+    and a date filter. Asking for the start year alone -- the first fix -- mixed
+    the previous season into the calendar (September fixtures numbered round 28)
+    and left out everything after 31 December.
+
+    Raises if any request fails: half a season is worse than none, because a
+    caller can fall back on an empty result but cannot tell a partial one apart.
+    """
+    lo, hi = start.isoformat(), end.isoformat()
+    events: dict[str, dict] = {}
+    for year in range(start.year, end.year + 1):
+        url = f"{_BASE.format(code=code)}?dates={year}&limit=1000"
+        for attempt in range(tries):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=timeout) as fh:
+                    data = json.load(fh)
+                break
+            except Exception:
+                if attempt == tries - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
+        for ev in data.get("events", []) or []:
+            if lo <= str(ev.get("date", ""))[:10] <= hi:
+                events[str(ev.get("id"))] = ev
+    return sorted(events.values(), key=lambda ev: str(ev.get("date", "")))
 
 
 def _load_aliases(root: str | Path = ".") -> dict[str, str]:
@@ -77,18 +119,14 @@ def fetch_season_fixtures(
         return alias.get(name, canonical_team_name(name))
 
     y1 = int(str(season)[:4])
-    # ESPN stopped accepting an explicit YYYYMMDD-YYYYMMDD range (it now 400s);
-    # `dates=<start year>` returns the whole European season instead (2026-09-16).
-    url = f"{_BASE.format(code=code)}?dates={y1}&limit=1000"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as fh:
-            data = json.load(fh)
+        events = fetch_scoreboard_events(code, date(y1, 7, 1), date(y1 + 1, 6, 30),
+                                         timeout=timeout)
     except Exception:
         return pd.DataFrame(columns=COLUMNS)
 
     rows = []
-    for ev in data.get("events", []) or []:
+    for ev in events:
         try:
             c = ev["competitions"][0]
         except (KeyError, IndexError):

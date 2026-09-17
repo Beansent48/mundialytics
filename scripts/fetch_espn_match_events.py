@@ -139,10 +139,18 @@ def _aliases() -> dict[str, str]:
 
 
 def list_matches(code: str, comp: str, lo: str, hi: str, canon) -> list[dict]:
-    """Completed matches for one league, from the scoreboard (one request)."""
-    data = _get(f"{BASE.format(code=code)}/scoreboard?dates={lo}-{hi}&limit=1000")
+    """Completed matches for one league between two AAAAMMDD dates.
+
+    One scoreboard request per calendar year the window touches: ESPN has
+    rejected explicit date ranges since 2026-09-16 (see
+    providers/espn_fixtures.fetch_scoreboard_events).
+    """
+    from mundialytics.providers.espn_fixtures import fetch_scoreboard_events
+
+    start = pd.Timestamp(lo).date()
+    end = pd.Timestamp(hi).date()
     games = []
-    for ev in data.get("events", []):
+    for ev in fetch_scoreboard_events(code, start, end, timeout=40, tries=3):
         c = ev["competitions"][0]
         if not c.get("status", {}).get("type", {}).get("completed"):
             continue
