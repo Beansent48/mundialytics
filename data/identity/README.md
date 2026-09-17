@@ -1,9 +1,16 @@
-# Identity maps
+# data/identity/
 
-This folder stores provider/canonical identity files. For the free MVP, API-Football is the operational source of truth for current fixtures, lineups and provider player IDs. StatsBomb Open Data remains the historical event source used to train/calibrate props.
+Hand-curated name fixes for players, versioned because they are reviewed by hand
+rather than generated.
 
-Typical generated file:
+| File | Read by | What it does |
+|---|---|---|
+| `player_display_names.csv` | `mundialytics.identity.display_names`, `scripts/reconcile_fbref_duplicate_identities.py` | The name a player is shown under, when the feeds only carry a full legal name or disagree on spelling. |
+| `player_aliases.csv` | `mundialytics.identity.player_resolver` | Short or accented lineup names mapped to the full historical (StatsBomb-style) name the rating data uses. |
 
-- `player_identity_map.csv`: maps `api_football:<provider_player_id>` to the historical `player_id_global` used by the player-props model.
+Team-name aliases live elsewhere: `data/curated/fixture_team_aliases.csv` for
+ESPN fixtures and squads, and the Understat / Sofascore / ClubElo maps in
+`src/mundialytics/enrichment/` and `statistical_core/competition/club_aliases.py`.
 
-Do not hand-edit model IDs blindly. If a provider row does not map cleanly, fix the provider export or add a reviewed alias row and keep `match_status`/`match_confidence` honest.
+Add a row only after checking both spellings refer to the same player. A wrong
+alias silently merges two careers, which is worse than leaving a name unmatched.

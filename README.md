@@ -5,8 +5,8 @@
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
-BTTS, half-time markets and player/team props, fitted on **45,938 matches across
-27 seasons (2000/01–2026/27)** of the Big 5 European leagues — England, Spain,
+BTTS, half-time markets and player/team props, fitted on **more than 46,000
+matches across 27 seasons (2000/01–2026/27)** of the Big 5 European leagues — England, Spain,
 Italy, Germany, France — and benchmarked against bookmaker closing odds. A
 second engine covers national teams on international results from 2010.
 
@@ -256,7 +256,7 @@ the SquadLab calibration reported under In progress.
 
 | Area | What works |
 |---|---|
-| Player ratings | 11,063 profiles, position-scoped roles, cross-era baseline |
+| Player ratings | 13,297 rated players, position-scoped roles, cross-era baseline |
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
 | Odds layer | odds contract and readiness checks, de-vigging, value, pick policy |
 | Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
@@ -291,8 +291,9 @@ Listed because half-finished work is normal and hiding it helps nobody.
   histories were never downloaded, and the ClubElo API has been returning 502
   since early September (still down on 2026-09-17). Audit it with `python scripts/audit_european_elo_coverage.py`; full
   write-up in [`docs/EUROPEAN_ELO_COVERAGE.md`](docs/EUROPEAN_ELO_COVERAGE.md).
-- **xG coverage** — ~97% of historical matches (Bundesliga 2024/25 is the notable
-  hole, an upstream scraper bug rather than a missing source). Understat stopped
+- **xG coverage** — 97% of matches since 2014/15, where Understat's data starts
+  (Bundesliga 2024/25 is the notable hole, an upstream scraper bug rather than a
+  missing source). Understat stopped
   publishing after 2025/26, so current-season xG now comes live from Sofascore's
   per-shot data, aggregated to match level and feeding the same rolling xG-rate
   form (`scripts/build_sofascore_xg_matches.py`; 100% of played 2026/27 matches).
@@ -313,6 +314,7 @@ pip install -e ".[data]"
 
 # The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes:
 uvicorn api.main:app --port 8000
+npm --prefix web install
 npm --prefix web run dev         # http://localhost:3000
 ```
 

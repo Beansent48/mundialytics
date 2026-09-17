@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.51.1 — Live-pipeline fixes found while verifying (2026-09-17)
+
+### Fixed
+- **ESPN calendars were a calendar year, not a season.** The 2026-09-16 fix for
+  ESPN's dropped date ranges asked for `dates=<start year>`, which returns
+  January–December: the 2026/27 calendar carried the tail of 2025/26 and stopped
+  at 31 December. Consequences, all live: September fixtures were numbered round
+  26–28 (Espanyol–Elche showed "Round 28"), the league forecast simulated only
+  the 113 fixtures left in 2026 instead of 323, and the pre-kickoff logger kept
+  reporting fixtures "already logged with another round". Both years are now
+  requested and filtered to the July–June window by
+  `providers.espn_fixtures.fetch_scoreboard_events`, which the UEFA calendar and
+  the player-stats step share. Verified live: 380/306 fixtures per league,
+  rounds 4–7 in mid-September.
+- **The player-stats step had been failing since 2026-09-16** (HTTP 400 on the
+  same date-range form), so the `jug_*` markets went unsettled.
+- **No player market had been logged since 2026-09-04.** `update_season` prunes
+  the fitted-model caches one step before the pre-kickoff logger reads them, so
+  an unattended run always found none. The logger now fits them through the same
+  function the app uses: 8,574 rows per round instead of 2,304.
+- `scripts/evaluate_european_layer.py` read the fixture columns by position
+  (`_5`, `_6`), which only matched fixturedownload's layout and crashed on the
+  ESPN-written files. Re-run after the fix: RPS 0.2044 vs 0.2327 base rates on
+  the held-out season, exactly as the README reports.
+
+### Added
+- `scripts/warm_api_caches.py`, run as step 7m of the refresh: the league
+  forecast and Golden Boot race cost ~30 s each and are keyed on matches played,
+  so the first visitor after every refresh paid for them — and the web client
+  aborts at 20 s, which rendered the league page as a 404 for that visitor.
+
+### Docs
+- `scripts/README.md`: the "start here" list no longer points at
+  `predict_match.py` (its model bundle no longer unpickles) or the World Cup-era
+  matchday runner as the way to price a fixture; script counts re-counted.
+- `data/identity/README.md` described an API-Football flow that no longer
+  exists; the empty `notebooks/` stub and an unused national-team alias file are
+  gone.
+
+### Verified by running
+- README numbers reproduced: Bet365 benchmark (0.2008 vs 0.1946, 82.8% of the
+  gap), the reliability figure (byte-identical), half-time, national, European,
+  league forecast, player props (6 markets, 5/5 folds, ECE 0.0009–0.0130) and
+  team props.
+- Full refresh (`run_update.ps1`), API endpoints, every web page, and a SquadLab
+  Champions season end to end.
+
+
 ## v0.51.0 — Repository cleanup (2026-09-17)
 
 ### Fixed
