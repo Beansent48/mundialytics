@@ -18388,3 +18388,272 @@ logged_at,season,jornada,partido,fecha,home,away,mercado,ambito,linea,prob,selec
 2026-09-14T19:30:36,2026-2027,1,besiktas vs marseille,2026-09-17,besiktas,marseille,shots,Total,24.5,0.4632,UNDER
 2026-09-14T19:30:36,2026-2027,1,besiktas vs marseille,2026-09-17,besiktas,marseille,sot,Total,7.5,0.6211,OVER
 2026-09-14T19:30:36,2026-2027,1,besiktas vs marseille,2026-09-17,besiktas,marseille,sot,Total,8.5,0.4953,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Total,7.5,0.8728,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Total,8.5,0.798,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Total,9.5,0.6897,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Total,10.5,0.5763,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Total,11.5,0.463,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Local,3.5,0.8637,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Local,4.5,0.7559,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Local,5.5,0.6309,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Visitante,3.5,0.6794,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Visitante,4.5,0.5204,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,corners,Visitante,5.5,0.3767,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Total,2.5,0.7656,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Total,3.5,0.5824,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Total,4.5,0.3982,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Total,5.5,0.2459,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Total,6.5,0.1383,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Local,1.5,0.5629,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Local,2.5,0.2728,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Visitante,1.5,0.7095,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,yellows,Visitante,2.5,0.4208,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,fouls,Total,19.5,0.8483,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,fouls,Total,21.5,0.7423,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,fouls,Total,23.5,0.6043,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,fouls,Total,25.5,0.4611,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Total,20.5,0.983,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Total,22.5,0.9633,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Total,24.5,0.9187,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Total,26.5,0.8393,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Local,9.5,0.9919,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Local,11.5,0.9733,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Local,13.5,0.9351,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Visitante,9.5,0.7118,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Visitante,11.5,0.5261,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,shots,Visitante,13.5,0.3515,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,sot,Total,6.5,0.9042,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,sot,Total,7.5,0.8285,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,sot,Total,8.5,0.7249,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,sot,Total,9.5,0.6064,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,booking_pts,Total,30.5,0.6388,OVER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,booking_pts,Total,40.5,0.4708,UNDER
+2026-09-15T10:02:26,2026-2027,4,schalke 04 vs elversberg,2026-09-20,schalke 04,elversberg,booking_pts,Total,50.5,0.3214,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,1X2,Total,,0.5488,2
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,Goles,Total,2.5,0.5587,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,ht_ft,Total,,0.3379,2/2
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,ht_1x2,Total,,0.4011,2
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,ht_goles,Total,0.5,0.723,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,ht_goles,Total,1.5,0.3674,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,ht_goles,Total,2.5,0.1391,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,corners,Total,8.5,0.6132,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,corners,Total,9.5,0.4938,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,corners,Total,10.5,0.3795,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,shots,Total,22.5,0.6063,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,shots,Total,24.5,0.4684,UNDER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,sot,Total,7.5,0.627,OVER
+2026-09-16T14:26:57,2026-2027,1,omonia vs celta,2026-09-16,omonia,celta,sot,Total,8.5,0.5017,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,1X2,Total,,0.6513,2
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,Goles,Total,2.5,0.5927,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,ht_ft,Total,,0.4203,2/2
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,ht_1x2,Total,,0.472,2
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,ht_goles,Total,0.5,0.7405,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,ht_goles,Total,1.5,0.3904,UNDER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,ht_goles,Total,2.5,0.1543,UNDER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,corners,Total,8.5,0.6299,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,corners,Total,9.5,0.5115,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,corners,Total,10.5,0.3968,UNDER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,shots,Total,22.5,0.6296,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,shots,Total,24.5,0.4929,UNDER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,sot,Total,7.5,0.6533,OVER
+2026-09-16T14:26:57,2026-2027,1,ararat-armenia vs sparta praha,2026-09-16,ararat-armenia,sparta praha,sot,Total,8.5,0.5301,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,1X2,Total,,0.8449,1
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,Goles,Total,2.5,0.7147,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,ht_ft,Total,,0.6202,1/1
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,ht_1x2,Total,,0.6463,1
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,ht_goles,Total,0.5,0.8057,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,ht_goles,Total,1.5,0.4874,UNDER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,ht_goles,Total,2.5,0.2266,UNDER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,corners,Total,8.5,0.7126,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,corners,Total,9.5,0.603,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,corners,Total,10.5,0.4893,UNDER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,shots,Total,22.5,0.7434,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,shots,Total,24.5,0.6207,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,sot,Total,7.5,0.7452,OVER
+2026-09-16T14:26:57,2026-2027,1,leverkusen vs celje,2026-09-16,leverkusen,celje,sot,Total,8.5,0.6347,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,1X2,Total,,0.3937,1
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,Goles,Total,2.5,0.5363,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,ht_ft,Total,,0.2321,1/1
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,ht_1x2,Total,,0.4108,X
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,ht_goles,Total,0.5,0.7118,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,ht_goles,Total,1.5,0.3533,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,ht_goles,Total,2.5,0.1302,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,corners,Total,8.5,0.6047,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,corners,Total,9.5,0.4848,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,corners,Total,10.5,0.3709,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,shots,Total,22.5,0.5945,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,shots,Total,24.5,0.4562,UNDER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,sot,Total,7.5,0.6092,OVER
+2026-09-16T14:26:57,2026-2027,1,milan vs benfica,2026-09-16,milan,benfica,sot,Total,8.5,0.4828,UNDER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,1X2,Total,,0.7054,1
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,Goles,Total,2.5,0.6178,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,ht_ft,Total,,0.4741,1/1
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,ht_1x2,Total,,0.5204,1
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,ht_goles,Total,0.5,0.7558,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,ht_goles,Total,1.5,0.4115,UNDER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,ht_goles,Total,2.5,0.1689,UNDER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,corners,Total,8.5,0.6546,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,corners,Total,9.5,0.5383,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,corners,Total,10.5,0.4231,UNDER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,shots,Total,22.5,0.6646,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,shots,Total,24.5,0.5307,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,sot,Total,7.5,0.6707,OVER
+2026-09-16T14:26:57,2026-2027,1,olympiacos vs jagiellonia,2026-09-16,olympiacos,jagiellonia,sot,Total,8.5,0.5492,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,1X2,Total,,0.6045,2
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,Goles,Total,2.5,0.5752,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,ht_ft,Total,,0.3816,2/2
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,ht_1x2,Total,,0.4388,2
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,ht_goles,Total,0.5,0.7315,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,ht_goles,Total,1.5,0.3784,UNDER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,ht_goles,Total,2.5,0.1463,UNDER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,corners,Total,8.5,0.6211,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,corners,Total,9.5,0.5022,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,corners,Total,10.5,0.3877,UNDER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,shots,Total,22.5,0.6174,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,shots,Total,24.5,0.48,UNDER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,sot,Total,7.5,0.6398,OVER
+2026-09-16T14:26:57,2026-2027,1,sturm graz vs rennes,2026-09-16,sturm graz,rennes,sot,Total,8.5,0.5154,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,1X2,Total,,0.4162,2
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,Goles,Total,2.5,0.5374,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,ht_ft,Total,,0.2427,2/2
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,ht_1x2,Total,,0.4103,X
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,ht_goles,Total,0.5,0.7121,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,ht_goles,Total,1.5,0.3537,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,ht_goles,Total,2.5,0.1305,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,corners,Total,8.5,0.6041,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,corners,Total,9.5,0.4842,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,corners,Total,10.5,0.3703,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,shots,Total,22.5,0.5936,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,shots,Total,24.5,0.4553,UNDER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,sot,Total,7.5,0.6103,OVER
+2026-09-16T14:26:57,2026-2027,1,h. beer-sheva vs gnk dinamo,2026-09-16,h. beer-sheva,gnk dinamo,sot,Total,8.5,0.4839,UNDER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,1X2,Total,,0.7114,2
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,Goles,Total,2.5,0.6209,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,ht_ft,Total,,0.4736,2/2
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,ht_1x2,Total,,0.5176,2
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,ht_goles,Total,0.5,0.7548,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,ht_goles,Total,1.5,0.4102,UNDER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,ht_goles,Total,2.5,0.1679,UNDER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,corners,Total,8.5,0.6444,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,corners,Total,9.5,0.5271,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,corners,Total,10.5,0.4121,UNDER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,shots,Total,22.5,0.6497,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,shots,Total,24.5,0.5145,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,sot,Total,7.5,0.6751,OVER
+2026-09-16T14:26:57,2026-2027,1,ofi crete vs hoffenheim,2026-09-17,ofi crete,hoffenheim,sot,Total,8.5,0.5541,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,1X2,Total,,0.4158,1
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,Goles,Total,2.5,0.5373,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,ht_ft,Total,,0.2471,1/1
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,ht_1x2,Total,,0.4098,X
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,ht_goles,Total,0.5,0.7125,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,ht_goles,Total,1.5,0.3541,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,ht_goles,Total,2.5,0.1307,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,corners,Total,8.5,0.6057,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,corners,Total,9.5,0.4859,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,corners,Total,10.5,0.3719,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,shots,Total,22.5,0.5959,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,shots,Total,24.5,0.4577,UNDER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,sot,Total,7.5,0.61,OVER
+2026-09-16T14:26:57,2026-2027,1,levski sofia vs salzburg,2026-09-17,levski sofia,salzburg,sot,Total,8.5,0.4836,UNDER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,1X2,Total,,0.7501,1
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,Goles,Total,2.5,0.643,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,ht_ft,Total,,0.5167,1/1
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,ht_1x2,Total,,0.5568,1
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,ht_goles,Total,0.5,0.7689,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,ht_goles,Total,1.5,0.4303,UNDER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,ht_goles,Total,2.5,0.1824,UNDER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,corners,Total,8.5,0.6695,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,corners,Total,9.5,0.5546,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,corners,Total,10.5,0.4395,UNDER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,shots,Total,22.5,0.6851,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,shots,Total,24.5,0.5534,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,sot,Total,7.5,0.6899,OVER
+2026-09-16T14:26:57,2026-2027,1,juventus vs n.e.c.,2026-09-17,juventus,n.e.c.,sot,Total,8.5,0.5707,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,1X2,Total,,0.5282,2
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,Goles,Total,2.5,0.5538,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,ht_ft,Total,,0.3224,2/2
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,ht_1x2,Total,,0.3985,X
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,ht_goles,Total,0.5,0.7204,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,ht_goles,Total,1.5,0.3641,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,ht_goles,Total,2.5,0.1371,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,corners,Total,8.5,0.6109,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,corners,Total,9.5,0.4914,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,corners,Total,10.5,0.3772,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,shots,Total,22.5,0.6031,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,shots,Total,24.5,0.465,UNDER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,sot,Total,7.5,0.6232,OVER
+2026-09-16T14:26:57,2026-2027,1,real sociedad vs bournemouth,2026-09-17,real sociedad,bournemouth,sot,Total,8.5,0.4976,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,1X2,Total,,0.5353,1
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,Goles,Total,2.5,0.5554,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,ht_ft,Total,,0.333,1/1
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,ht_1x2,Total,,0.3992,1
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,ht_goles,Total,0.5,0.7226,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,ht_goles,Total,1.5,0.3669,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,ht_goles,Total,2.5,0.1388,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,corners,Total,8.5,0.6176,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,corners,Total,9.5,0.4984,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,corners,Total,10.5,0.384,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,yellows,Total,3.5,0.5659,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,yellows,Total,4.5,0.3824,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,yellows,Total,5.5,0.2335,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,fouls,Total,21.5,0.6804,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,fouls,Total,23.5,0.5506,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,shots,Total,22.5,0.6128,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,shots,Total,24.5,0.4751,UNDER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,sot,Total,7.5,0.6234,OVER
+2026-09-16T14:26:57,2026-2027,1,celtic vs ferencváros,2026-09-17,celtic,ferencváros,sot,Total,8.5,0.4978,UNDER
