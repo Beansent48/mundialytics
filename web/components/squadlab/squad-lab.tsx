@@ -812,13 +812,25 @@ function SeasonView({
             {t("topScorers")}
           </h2>
           <div className="mt-3 flex flex-col gap-1.5">
-            {season.scorers.slice(0, 8).map((s, i) => (
+            {season.scorers.slice(0, 10).map((s, i) => (
               <div
                 key={`${s.player}-${i}`}
-                className="flex items-center gap-3 rounded-[11px] border border-brand/40 bg-brand-ghost px-4 py-2.5"
+                className={cn(
+                  "flex items-center gap-3 rounded-[11px] border px-4 py-2.5",
+                  // the highlight is what makes YOUR man stand out; before this
+                  // the list was only ever your own eleven, so everything glowed
+                  s.isSquad
+                    ? "border-brand/40 bg-brand-ghost"
+                    : "border-border bg-surface",
+                )}
               >
                 <span className="w-5 text-[0.72rem] tabular-nums text-dim">{i + 1}</span>
-                <span className="flex-1 truncate text-[0.86rem] font-medium">{s.player}</span>
+                <span className="flex-1 truncate text-[0.86rem] font-medium">
+                  {s.player}
+                  <span className="ml-2 text-[0.68rem] font-normal text-dim">
+                    {label(s.team)}
+                  </span>
+                </span>
                 {s.assists ? (
                   <span className="text-[0.68rem] text-dim">
                     {t("assistShort", { n: s.assists })}

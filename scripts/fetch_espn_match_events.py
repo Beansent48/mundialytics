@@ -59,6 +59,22 @@ LEAGUES = {
     "fra.1": "Ligue 1",
 }
 
+UEFA_LEAGUES = {
+    "uefa.champions": "Champions League",
+    "uefa.europa": "Europa League",
+    "uefa.europa.conf": "Conference League",
+}
+
+# UEFA writes to its OWN files, and that is not tidiness. The league files are
+# keyed on (home, away) by their consumers -- a Champions quarter-final between
+# Real Madrid and Barcelona would overwrite the entry for the LaLiga clasico --
+# and the jug_* settlement layer reads them as "this club's league matches", so
+# a goal in Europe must never settle a LaLiga market.
+TARGETS = {
+    "big5": {"leagues": LEAGUES, "suffix": "current"},
+    "uefa": {"leagues": UEFA_LEAGUES, "suffix": "uefa"},
+}
+
 # ESPN stat name -> our column
 STATS = {
     "totalGoals": "goals", "totalShots": "shots", "shotsOnTarget": "sot",
@@ -266,7 +282,17 @@ def main() -> None:
     ap.add_argument("--from", dest="lo", default=None, help="AAAAMMDD")
     ap.add_argument("--to", dest="hi", default=None, help="AAAAMMDD")
     ap.add_argument("--rebuild", action="store_true", help="ignora lo ya descargado")
+    ap.add_argument("--competitions", choices=sorted(TARGETS), default="big5",
+                    help="big5 (por defecto) o uefa (Champions/Europa/Conference)")
     args = ap.parse_args()
+
+    target = TARGETS[args.competitions]
+    leagues = target["leagues"]
+    suffix = target["suffix"]
+    OUT_P = DIR / f"espn_player_match_{suffix}.csv"
+    OUT_M = DIR / f"espn_matches_{suffix}.csv"
+    OUT_E = DIR / f"espn_player_events_{suffix}.csv"
+    OUT_T = DIR / f"espn_team_match_{suffix}.csv"
 
     from mundialytics.identity.normalization import canonical_team_name
     alias = _aliases()
@@ -300,7 +326,7 @@ def main() -> None:
     have_t = set(old_t["event_id"].astype(str)) if "event_id" in old_t.columns else set()
 
     games, players, events, teams = [], [], [], []
-    for code, comp in LEAGUES.items():
+    for code, comp in leagues.items():
         try:
             g = list_matches(code, comp, lo, hi, canon)
         except Exception as exc:
