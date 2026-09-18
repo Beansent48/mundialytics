@@ -35,7 +35,6 @@ import argparse
 import json
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -43,6 +42,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from mundialytics.providers.espn_fixtures import espn_json  # noqa: E402
 from mundialytics.identity.current_squads import (  # noqa: E402
     DEFAULT_CURRENT_SQUADS_PATH, full_key, position_group, short_key,
 )
@@ -67,16 +67,8 @@ NUMERIC = ["goals", "shots", "sot", "assists", "yellow_cards", "red_cards",
 
 
 def _get(url: str, tries: int = 3) -> dict:
-    for i in range(tries):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=40) as fh:
-                return json.load(fh)
-        except Exception:
-            if i == tries - 1:
-                raise
-            time.sleep(2 * (i + 1))
-    return {}
+    """Thin alias for the shared caller: the User-Agent rule lives in one place."""
+    return espn_json(url, timeout=40, tries=tries)
 
 
 def _canon():

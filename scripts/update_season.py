@@ -270,7 +270,9 @@ def main() -> None:
             FD_SLUG, fetch_season_fixtures)
         yr = date.today().year if date.today().month >= 7 else date.today().year - 1
         for comp, slug in FD_SLUG.items():
-            (ROOT / f"data/external/uefa/raw_{slug}_{yr}.csv").unlink(missing_ok=True)
+            # Fetch BEFORE dropping the cache. Deleting first made the cache
+            # useless as a fallback exactly when it was needed: with both hosts
+            # down the file was gone and the fetch had nothing to fall back on.
             df = fetch_season_fixtures(ROOT, comp, yr)
             if df is not None:
                 res_n = df["Result"].astype(str).str.contains(r"\d+\s*-\s*\d+").sum()
