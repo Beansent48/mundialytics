@@ -446,16 +446,6 @@ function SeasonView({
   const squadLabel = t("sheetTitle");
   const label = (team: string) => (team === season.teamName ? squadLabel : team);
 
-  // The league-phase table has 36 rows; show the top of it plus the squad's own
-  // row when it finished outside the window, so it is always visible.
-  const TABLE_WINDOW = 12;
-  const tableRows = useMemo(() => {
-    const top = season.leaguePhase.slice(0, TABLE_WINDOW);
-    const squadRow = season.leaguePhase.find((r) => r.isSquad);
-    if (squadRow && squadRow.rank > TABLE_WINDOW) top.push(squadRow);
-    return top;
-  }, [season.leaguePhase]);
-
   // The squad's own knockout ties, in order, plus the final for the champion.
   const ownTies = useMemo(() => {
     const out: BracketTie[] = [];
@@ -597,7 +587,74 @@ function SeasonView({
         </span>
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+      <div className="mt-8 flex flex-col gap-10">
+        <section>
+          <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
+            {t("leaguePhaseTable")}
+          </h2>
+          <div className="mt-3 overflow-x-auto rounded-[var(--radius-card)] border border-border">
+            <table className="w-full min-w-[22rem] text-[0.82rem]">
+              <thead>
+                <tr className="border-b border-border bg-bg-elevated text-[0.6rem] uppercase tracking-[0.07em] text-dim">
+                  <th className="px-3 py-2 text-left font-semibold">#</th>
+                  <th className="px-3 py-2 text-left font-semibold">{t("colTeam")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colPlayed")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colFor")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colAgainst")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colDiff")}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t("colPoints")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {season.leaguePhase.map((r) => (
+                  <tr
+                    key={r.team}
+                    className={cn(
+                      "border-b border-border last:border-0",
+                      // Where the table actually splits: 1-8 go straight to the
+                      // last 16, 9-24 play the knockout play-off, 25-36 are out.
+                      // Without the rules drawn on it, 36 rows is just a list.
+                      r.rank === 9 || r.rank === 25
+                        ? "border-t-2 border-t-border-strong"
+                        : "",
+                      r.isSquad ? "bg-brand-ghost" : "bg-surface",
+                    )}
+                  >
+                    <td className="px-3 py-2 tabular-nums text-dim">{r.rank}</td>
+                    <td className={cn("px-3 py-2", r.isSquad ? "font-semibold text-text" : "")}>
+                      {label(r.team)}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.played}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.goalsFor}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.goalsAgainst}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-2 py-2 text-right tabular-nums",
+                        r.goalDiff > 0
+                          ? "text-positive"
+                          : r.goalDiff < 0
+                            ? "text-negative"
+                            : "text-dim",
+                      )}
+                    >
+                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {r.points}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[0.7rem] text-dim">{t("tableLegend")}</p>
+        </section>
         <section>
           <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
             {t("yourResults")}
@@ -606,7 +663,6 @@ function SeasonView({
             {shown
               .slice()
               .reverse()
-              .slice(0, 12)
               .map((f, i) => {
                 const home = f.home === season.teamName;
                 const us = home ? f.homeGoals : f.awayGoals;
@@ -685,7 +741,10 @@ function SeasonView({
                     </div>
                   );
                 })}
-                {finalTie ? (
+                {/* Your own final is already in the run above; this block is
+                    for the final you did not reach, so the champion is still
+                    named. Showing both printed the same tie twice. */}
+                {finalTie && !finalTie.isSquad ? (
                   <div className="mt-1 flex items-center gap-3 rounded-[11px] border border-warning/40 bg-warning/5 px-4 py-2.5">
                     <span className="w-20 shrink-0 truncate text-[0.66rem] uppercase tracking-[0.06em] text-warning">
                       {finalTie.roundLabel}
@@ -705,68 +764,6 @@ function SeasonView({
               </div>
             </div>
           ) : null}
-        </section>
-
-        <section>
-          <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
-            {t("leaguePhaseTable")}
-          </h2>
-          <div className="mt-3 overflow-x-auto rounded-[var(--radius-card)] border border-border">
-            <table className="w-full min-w-[22rem] text-[0.82rem]">
-              <thead>
-                <tr className="border-b border-border bg-bg-elevated text-[0.6rem] uppercase tracking-[0.07em] text-dim">
-                  <th className="px-3 py-2 text-left font-semibold">#</th>
-                  <th className="px-3 py-2 text-left font-semibold">{t("colTeam")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colPlayed")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colFor")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colAgainst")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colDiff")}</th>
-                  <th className="px-3 py-2 text-right font-semibold">{t("colPoints")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.map((r) => (
-                  <tr
-                    key={r.team}
-                    className={cn(
-                      "border-b border-border last:border-0",
-                      r.isSquad ? "bg-brand-ghost" : "bg-surface",
-                    )}
-                  >
-                    <td className="px-3 py-2 tabular-nums text-dim">{r.rank}</td>
-                    <td className={cn("px-3 py-2", r.isSquad ? "font-semibold text-text" : "")}>
-                      {label(r.team)}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">
-                      {r.played}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">
-                      {r.goalsFor}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">
-                      {r.goalsAgainst}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-2 py-2 text-right tabular-nums",
-                        r.goalDiff > 0
-                          ? "text-positive"
-                          : r.goalDiff < 0
-                            ? "text-negative"
-                            : "text-dim",
-                      )}
-                    >
-                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                      {r.points}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2 text-[0.7rem] text-dim">{t("leaguePhaseNote")}</p>
         </section>
       </div>
 
