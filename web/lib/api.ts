@@ -293,6 +293,18 @@ export type SquadPool = {
   roleWeights: Record<string, Record<string, number>>;
   /** Human labels for the sub-stat codes. */
   substatLabels: Record<string, string>;
+  /** How many times a slot may be dealt again. Served, not hardcoded. */
+  maxRerolls: number;
+};
+
+/** One slot's candidates, dealt by the server against the card rarities. */
+export type SquadDeal = {
+  seed: number;
+  position: string;
+  index: number;
+  reroll: number;
+  maxRerolls: number;
+  candidates: SquadPlayer[];
 };
 
 /** A goal or a booking, with the minute it happened on. */
@@ -464,6 +476,27 @@ export const api = {
   // The squad always plays the Champions, so the pool is pan-European — no
   // competition to scope it to.
   squadPool: () => request<SquadPool>(`/squadlab/pool`, 3600),
+  // A POST because the body carries the draft's own seed and everything taken
+  // so far. Uncached on purpose: the answer is already reproducible from the
+  // body, so a cache would only add a way for it to go stale.
+  dealSlot: async (
+    seed: number,
+    position: string,
+    index: number,
+    reroll: number,
+    taken: string[],
+  ) => {
+    const res = await fetch(`${BASE}/squadlab/deal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seed, position, index, reroll, taken }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new ApiError(`deal returned ${res.status}`, res.status);
+    }
+    return (await res.json()) as SquadDeal;
+  },
   playChampions: async (squad: string[], mode: string, seed?: number) => {
     // A POST carrying a squad the user just invented: nothing to cache, since
     // no two visitors send the same body, and each play takes a random slot in

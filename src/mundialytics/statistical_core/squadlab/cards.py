@@ -198,6 +198,19 @@ def load_cards(path: str | None = None) -> pd.DataFrame:
     return df
 
 
+@functools.lru_cache(maxsize=4)
+def card_player_names(path: str | None = None) -> dict[str, str]:
+    """card_id -> the man's name, for callers holding ids and not Cards.
+
+    Building 3,000 Card objects to read one field off a handful of them is the
+    kind of work that turns a 6ms deal into a slow one.
+    """
+    df = load_cards(path)
+    if df.empty:
+        return {}
+    return dict(zip(df["card_id"].astype(str), df["player"].astype(str)))
+
+
 def cards_from_frame(df: pd.DataFrame) -> list[Card]:
     cols = Card.__dataclass_fields__.keys()
     return [Card(**{c: r[c] for c in cols}) for _, r in df.iterrows()]
@@ -226,7 +239,16 @@ class DraftPool:
         return short_key(player)
 
     def take(self, card: Card) -> None:
-        self._taken.add(self.person(card.player))
+        self.take_player(card.player)
+
+    def take_player(self, player: str) -> None:
+        """Remove a man by name, for callers holding a pick and not a Card.
+
+        The draft is stateless over HTTP: the client posts back who it has
+        already drafted, and rebuilding a Card for each of them just to reach
+        his short_key would be work for nothing.
+        """
+        self._taken.add(self.person(player))
 
     def is_taken(self, card: Card) -> bool:
         return self.person(card.player) in self._taken
