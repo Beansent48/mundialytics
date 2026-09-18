@@ -1273,22 +1273,36 @@ def fixtures_day(day: str | None = None) -> dict:
     except ValueError as exc:
         raise HTTPException(400, f"Bad date: {day}") from exc
 
-    key = ("day", target.isoformat(), str(df["date"].max())[:10])
+    # The European fixtures live in their own files, so their freshness has to
+    # be in the key too: without it a result that landed in Europe would never
+    # push the cached day aside.
+    from api import european as eu
+
+    key = ("day", target.isoformat(), str(df["date"].max())[:10], eu.fixtures_fingerprint())
     return _cached(key, lambda: _build_day(df, target))
 
 
 def _build_day(df, target) -> dict:
+    from api import european as eu
+
     rows = cat.window(df, target, target)
     groups: dict[str, list[dict]] = {}
     for r in rows.itertuples():
         payload = _fixture_payload(r, r.competition, r.season, with_probs=True)
         groups.setdefault(r.competition, []).append(payload)
 
+    # Europe is kept in its own catalogue rather than merged into cat.COMPETITIONS:
+    # ten places in this file read that dict and assume a big-five foundation, a
+    # trusted calendar and a match page, none of which hold for a UEFA tie.
+    euro: dict[str, list[dict]] = {}
+    for item in eu.day_fixtures(target):
+        euro.setdefault(item["competition"], []).append(item)
+
     return {
         "date": target.isoformat(),
-        "count": sum(len(v) for v in groups.values()),
+        "count": sum(len(v) for v in groups.values()) + sum(len(v) for v in euro.values()),
         # catalogue order, not dictionary order: the leagues always line up the
-        # same way whichever day you land on
+        # same way whichever day you land on, with Europe after them
         "competitions": [
             {
                 "slug": slug,
@@ -1298,8 +1312,27 @@ def _build_day(df, target) -> dict:
             }
             for slug in cat.COMPETITIONS
             if slug in groups
+        ] + [
+            {
+                "slug": slug,
+                "name": eu.COMPETITIONS[slug]["name"],
+                "country": "EU",
+                "fixtures": euro[slug],
+            }
+            for slug in eu.COMPETITIONS
+            if slug in euro
         ],
     }
+
+
+
+def _merge_counts(*sources: dict) -> dict:
+    """Add up per-day fixture counts. The strip counts matches, not leagues."""
+    out: dict[str, int] = {}
+    for src in sources:
+        for day, n in (src or {}).items():
+            out[str(day)] = out.get(str(day), 0) + int(n)
+    return dict(sorted(out.items()))
 
 
 @app.get("/fixtures/calendar")
@@ -1311,10 +1344,14 @@ def fixtures_calendar(days_back: int = Query(7, ge=0, le=30),
     _, _, df = club_engine()
     today = _date.today()
     start, end = today - _td(days=days_back), today + _td(days=days_forward)
-    key = ("calendar", start.isoformat(), end.isoformat(), str(df["date"].max())[:10])
+    from api import european as eu
+
+    key = ("calendar", start.isoformat(), end.isoformat(), str(df["date"].max())[:10],
+           eu.fixtures_fingerprint())
     return _cached(key, lambda: {
         "today": today.isoformat(),
         "from": start.isoformat(),
         "to": end.isoformat(),
-        "counts": cat.day_counts(df, start, end),
+        "counts": _merge_counts(cat.day_counts(df, start, end),
+                                eu.day_counts(start, end)),
     })

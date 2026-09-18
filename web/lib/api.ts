@@ -23,6 +23,10 @@ export type Fixture = {
   played: boolean;
   score: { home: number; away: number } | null;
   probabilities: Probabilities | null;
+  /** False for a fixture with no match page of its own (the European ties). */
+  analysis?: boolean;
+  /** Which model priced it: the big-five engine, or the European Elo scale. */
+  model?: string;
 };
 
 export type Outcome = "home" | "draw" | "away";
