@@ -45,19 +45,13 @@ function buildSlots(slots: Record<string, number>): Slot[] {
   return out;
 }
 
-/** Stable shuffle: a slot keeps its five until you ask for new ones. */
-function sample<T>(items: T[], n: number, seed: number): T[] {
-  const arr = [...items];
-  let s = seed;
-  const rand = () => {
-    s = (s * 1664525 + 1013904223) % 4294967296;
-    return s / 4294967296;
-  };
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr.slice(0, n);
+/** A fresh draft every time. The cards themselves are dealt by the server,
+ *  which rolls card kind and then tier, so the rarities on the catalogue
+ *  finally decide what you are offered. This seed is the only thing that makes
+ *  one draft differ from another, and it never leaves the session. */
+function mintSeed(): number {
+  const [n] = crypto.getRandomValues(new Uint32Array(1));
+  return n;
 }
 
 export function SquadLab() {
@@ -72,6 +66,10 @@ export function SquadLab() {
   const [openSlot, setOpenSlot] = useState<string | null>(null);
   const [rerolls, setRerolls] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
+  // The draft's own seed, and the cards already dealt, keyed by slot+reroll so
+  // a re-render never re-deals a hand the reader is still looking at.
+  const [seed, setSeed] = useState(0);
+  const [dealt, setDealt] = useState<Record<string, SquadPlayer[]>>({});
 
   const [season, setSeason] = useState<SquadSeason | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -94,6 +92,8 @@ export function SquadLab() {
     setPoolError(false);
     setPicks({});
     setRerolls({});
+    setDealt({});
+    setSeed(mintSeed());
     setSeason(null);
     try {
       setPool(await api.squadPool());
@@ -114,23 +114,51 @@ export function SquadLab() {
   const candidates = useCallback(
     (slot: Slot): SquadPlayer[] => {
       if (!pool) return [];
-      const all = (pool.players[slot.position] ?? []).filter(
-        (p) => !taken.has(p.player) || picks[slot.key]?.player === p.player,
-      );
+      const free = (p: SquadPlayer) =>
+        !taken.has(p.player) || picks[slot.key]?.player === p.player;
       if (mode === "sandbox") {
+        const all = (pool.players[slot.position] ?? []).filter(free);
         const q = query.trim().toLowerCase();
         return (q ? all.filter((p) => p.display.toLowerCase().includes(q)) : all).slice(
           0,
           18,
         );
       }
-      const seed =
-        slot.key.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 7919 +
-        (rerolls[slot.key] ?? 0) * 104729;
-      return sample(all.slice(0, 18), 5, seed).sort((a, b) => b.overall - a.overall);
+      // Dealt by the server. The filter is a safety net for a hand dealt before
+      // the man in it was drafted somewhere else.
+      return (dealt[`${slot.key}|${rerolls[slot.key] ?? 0}`] ?? []).filter(free);
     },
-    [pool, taken, picks, mode, query, rerolls],
+    [pool, taken, picks, mode, query, rerolls, dealt],
   );
+
+  // Ask for a hand when a slot opens, or when it is rerolled. Keyed by
+  // slot+reroll, so it is fetched once and survives every re-render after.
+  const dealKey = openSlot ? `${openSlot}|${rerolls[openSlot] ?? 0}` : null;
+  useEffect(() => {
+    if (mode !== "draft" || !pool || !openSlot || !dealKey || !seed) return;
+    if (dealt[dealKey]) return;
+    const slot = slots.find((x) => x.key === openSlot);
+    if (!slot) return;
+
+    let cancelled = false;
+    api
+      .dealSlot(seed, slot.position, slot.index, rerolls[openSlot] ?? 0,
+                Object.values(picks).map((p) => p.player))
+      .then((d) => {
+        if (!cancelled) setDealt((prev) => ({ ...prev, [dealKey]: d.candidates }));
+      })
+      .catch(() => {
+        // Record the failure as an empty hand. Leaving the key unset would
+        // read as "still dealing" and spin for ever.
+        if (!cancelled) setDealt((prev) => ({ ...prev, [dealKey]: [] }));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `picks` is read, not watched: a hand already dealt must not be re-dealt
+    // under the reader because another slot was filled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, pool, openSlot, dealKey, seed, slots, dealt]);
 
   function pick(slotKey: string, player: SquadPlayer) {
     setPicks((prev) => ({ ...prev, [slotKey]: player }));
@@ -162,6 +190,7 @@ export function SquadLab() {
     setPicks({});
     setSeason(null);
     setRerolls({});
+    setDealt({});
     setOpenSlot(null);
   }
 
@@ -231,6 +260,15 @@ export function SquadLab() {
 
   /* ── Building the eleven ─────────────────────────────────────────────── */
   const openSlotObj = slots.find((s) => s.key === openSlot);
+  // The cap is served, not hardcoded: unlimited rerolls make rarity pointless,
+  // because you just spin until the icon turns up.
+  const rerollsLeft = openSlotObj
+    ? (pool?.maxRerolls ?? 3) - (rerolls[openSlotObj.key] ?? 0)
+    : 0;
+  // Derived, not stored: a hand is "on its way" exactly while its key has no
+  // entry yet, and an effect that sets state on its own way in trips the
+  // set-state-in-effect rule.
+  const dealing = mode === "draft" && !!dealKey && dealt[dealKey] === undefined;
 
   return (
     <div>
@@ -322,10 +360,11 @@ export function SquadLab() {
                           [openSlotObj.key]: (r[openSlotObj.key] ?? 0) + 1,
                         }))
                       }
-                      className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[0.75rem] text-muted transition-colors hover:border-border-strong hover:text-text"
+                      disabled={rerollsLeft <= 0 || dealing}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[0.75rem] text-muted transition-colors hover:border-border-strong hover:text-text disabled:pointer-events-none disabled:opacity-40"
                     >
                       <Dices className="size-3.5" />
-                      {t("reroll")}
+                      {t("rerollLeft", { n: rerollsLeft })}
                     </button>
                   ) : null}
                   <button
@@ -365,7 +404,7 @@ export function SquadLab() {
                 ))}
                 {!candidates(openSlotObj).length ? (
                   <p className="col-span-full text-[0.83rem] text-dim">
-                    {t("noCandidates")}
+                    {dealing ? t("dealing") : t("noCandidates")}
                   </p>
                 ) : null}
               </div>

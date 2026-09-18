@@ -367,7 +367,6 @@
       "Forward": "Attack"
     },
     "emptySlot": "Pick #{n}",
-    "reroll": "New faces",
     "search": "Search a player…",
     "close": "Close",
     "noCandidates": "No players left for this position.",
@@ -457,6 +456,8 @@
     "advanced": "Through",
     "eliminated": "Out",
     "leaguePhaseTable": "League phase",
+    "rerollLeft": "Deal again ({n})",
+    "dealing": "Dealing cards…",
     "advancedStats": "Advanced stats",
     "closeStats": "Close stats",
     "tableLegend": "1st–8th go straight to the last 16 · 9th–24th play the play-off · 25th–36th are out.",

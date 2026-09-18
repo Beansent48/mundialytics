@@ -1183,6 +1183,19 @@ def awards(competition: str) -> dict:
 # ── SquadLab ───────────────────────────────────────────────────────────────────
 
 
+class DealRequest(BaseModel):
+    """One slot's worth of candidates. Everything the deal depends on is here:
+    the server keeps no draft state, so the same body always deals the same
+    five cards and a different draft seed deals different ones."""
+
+    seed: int = Field(ge=0, lt=2 ** 53)
+    position: str
+    index: int = Field(default=0, ge=0, le=10)
+    reroll: int = Field(default=0, ge=0)
+    # card ids already drafted; a man is removed with ALL of his cards
+    taken: list[str] = Field(default_factory=list, max_length=11)
+
+
 class SeasonRequest(BaseModel):
     squad: list[str] = Field(min_length=11, max_length=11)
     # Draft vs Sandbox is only a build method now — both play the Champions.
@@ -1203,7 +1216,29 @@ def squadlab_pool() -> dict:
     data = sl.champions_pool()
     if not any(data["players"].values()):
         raise HTTPException(503, "No player profiles available")
-    return {"competition": "champions", "competitionName": "Champions League", **data}
+    return {"competition": "champions", "competitionName": "Champions League",
+            "maxRerolls": sl.MAX_REROLLS, **data}
+
+
+@app.post("/squadlab/deal")
+def squadlab_deal(req: DealRequest) -> dict:
+    """Five candidates for one slot, rolled against the card rarities.
+
+    Not cached, and it does not need to be: the answer is a pure function of
+    the body (~6ms), so a re-render, a reload or a second tab all get the same
+    five cards back without anything being stored between requests.
+    """
+    from api import squadlab as sl
+
+    if req.position not in sl.POSITIONS:
+        raise HTTPException(400, f"Unknown position: {req.position}")
+    if req.reroll > sl.MAX_REROLLS:
+        raise HTTPException(400, f"At most {sl.MAX_REROLLS} rerolls per slot")
+
+    data = sl.deal_slot(req.seed, req.position, req.index, req.reroll, req.taken)
+    if not data["candidates"]:
+        raise HTTPException(503, "No cards available to deal")
+    return data
 
 
 @app.post("/squadlab/season")

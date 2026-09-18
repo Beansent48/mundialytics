@@ -367,7 +367,6 @@
       "Forward": "Ataque"
     },
     "emptySlot": "Elegir #{n}",
-    "reroll": "Otras caras",
     "search": "Busca un jugador…",
     "close": "Cerrar",
     "noCandidates": "No quedan jugadores para este puesto.",
@@ -457,6 +456,8 @@
     "advanced": "Pasa",
     "eliminated": "Fuera",
     "leaguePhaseTable": "Fase liga",
+    "rerollLeft": "Otras cartas ({n})",
+    "dealing": "Repartiendo cartas…",
     "advancedStats": "Estadísticas avanzadas",
     "closeStats": "Cerrar estadísticas",
     "tableLegend": "Del 1 al 8 pasan a octavos · del 9 al 24 juegan el playoff · del 25 al 36 quedan eliminados.",

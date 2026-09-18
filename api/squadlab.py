@@ -316,6 +316,71 @@ def champions_pool(limit_per_position: int = 40) -> dict:
     }
 
 
+# How many candidates a slot is offered, and how many times you may ask again.
+# Three is the point where a reroll is still a decision: unlimited rerolls turn
+# the draft into "keep spinning until the icon shows up", which is the same as
+# having no rarity at all.
+CANDIDATES_PER_SLOT = 5
+MAX_REROLLS = 3
+
+
+def _deal_rng(seed: int, position: str, index: int, reroll: int):
+    """A generator fixed by (draft, slot, reroll) and nothing else.
+
+    The five cards in a slot must not change when React re-renders, when the
+    tab is reloaded or when the same draft is opened twice -- but they must
+    differ between drafts. Deriving the stream from the client's per-draft seed
+    gives both, with no session to store: the server stays stateless and the
+    answer is reproducible from the request alone.
+    """
+    import numpy as np
+
+    key = f"{int(seed)}|{position}|{int(index)}|{int(reroll)}".encode()
+    return np.random.default_rng(
+        int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "big"))
+
+
+def deal_slot(seed: int, position: str, index: int = 0, reroll: int = 0,
+              taken: list[str] | None = None) -> dict:
+    """The candidates for one slot, rolled kind-then-tier by DraftPool.
+
+    This used to be two layers of determinism stacked on each other: the pool
+    sampled its primes and icons with a constant MD5 seed, and the client then
+    shuffled the top 18 of it with a seed made from the slot's own name. Every
+    player saw the same five cards in the same hole, for ever, and the tiers
+    the catalogue carries meant nothing because nothing ever rolled against
+    them. DraftPool has done this properly all along -- kind, then tier, with a
+    ladder fallback and uniqueness by PERSON so drafting Messi takes his icon,
+    his prime and his current card at once -- it was simply never called.
+    """
+    from mundialytics.statistical_core.squadlab.cards import (
+        DraftPool, card_player_names, load_cards,
+    )
+
+    df = load_cards()
+    if df.empty:
+        return {"candidates": []}
+
+    pool = DraftPool(df, _deal_rng(seed, position, index, reroll))
+    names = card_player_names()
+    for card_id in taken or []:
+        who = names.get(str(card_id))
+        if who:
+            pool.take_player(who)
+
+    cards = pool.deal(position, CANDIDATES_PER_SLOT)
+    return {
+        "seed": int(seed),
+        "position": position,
+        "index": int(index),
+        "reroll": int(reroll),
+        "maxRerolls": MAX_REROLLS,
+        # best first, the way a shortlist reads
+        "candidates": sorted((_card_entry(c) for c in cards),
+                             key=lambda x: -x["overall"]),
+    }
+
+
 @lru_cache(maxsize=1)
 def _champions_resources():
     """The real CL field (elo + drawn fixtures) and the squad-rating -> Elo line.
@@ -398,19 +463,6 @@ def _display(name: str) -> str:
         return display_name(base) + mark
     except Exception:
         return base + mark
-
-
-def seeded_sample(candidates: list[dict], seed: str, n: int = 5) -> list[dict]:
-    """A stable random five from the shortlist.
-
-    Seeded per slot so Defender #1 and Defender #4 see different faces instead
-    of the same top five, and so a reload of the same slot shows the same set.
-    """
-    if len(candidates) <= n:
-        return candidates
-    seed_int = int(hashlib.md5(seed.encode()).hexdigest(), 16) % (2**32)
-    sample = random.Random(seed_int).sample(candidates, n)
-    return sorted(sample, key=lambda x: -x["overall"])
 
 
 def play_champions(squad_names: list[str], seed: int | None = None) -> dict:
