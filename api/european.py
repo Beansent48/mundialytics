@@ -138,7 +138,13 @@ def forecast(comp_id: str, year: int, n_sims: int = 2000) -> dict:
     if path.exists():
         try:
             cached = json.loads(path.read_text(encoding="utf-8"))
-            if cached.get("_played") == played and cached.get("_preDraw") == pre_draw:
+            # The field size belongs in the key, not just the match count. A club
+            # that starts resolving to an Elo (Slavia Praha did not, which is why
+            # the Champions cache said 35 teams) changes the tournament without
+            # changing `played`, and the stale answer would never expire.
+            if (cached.get("_played") == played
+                    and cached.get("_preDraw") == pre_draw
+                    and cached.get("_teams") == len(teams)):
                 return cached
         except Exception:
             pass
@@ -157,6 +163,7 @@ def forecast(comp_id: str, year: int, n_sims: int = 2000) -> dict:
     out = {
         "_played": played,
         "_preDraw": pre_draw,
+        "_teams": len(teams),
         "competition": comp_id,
         "year": year,
         "teams": len(teams),
