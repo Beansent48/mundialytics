@@ -1,6 +1,7 @@
 "use client";
 
 import { Info } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 import { PlayerStatsPanel } from "@/components/squadlab/player-stats-popover";
@@ -92,25 +93,40 @@ export function PlayerCard({
         ? "#8b5cff"
         : null;
 
+  const t = useTranslations("squadlab");
   const canInspect = !!substatLabels && !!roleWeights;
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
-  const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const open = canInspect && (hovered || pinned) && anchor != null;
+  // Click, never hover. On the pitch the cards sit 70px apart and a 300px panel
+  // covers the next one, so a passing cursor kept opening stats nobody asked
+  // for -- and on a touch screen there is no hover to leave, either.
+  const open = canInspect && pinned && anchor != null;
 
   const capture = () => {
     if (wrapRef.current) setAnchor(wrapRef.current.getBoundingClientRect());
   };
 
-  // A pinned popover closes on the next click outside the card.
+  // An open popover closes on the next click outside the card, or on Escape,
+  // which hands the focus back to the button that opened it.
   useEffect(() => {
     if (!pinned) return;
     const onDown = (e: PointerEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) setPinned(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPinned(false);
+        btnRef.current?.focus();
+      }
+    };
     document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [pinned]);
 
   // A keeper's defensive axis *is* their shot-stopping, so showing both would
@@ -125,19 +141,7 @@ export function PlayerCard({
         ] as const);
 
   return (
-    <span
-      ref={wrapRef}
-      className="relative block"
-      onMouseEnter={
-        canInspect
-          ? () => {
-              capture();
-              setHovered(true);
-            }
-          : undefined
-      }
-      onMouseLeave={canInspect ? () => setHovered(false) : undefined}
-    >
+    <span ref={wrapRef} className="relative block">
       {aura ? (
         <span
           aria-hidden
@@ -207,19 +211,24 @@ export function PlayerCard({
 
       {canInspect ? (
         <button
+          ref={btnRef}
           type="button"
-          aria-label="Estadísticas avanzadas"
+          aria-label={pinned ? t("closeStats") : t("advancedStats")}
+          aria-expanded={pinned}
           onClick={(e) => {
             e.stopPropagation();
             capture();
             setPinned((p) => !p);
           }}
           className={cn(
-            "absolute bottom-1 right-1 z-10 flex size-4 items-center justify-center rounded-full bg-black/25 text-white/80 transition-opacity hover:bg-black/45 hover:text-white",
-            pinned ? "opacity-100" : "opacity-60",
+            // Above the bevel, not on it: .mv-card is clipped to a point at
+            // 50% 100%, so the old bottom-1 right-1 sat in the cut-away corner.
+            "absolute bottom-[25px] right-1.5 z-10 flex size-6 items-center justify-center rounded-full",
+            "bg-black/45 text-white transition-colors hover:bg-black/70 sm:size-7",
+            pinned ? "bg-black/70 ring-1 ring-white/50" : "",
           )}
         >
-          <Info className="size-2.5" />
+          <Info className="size-3.5" />
         </button>
       ) : null}
 

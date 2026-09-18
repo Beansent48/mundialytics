@@ -1,5 +1,68 @@
 # Changelog
 
+## v0.52.0 — Europe gets players, and the draft gets dealt (2026-09-18)
+
+### Fixed
+- **ESPN was refusing every request.** Its edge started rejecting browser-shaped
+  User-Agents: a call claiming to be Chrome while carrying Python's TLS
+  fingerprint reads as a bot and gets a hard 403. The repo sent `Mozilla/5.0`,
+  so the fixture calendar, the player stats and the current squads stopped
+  arriving at once, and the European page went on serving a cached bracket that
+  looked perfectly healthy because the fetch swallowed the error. Measured, three
+  tries each: no header and `python-urllib/3.14` succeeded on every endpoint;
+  `Mozilla/5.0`, a full Chrome string and `Mundialytics/0.50` failed on every
+  one. The three ESPN callers now share one `espn_json()` with no User-Agent, and
+  a test fails if one creeps back.
+- **The European fetch failed silently**, and the daily update **deleted the
+  European fixture cache before refetching it**, so the fallback was gone exactly
+  when it was needed. It fetches first now, and says why when it degrades.
+- **The European cache never expired on a change of field.** It was keyed on
+  matches played and whether the draw was out, neither of which moves when a club
+  starts or stops resolving to an Elo — `uefa_champions_2026.json` says 35 teams
+  because Slavia Praha has no row in the local ClubElo snapshot.
+- **SquadLab printed the final twice** when your squad reached it, once as a tie
+  in "your run" and again in the block meant to name the champion when you did
+  not get there.
+- **The league-phase table was cut to twelve rows** of 36, and sat in a
+  half-width column beside the results, which were capped at twelve for the same
+  reason.
+- **The card's info button** was 16px of 25%-opaque black in the cut-away corner
+  of the card's clip-path, opened on hover over the whole card (a 300px panel
+  covering the next card on a pitch where they sit 70px apart, and nothing at all
+  on a touch screen), and carried a hardcoded Spanish label in a two-locale app.
+
+### Added
+- **Squads for all 108 European participants**, Sabah and Lincoln Red Imps
+  included: `current_squads.csv` goes from 96 clubs to 166. The domestic half is
+  untouched — European appearances and goals land in their own `uefa_*` columns
+  rather than being folded into `goals` and `apps`, which the scorer race, the
+  props and `squad_share` all read as league numbers. UEFA player-match stats go
+  to their own files, because the league files are keyed on (home, away) by their
+  consumers and a Champions quarter-final between Real Madrid and Barcelona would
+  overwrite the LaLiga clasico.
+- **Real scorers for the other 35 clubs** in a SquadLab Champions run. Weighted
+  by goals and assists per appearance, pulled towards a positional prior so a
+  one-cap youngster does not finish as Europe's top scorer, and anchored on a
+  competition-wide ceiling so Bayern's forwards stay more dangerous than Sabah's.
+  No ratings are invented: those clubs have never been measured here.
+- **European ties on the day screen**, priced by the European Elo model rather
+  than the big-five engine, whose strengths are fitted per league.
+- **A draft that is actually dealt.** `DraftPool` — kind, then tier, with a
+  ladder fallback and uniqueness by person — had been written and tested and
+  never called. The pool sampled its primes and icons with a constant MD5 seed
+  and the client shuffled the top 18 with a seed made from the slot's name, so
+  everybody saw the same five cards in the same hole for ever and the tiers meant
+  nothing. Rerolls are capped at three, enforced on the server.
+
+### Changed
+- The props model refuses squads from competitions it was not fitted on. One
+  coincidental name match was enough to install a "roster" and have
+  `predict_fixture` serve an authoritative-looking shortlist of one player for a
+  club never measured here; eight clubs were in that state. The exclusion is by
+  competition, not by how many names we recognise — a promoted Ligue 1 side
+  matched 5 players and European clubs matched up to 10, so a threshold would
+  have stripped real big-five clubs of their squads.
+
 ## v0.51.1 — Live-pipeline fixes found while verifying (2026-09-17)
 
 ### Fixed

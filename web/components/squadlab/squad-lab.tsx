@@ -45,19 +45,13 @@ function buildSlots(slots: Record<string, number>): Slot[] {
   return out;
 }
 
-/** Stable shuffle: a slot keeps its five until you ask for new ones. */
-function sample<T>(items: T[], n: number, seed: number): T[] {
-  const arr = [...items];
-  let s = seed;
-  const rand = () => {
-    s = (s * 1664525 + 1013904223) % 4294967296;
-    return s / 4294967296;
-  };
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr.slice(0, n);
+/** A fresh draft every time. The cards themselves are dealt by the server,
+ *  which rolls card kind and then tier, so the rarities on the catalogue
+ *  finally decide what you are offered. This seed is the only thing that makes
+ *  one draft differ from another, and it never leaves the session. */
+function mintSeed(): number {
+  const [n] = crypto.getRandomValues(new Uint32Array(1));
+  return n;
 }
 
 export function SquadLab() {
@@ -72,6 +66,10 @@ export function SquadLab() {
   const [openSlot, setOpenSlot] = useState<string | null>(null);
   const [rerolls, setRerolls] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
+  // The draft's own seed, and the cards already dealt, keyed by slot+reroll so
+  // a re-render never re-deals a hand the reader is still looking at.
+  const [seed, setSeed] = useState(0);
+  const [dealt, setDealt] = useState<Record<string, SquadPlayer[]>>({});
 
   const [season, setSeason] = useState<SquadSeason | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -94,6 +92,8 @@ export function SquadLab() {
     setPoolError(false);
     setPicks({});
     setRerolls({});
+    setDealt({});
+    setSeed(mintSeed());
     setSeason(null);
     try {
       setPool(await api.squadPool());
@@ -114,23 +114,51 @@ export function SquadLab() {
   const candidates = useCallback(
     (slot: Slot): SquadPlayer[] => {
       if (!pool) return [];
-      const all = (pool.players[slot.position] ?? []).filter(
-        (p) => !taken.has(p.player) || picks[slot.key]?.player === p.player,
-      );
+      const free = (p: SquadPlayer) =>
+        !taken.has(p.player) || picks[slot.key]?.player === p.player;
       if (mode === "sandbox") {
+        const all = (pool.players[slot.position] ?? []).filter(free);
         const q = query.trim().toLowerCase();
         return (q ? all.filter((p) => p.display.toLowerCase().includes(q)) : all).slice(
           0,
           18,
         );
       }
-      const seed =
-        slot.key.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 7919 +
-        (rerolls[slot.key] ?? 0) * 104729;
-      return sample(all.slice(0, 18), 5, seed).sort((a, b) => b.overall - a.overall);
+      // Dealt by the server. The filter is a safety net for a hand dealt before
+      // the man in it was drafted somewhere else.
+      return (dealt[`${slot.key}|${rerolls[slot.key] ?? 0}`] ?? []).filter(free);
     },
-    [pool, taken, picks, mode, query, rerolls],
+    [pool, taken, picks, mode, query, rerolls, dealt],
   );
+
+  // Ask for a hand when a slot opens, or when it is rerolled. Keyed by
+  // slot+reroll, so it is fetched once and survives every re-render after.
+  const dealKey = openSlot ? `${openSlot}|${rerolls[openSlot] ?? 0}` : null;
+  useEffect(() => {
+    if (mode !== "draft" || !pool || !openSlot || !dealKey || !seed) return;
+    if (dealt[dealKey]) return;
+    const slot = slots.find((x) => x.key === openSlot);
+    if (!slot) return;
+
+    let cancelled = false;
+    api
+      .dealSlot(seed, slot.position, slot.index, rerolls[openSlot] ?? 0,
+                Object.values(picks).map((p) => p.player))
+      .then((d) => {
+        if (!cancelled) setDealt((prev) => ({ ...prev, [dealKey]: d.candidates }));
+      })
+      .catch(() => {
+        // Record the failure as an empty hand. Leaving the key unset would
+        // read as "still dealing" and spin for ever.
+        if (!cancelled) setDealt((prev) => ({ ...prev, [dealKey]: [] }));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `picks` is read, not watched: a hand already dealt must not be re-dealt
+    // under the reader because another slot was filled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, pool, openSlot, dealKey, seed, slots, dealt]);
 
   function pick(slotKey: string, player: SquadPlayer) {
     setPicks((prev) => ({ ...prev, [slotKey]: player }));
@@ -162,6 +190,7 @@ export function SquadLab() {
     setPicks({});
     setSeason(null);
     setRerolls({});
+    setDealt({});
     setOpenSlot(null);
   }
 
@@ -231,6 +260,15 @@ export function SquadLab() {
 
   /* ── Building the eleven ─────────────────────────────────────────────── */
   const openSlotObj = slots.find((s) => s.key === openSlot);
+  // The cap is served, not hardcoded: unlimited rerolls make rarity pointless,
+  // because you just spin until the icon turns up.
+  const rerollsLeft = openSlotObj
+    ? (pool?.maxRerolls ?? 3) - (rerolls[openSlotObj.key] ?? 0)
+    : 0;
+  // Derived, not stored: a hand is "on its way" exactly while its key has no
+  // entry yet, and an effect that sets state on its own way in trips the
+  // set-state-in-effect rule.
+  const dealing = mode === "draft" && !!dealKey && dealt[dealKey] === undefined;
 
   return (
     <div>
@@ -322,10 +360,11 @@ export function SquadLab() {
                           [openSlotObj.key]: (r[openSlotObj.key] ?? 0) + 1,
                         }))
                       }
-                      className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[0.75rem] text-muted transition-colors hover:border-border-strong hover:text-text"
+                      disabled={rerollsLeft <= 0 || dealing}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[0.75rem] text-muted transition-colors hover:border-border-strong hover:text-text disabled:pointer-events-none disabled:opacity-40"
                     >
                       <Dices className="size-3.5" />
-                      {t("reroll")}
+                      {t("rerollLeft", { n: rerollsLeft })}
                     </button>
                   ) : null}
                   <button
@@ -365,7 +404,7 @@ export function SquadLab() {
                 ))}
                 {!candidates(openSlotObj).length ? (
                   <p className="col-span-full text-[0.83rem] text-dim">
-                    {t("noCandidates")}
+                    {dealing ? t("dealing") : t("noCandidates")}
                   </p>
                 ) : null}
               </div>
@@ -445,16 +484,6 @@ function SeasonView({
   // language, so the label is swapped in wherever that name is shown.
   const squadLabel = t("sheetTitle");
   const label = (team: string) => (team === season.teamName ? squadLabel : team);
-
-  // The league-phase table has 36 rows; show the top of it plus the squad's own
-  // row when it finished outside the window, so it is always visible.
-  const TABLE_WINDOW = 12;
-  const tableRows = useMemo(() => {
-    const top = season.leaguePhase.slice(0, TABLE_WINDOW);
-    const squadRow = season.leaguePhase.find((r) => r.isSquad);
-    if (squadRow && squadRow.rank > TABLE_WINDOW) top.push(squadRow);
-    return top;
-  }, [season.leaguePhase]);
 
   // The squad's own knockout ties, in order, plus the final for the champion.
   const ownTies = useMemo(() => {
@@ -597,7 +626,74 @@ function SeasonView({
         </span>
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+      <div className="mt-8 flex flex-col gap-10">
+        <section>
+          <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
+            {t("leaguePhaseTable")}
+          </h2>
+          <div className="mt-3 overflow-x-auto rounded-[var(--radius-card)] border border-border">
+            <table className="w-full min-w-[22rem] text-[0.82rem]">
+              <thead>
+                <tr className="border-b border-border bg-bg-elevated text-[0.6rem] uppercase tracking-[0.07em] text-dim">
+                  <th className="px-3 py-2 text-left font-semibold">#</th>
+                  <th className="px-3 py-2 text-left font-semibold">{t("colTeam")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colPlayed")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colFor")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colAgainst")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colDiff")}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t("colPoints")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {season.leaguePhase.map((r) => (
+                  <tr
+                    key={r.team}
+                    className={cn(
+                      "border-b border-border last:border-0",
+                      // Where the table actually splits: 1-8 go straight to the
+                      // last 16, 9-24 play the knockout play-off, 25-36 are out.
+                      // Without the rules drawn on it, 36 rows is just a list.
+                      r.rank === 9 || r.rank === 25
+                        ? "border-t-2 border-t-border-strong"
+                        : "",
+                      r.isSquad ? "bg-brand-ghost" : "bg-surface",
+                    )}
+                  >
+                    <td className="px-3 py-2 tabular-nums text-dim">{r.rank}</td>
+                    <td className={cn("px-3 py-2", r.isSquad ? "font-semibold text-text" : "")}>
+                      {label(r.team)}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.played}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.goalsFor}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.goalsAgainst}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-2 py-2 text-right tabular-nums",
+                        r.goalDiff > 0
+                          ? "text-positive"
+                          : r.goalDiff < 0
+                            ? "text-negative"
+                            : "text-dim",
+                      )}
+                    >
+                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {r.points}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[0.7rem] text-dim">{t("tableLegend")}</p>
+        </section>
         <section>
           <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
             {t("yourResults")}
@@ -606,7 +702,6 @@ function SeasonView({
             {shown
               .slice()
               .reverse()
-              .slice(0, 12)
               .map((f, i) => {
                 const home = f.home === season.teamName;
                 const us = home ? f.homeGoals : f.awayGoals;
@@ -685,7 +780,10 @@ function SeasonView({
                     </div>
                   );
                 })}
-                {finalTie ? (
+                {/* Your own final is already in the run above; this block is
+                    for the final you did not reach, so the champion is still
+                    named. Showing both printed the same tie twice. */}
+                {finalTie && !finalTie.isSquad ? (
                   <div className="mt-1 flex items-center gap-3 rounded-[11px] border border-warning/40 bg-warning/5 px-4 py-2.5">
                     <span className="w-20 shrink-0 truncate text-[0.66rem] uppercase tracking-[0.06em] text-warning">
                       {finalTie.roundLabel}
@@ -706,68 +804,6 @@ function SeasonView({
             </div>
           ) : null}
         </section>
-
-        <section>
-          <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
-            {t("leaguePhaseTable")}
-          </h2>
-          <div className="mt-3 overflow-x-auto rounded-[var(--radius-card)] border border-border">
-            <table className="w-full min-w-[22rem] text-[0.82rem]">
-              <thead>
-                <tr className="border-b border-border bg-bg-elevated text-[0.6rem] uppercase tracking-[0.07em] text-dim">
-                  <th className="px-3 py-2 text-left font-semibold">#</th>
-                  <th className="px-3 py-2 text-left font-semibold">{t("colTeam")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colPlayed")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colFor")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colAgainst")}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t("colDiff")}</th>
-                  <th className="px-3 py-2 text-right font-semibold">{t("colPoints")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.map((r) => (
-                  <tr
-                    key={r.team}
-                    className={cn(
-                      "border-b border-border last:border-0",
-                      r.isSquad ? "bg-brand-ghost" : "bg-surface",
-                    )}
-                  >
-                    <td className="px-3 py-2 tabular-nums text-dim">{r.rank}</td>
-                    <td className={cn("px-3 py-2", r.isSquad ? "font-semibold text-text" : "")}>
-                      {label(r.team)}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">
-                      {r.played}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">
-                      {r.goalsFor}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">
-                      {r.goalsAgainst}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-2 py-2 text-right tabular-nums",
-                        r.goalDiff > 0
-                          ? "text-positive"
-                          : r.goalDiff < 0
-                            ? "text-negative"
-                            : "text-dim",
-                      )}
-                    >
-                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                      {r.points}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2 text-[0.7rem] text-dim">{t("leaguePhaseNote")}</p>
-        </section>
       </div>
 
       {done && season.scorers.length ? (
@@ -776,13 +812,25 @@ function SeasonView({
             {t("topScorers")}
           </h2>
           <div className="mt-3 flex flex-col gap-1.5">
-            {season.scorers.slice(0, 8).map((s, i) => (
+            {season.scorers.slice(0, 10).map((s, i) => (
               <div
                 key={`${s.player}-${i}`}
-                className="flex items-center gap-3 rounded-[11px] border border-brand/40 bg-brand-ghost px-4 py-2.5"
+                className={cn(
+                  "flex items-center gap-3 rounded-[11px] border px-4 py-2.5",
+                  // the highlight is what makes YOUR man stand out; before this
+                  // the list was only ever your own eleven, so everything glowed
+                  s.isSquad
+                    ? "border-brand/40 bg-brand-ghost"
+                    : "border-border bg-surface",
+                )}
               >
                 <span className="w-5 text-[0.72rem] tabular-nums text-dim">{i + 1}</span>
-                <span className="flex-1 truncate text-[0.86rem] font-medium">{s.player}</span>
+                <span className="flex-1 truncate text-[0.86rem] font-medium">
+                  {s.player}
+                  <span className="ml-2 text-[0.68rem] font-normal text-dim">
+                    {label(s.team)}
+                  </span>
+                </span>
                 {s.assists ? (
                   <span className="text-[0.68rem] text-dim">
                     {t("assistShort", { n: s.assists })}

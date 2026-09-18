@@ -34,13 +34,14 @@ import argparse
 import json
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+
+from mundialytics.providers.espn_fixtures import espn_json  # noqa: E402
 
 DIR = ROOT / "data/external/advanced/espn"
 OUT_P = DIR / "espn_player_match_current.csv"
@@ -56,6 +57,22 @@ LEAGUES = {
     "ger.1": "Bundesliga",
     "ita.1": "Serie A",
     "fra.1": "Ligue 1",
+}
+
+UEFA_LEAGUES = {
+    "uefa.champions": "Champions League",
+    "uefa.europa": "Europa League",
+    "uefa.europa.conf": "Conference League",
+}
+
+# UEFA writes to its OWN files, and that is not tidiness. The league files are
+# keyed on (home, away) by their consumers -- a Champions quarter-final between
+# Real Madrid and Barcelona would overwrite the entry for the LaLiga clasico --
+# and the jug_* settlement layer reads them as "this club's league matches", so
+# a goal in Europe must never settle a LaLiga market.
+TARGETS = {
+    "big5": {"leagues": LEAGUES, "suffix": "current"},
+    "uefa": {"leagues": UEFA_LEAGUES, "suffix": "uefa"},
 }
 
 # ESPN stat name -> our column
@@ -119,16 +136,8 @@ def _minute_num(disp: str) -> float:
 
 
 def _get(url: str, tries: int = 3) -> dict:
-    for i in range(tries):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=40) as fh:
-                return json.load(fh)
-        except Exception:
-            if i == tries - 1:
-                raise
-            time.sleep(2 * (i + 1))
-    return {}
+    """Thin alias for the shared caller: the User-Agent rule lives in one place."""
+    return espn_json(url, timeout=40, tries=tries)
 
 
 def _aliases() -> dict[str, str]:
@@ -273,7 +282,17 @@ def main() -> None:
     ap.add_argument("--from", dest="lo", default=None, help="AAAAMMDD")
     ap.add_argument("--to", dest="hi", default=None, help="AAAAMMDD")
     ap.add_argument("--rebuild", action="store_true", help="ignora lo ya descargado")
+    ap.add_argument("--competitions", choices=sorted(TARGETS), default="big5",
+                    help="big5 (por defecto) o uefa (Champions/Europa/Conference)")
     args = ap.parse_args()
+
+    target = TARGETS[args.competitions]
+    leagues = target["leagues"]
+    suffix = target["suffix"]
+    OUT_P = DIR / f"espn_player_match_{suffix}.csv"
+    OUT_M = DIR / f"espn_matches_{suffix}.csv"
+    OUT_E = DIR / f"espn_player_events_{suffix}.csv"
+    OUT_T = DIR / f"espn_team_match_{suffix}.csv"
 
     from mundialytics.identity.normalization import canonical_team_name
     alias = _aliases()
@@ -307,7 +326,7 @@ def main() -> None:
     have_t = set(old_t["event_id"].astype(str)) if "event_id" in old_t.columns else set()
 
     games, players, events, teams = [], [], [], []
-    for code, comp in LEAGUES.items():
+    for code, comp in leagues.items():
         try:
             g = list_matches(code, comp, lo, hi, canon)
         except Exception as exc:
