@@ -390,7 +390,14 @@ export type SquadSeason = {
   /** The squad's own matches, chronological: league phase then knockout. */
   matches: SquadFixture[];
   bracket: SquadBracket;
-  scorers: { player: string; goals: number; assists: number; isSquad: boolean }[];
+  /** The tournament's scorers, not just yours: every club fields real players. */
+  scorers: {
+    player: string;
+    team: string;
+    goals: number;
+    assists: number;
+    isSquad: boolean;
+  }[];
 };
 
 export type DayFixtures = {

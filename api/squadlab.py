@@ -546,13 +546,14 @@ def _shape_champions(res, replaced: str, seed: int) -> dict:
     scorers = []
     sc = res.scorers
     if sc is not None and len(sc):
-        for r in sc.head(12).itertuples():
+        for r in sc.head(15).itertuples():
+            team = str(getattr(r, "equipo", "") or "")
             scorers.append({
                 "player": _display(str(r.jugador)),
+                "team": _label(team),
                 "goals": int(r.goles),
                 "assists": int(r.asistencias),
-                # only the squad's own goals are attributed to a scorer
-                "isSquad": True,
+                "isSquad": team == SQUAD_TEAM_NAME,
             })
 
     return {
