@@ -45,6 +45,27 @@ COLUMNS = ["match_id", "competition", "season", "date", "matchday",
            "home_team", "away_team", "completed", "home_goals", "away_goals"]
 
 
+# ESPN's edge refuses browser-shaped User-Agents. A request that claims to be
+# Chrome while carrying Python's TLS fingerprint reads as a bot and gets a hard
+# 403: measured on 2026-09-18, three tries each, "Mozilla/5.0", a full Chrome
+# string and a plain "Mundialytics/0.50" all failed on every endpoint, big five
+# and UEFA alike, while sending no User-Agent at all succeeded every time. The
+# header is therefore deliberately absent, and every ESPN caller in the repo
+# goes through this one function so it cannot creep back in one script at a time.
+def espn_json(url: str, timeout: int = 45, tries: int = 3) -> dict:
+    """One ESPN JSON call, retried with a backoff. Raises if the last try fails."""
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=timeout) as fh:
+                return json.load(fh)
+        except Exception:
+            if attempt == tries - 1:
+                raise
+            time.sleep(2 * (attempt + 1))
+    return {}
+
+
 def fetch_scoreboard_events(
     code: str,
     start: date,
@@ -69,16 +90,7 @@ def fetch_scoreboard_events(
     events: dict[str, dict] = {}
     for year in range(start.year, end.year + 1):
         url = f"{_BASE.format(code=code)}?dates={year}&limit=1000"
-        for attempt in range(tries):
-            try:
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=timeout) as fh:
-                    data = json.load(fh)
-                break
-            except Exception:
-                if attempt == tries - 1:
-                    raise
-                time.sleep(2 * (attempt + 1))
+        data = espn_json(url, timeout=timeout, tries=tries)
         for ev in data.get("events", []) or []:
             if lo <= str(ev.get("date", ""))[:10] <= hi:
                 events[str(ev.get("id"))] = ev

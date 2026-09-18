@@ -24,6 +24,7 @@ Two modes:
 import json
 import re
 import unicodedata
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -210,7 +211,12 @@ def fetch_espn_uefa(competition: str, year: int) -> pd.DataFrame | None:
     # one July-June season across two calendar-year requests (see the helper)
     try:
         events = fetch_scoreboard_events(code, date(year, 7, 1), date(year + 1, 6, 30))
-    except Exception:
+    except Exception as exc:
+        # Say WHY before falling back. A silent return is how ESPN's 403 went
+        # unnoticed from 2026-09-17: the page kept serving a cached bracket that
+        # looked perfectly healthy while the source had stopped answering.
+        warnings.warn(f"ESPN {code} {year}: {type(exc).__name__}: {exc}",
+                      RuntimeWarning, stacklevel=2)
         return None
 
     rows = []
