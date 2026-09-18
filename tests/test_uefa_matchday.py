@@ -9,6 +9,7 @@ and an honest account of what priced it.
 """
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 
 import pytest
@@ -85,12 +86,29 @@ def test_the_day_count_agrees_with_the_day_itself(busy: date) -> None:
     assert counts.get(busy.isoformat(), 0) == len(eu.day_fixtures(busy))
 
 
-def test_the_fingerprint_moves_with_the_files() -> None:
+def test_the_fingerprint_moves_with_the_files(tmp_path, monkeypatch) -> None:
     """It is a cache key: a European result landing has to push the cached day
-    aside, and the domestic feed's own clock will not do that."""
-    fp = eu.fixtures_fingerprint()
-    assert fp, "no fingerprint at all; every day would cache for ever"
-    assert fp == eu.fixtures_fingerprint()
+    aside, and the domestic feed's own clock will not do that.
+
+    Driven against a temporary directory rather than the real one. The fixture
+    files are not in the repository, so on a clean checkout the honest answer is
+    an empty fingerprint -- asserting it was non-empty tested that someone had
+    run the pipeline, not that the mechanism works.
+    """
+    monkeypatch.setattr(eu, "UEFA_DIR", tmp_path)
+    assert eu.fixtures_fingerprint() == "", "an empty directory has no fingerprint"
+
+    fixture = tmp_path / "raw_champions-league_2026.csv"
+    fixture.write_text("Round Number,Date,Home Team,Away Team,Result" + chr(10),
+                       encoding="utf-8")
+    os.utime(fixture, (1_700_000_000, 1_700_000_000))
+    first = eu.fixtures_fingerprint()
+    assert first, "a fixture file on disk must produce a fingerprint"
+    assert first == eu.fixtures_fingerprint(), "unchanged files must hash the same"
+
+    # a result landing rewrites the file; the cached day has to notice
+    os.utime(fixture, (1_700_003_600, 1_700_003_600))
+    assert eu.fixtures_fingerprint() != first
 
 
 def test_a_january_date_belongs_to_the_season_that_started_in_july() -> None:
