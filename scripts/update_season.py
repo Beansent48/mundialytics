@@ -270,7 +270,9 @@ def main() -> None:
             FD_SLUG, fetch_season_fixtures)
         yr = date.today().year if date.today().month >= 7 else date.today().year - 1
         for comp, slug in FD_SLUG.items():
-            (ROOT / f"data/external/uefa/raw_{slug}_{yr}.csv").unlink(missing_ok=True)
+            # Fetch BEFORE dropping the cache. Deleting first made the cache
+            # useless as a fallback exactly when it was needed: with both hosts
+            # down the file was gone and the fetch had nothing to fall back on.
             df = fetch_season_fixtures(ROOT, comp, yr)
             if df is not None:
                 res_n = df["Result"].astype(str).str.contains(r"\d+\s*-\s*\d+").sum()
@@ -314,6 +316,18 @@ def main() -> None:
         run_step("7e/8 FBref player stats (segunda fuente, puede fallar)",
                  [PY, "scripts/fetch_fbref_player_stats.py"],
                  optional=True, timeout=600)
+        # Europe writes to its own files, so this cannot corrupt the league
+        # ones, and it is optional: a bad day at UEFA must not stop the
+        # domestic markets settling. It feeds the scorers of the other 35
+        # clubs in a SquadLab Champions run, and nothing that settles a bet.
+        run_step("7d2/8 ESPN player stats, UEFA (CL/EL/UECL)",
+                 [PY, "scripts/fetch_espn_match_events.py",
+                  "--competitions", "uefa"],
+                 optional=True, timeout=900)
+        # Squads last: it reads both halves of the player-match data above.
+        run_step("7f/8 current squads (big-5 + los 108 de Europa)",
+                 [PY, "scripts/build_current_squads.py"],
+                 optional=True, timeout=1200)
     else:
         print("\n=== 7d/8 player stats SKIPPED ===", flush=True)
 
