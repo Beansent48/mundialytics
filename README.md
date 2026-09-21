@@ -270,10 +270,13 @@ open, kept because the benchmark above depends on it.
 Listed because half-finished work is normal and hiding it helps nobody.
 
 - **SquadLab** — now a playable draft, not just a simulator. Open tiered packs,
-  draft an eleven from ACTUAL / PRIME / ICON player cards (with re-rolls), pick a
-  formation, and play the **real Champions League** with your side dropped into an
-  actual bracket, resolved match by match on the same engine. Simulator, calendar
-  and the historical all-time catalogue all work. The
+  draft an eleven from ACTUAL / PRIME / ICON player cards, pick a formation, and
+  play the **real Champions League** with your side dropped into an actual
+  bracket, resolved match by match on the same engine. Each slot is dealt by
+  rolling card kind and then tier (primes ~10%, icons ~2%, three re-rolls), and
+  the other 35 clubs field their real current squads, so the tournament's top
+  scorers are real players rather than only your own. Simulator, calendar and the
+  historical all-time catalogue all work. The
   card axes are mapped per position-quantile (attack/defence/creation live on
   different scales), and the squad's rating maps onto team strength through a
   calibration that is precise on attack (R² = 0.68) and modest on defence
@@ -289,7 +292,7 @@ Listed because half-finished work is normal and hiding it helps nobody.
   is present on disk under any spelling. They are champions of smaller
   associations — Cyprus, Israel, Bulgaria, Czechia, the Nordics — whose Elo
   histories were never downloaded, and the ClubElo API has been returning 502
-  since early September (still down on 2026-09-17). Audit it with `python scripts/audit_european_elo_coverage.py`; full
+  since early September (still down on 2026-09-21). Audit it with `python scripts/audit_european_elo_coverage.py`; full
   write-up in [`docs/EUROPEAN_ELO_COVERAGE.md`](docs/EUROPEAN_ELO_COVERAGE.md).
 - **xG coverage** — 97% of matches since 2014/15, where Understat's data starts
   (Bundesliga 2024/25 is the notable hole, an upstream scraper bug rather than a
@@ -318,7 +321,8 @@ npm --prefix web install
 npm --prefix web run dev         # http://localhost:3000
 ```
 
-The web app has pages for matchday, single-competition simulation, league
+The web app has pages for matchday (the five leagues and the three UEFA
+competitions, each priced by its own model), single-competition simulation, league
 forecasting from the current table, player and team props, European
 competitions, results and track record, individual awards, and SquadLab —
 where you draft an eleven and play the real Champions League.
