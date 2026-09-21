@@ -33,6 +33,7 @@ from mundialytics.statistical_core.competition.european import (
     parse_fixturedownload, predict_euro_events,
 )
 from mundialytics.statistical_core.player_strength import PlayerStrengthProfile
+from mundialytics.statistical_core.squadlab.rival_squads import load_rival_squads
 from mundialytics.statistical_core.squadlab.player_rating import (
     attribute_cards, attribute_goals, compute_match_ratings, squad_attack_multiplier,
 )
@@ -185,6 +186,13 @@ def squad_elo_scale(strength_model, cards_df, club_elo: dict[str, float]) -> Squ
 
 
 # ── the run ────────────────────────────────────────────────────────────────────
+
+def _person(name: str) -> str:
+    """One man's key, so a drafted player is struck off his real club too."""
+    from mundialytics.identity.current_squads import short_key
+    return short_key(str(name))
+
+
 @dataclass
 class ChampionsMatch:
     stage: str                 # "liga" | playoff | r16 | qf | sf | final
@@ -195,6 +203,9 @@ class ChampionsMatch:
     away_goals: int
     squad_is_home: bool | None = None
     goal_events: list = field(default_factory=list)     # [(scorer, assister)]
+    # The same, for the clubs you are not managing, keyed by club. Every goal in
+    # the tournament used to be anonymous unless your eleven scored it.
+    rival_events: dict = field(default_factory=dict)
     card_players: list = field(default_factory=list)
     ratings: dict = field(default_factory=dict)
     note: str = ""
@@ -258,6 +269,16 @@ class ChampionsRun:
         fx["away"] = fx["away"].replace(self.replaced, squad_name)
         self.fixtures = fx
 
+        # Real players for the rest of the field. Anyone drafted into YOUR side
+        # is struck off his real club: he took your slot, he cannot also be
+        # scoring for them.
+        drafted = {_person(p.player) for p in squad}
+        self.rival_squads = {
+            team: [pl for pl in players if _person(pl.player) not in drafted]
+            for team, players in load_rival_squads(
+                [t for t in self.elo if t != squad_name]).items()
+        }
+
         self.tour = EuropeanTournament("champions", self.elo, self.calib, rng=self.rng)
         self.idx = self.tour.idx
         self.events_calib = load_event_calibration(ROOT)
@@ -279,6 +300,12 @@ class ChampionsRun:
         hg, ag = self._goals(lam_h), self._goals(lam_a)
         m = ChampionsMatch(stage=stage, matchday=matchday, home=home, away=away,
                            home_goals=hg, away_goals=ag)
+        for team, scored in ((home, hg), (away, ag)):
+            if team == self.squad_name or scored <= 0:
+                continue
+            players = self.rival_squads.get(team)
+            if players:
+                m.rival_events[team] = attribute_goals(players, scored, self.rng)
         if self.squad_name in (home, away):
             m.squad_is_home = home == self.squad_name
             gf, ga = (hg, ag) if m.squad_is_home else (ag, hg)
@@ -429,14 +456,24 @@ class ChampionsRun:
         return "Eliminado"
 
     def _scorers(self, matches: list[ChampionsMatch]) -> pd.DataFrame:
-        tally: dict[str, dict[str, int]] = {}
+        tally: dict[str, dict] = {}
+
+        def add(who: str, team: str, key: str) -> None:
+            row = tally.setdefault(who, {"equipo": team, "goles": 0, "asistencias": 0})
+            row[key] += 1
+
         for m in matches:
             for scorer, assister in m.goal_events or []:
-                tally.setdefault(scorer, {"goles": 0, "asistencias": 0})["goles"] += 1
+                add(scorer, self.squad_name, "goles")
                 if assister:
-                    tally.setdefault(assister, {"goles": 0, "asistencias": 0})["asistencias"] += 1
+                    add(assister, self.squad_name, "asistencias")
+            for team, events in (m.rival_events or {}).items():
+                for scorer, assister in events:
+                    add(scorer, team, "goles")
+                    if assister:
+                        add(assister, team, "asistencias")
         if not tally:
-            return pd.DataFrame(columns=["jugador", "goles", "asistencias"])
+            return pd.DataFrame(columns=["jugador", "equipo", "goles", "asistencias"])
         return (pd.DataFrame([{"jugador": k, **v} for k, v in tally.items()])
                 .sort_values(["goles", "asistencias"], ascending=False)
                 .reset_index(drop=True))

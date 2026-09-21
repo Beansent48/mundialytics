@@ -29,11 +29,20 @@ export function FixtureRow({
     ready && (has("teams", fixture.homeSlug) || has("teams", fixture.awaySlug));
 
   const p = fixture.probabilities;
+  // European ties have no match page of their own -- they are priced off the
+  // Elo scale, not the big-five engine, so there is no analysis to open. The
+  // row still leads somewhere: its competition, on the round it belongs to.
+  const analysed = fixture.analysis !== false;
+  const href = analysed
+    ? `/matchday/${fixture.competition}/${fixture.slug}`
+    : `/competitions/${fixture.competition}${
+        fixture.matchday != null ? `?matchday=${fixture.matchday}` : ""
+      }`;
 
   return (
     <div className="group relative flex items-stretch">
       <Link
-        href={`/matchday/${fixture.competition}/${fixture.slug}`}
+        href={href}
         className={cn(
           "flex flex-1 items-center gap-3 rounded-[12px] border border-border bg-surface",
           "px-4 py-3.5 transition-[border-color,background-color,transform] duration-200",

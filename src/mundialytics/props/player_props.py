@@ -38,6 +38,17 @@ K_RECENT = 450.0
 # a season keeps a club that spent last year in the second tier and drops one
 # gone longer; an empty shortlist is the honest answer for a squad we cannot see.
 ROSTER_MAX_AGE_DAYS = 400.0
+
+# Competitions whose squads this model may install. It is fitted on big-five
+# history, and the squad table now also carries the 108 clubs drawn into Europe
+# -- two thirds of which play in leagues never measured here. Those clubs are
+# excluded by WHERE THEY PLAY rather than by how many of their names we happen
+# to recognise, because the two cannot be told apart by counting: a promoted
+# Ligue 1 side matched 5 players, and European clubs matched up to 10. Judging
+# by the count would have stripped real big-five clubs of their squads.
+UEFA_COMPETITIONS = frozenset({
+    "Champions League", "Europa League", "Conference League",
+})
 SHOTS_DISP = 1.3
 PEN_CONV = 0.78  # measured penalty conversion in our shots data
 STATS = ["xg", "goals", "shots", "xa", "assists", "yellow_cards", "npxg", "npgoals"]
@@ -213,6 +224,7 @@ class PlayerPropsModel:
 
         self._current_squad_teams = set()
         self._squad_unmatched = {}
+        self._unmodelled_squads = []
         self._squads_fp = ""
         if current_squads is None:
             return
@@ -232,6 +244,15 @@ class PlayerPropsModel:
 
         if "pos_group" not in cs.columns:
             cs = cs.assign(pos_group="Unknown")
+        # One or two coincidental name matches is enough to install a "roster",
+        # and predict_fixture would then serve it as an authoritative shortlist
+        # of one. A club we do not model gets what it got before the squad table
+        # reached it: nothing.
+        if "competition" in cs.columns:
+            unmodelled = cs["competition"].isin(UEFA_COMPETITIONS)
+            self._unmodelled_squads = sorted(set(cs.loc[unmodelled, "team"].astype(str)))
+            cs = cs[~unmodelled]
+
         for team, grp in cs.groupby("team"):
             ids, missing = [], []
             for who, squad_pos in zip(grp["player"], grp["pos_group"]):
