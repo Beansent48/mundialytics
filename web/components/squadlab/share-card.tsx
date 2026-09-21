@@ -22,6 +22,11 @@ const TIER_COLORS: Record<string, [string, string, string, string]> = {
   gold: ["#ffe08a", "#e0a52e", "#a97016", "#12141c"],
   silver: ["#eef1f6", "#b8c0cf", "#8a93a5", "#12141c"],
   bronze: ["#e6b98d", "#b9793f", "#8a5424", "#12141c"],
+  // Special editions wear their own design, not the colour of their rating
+  // (.mv-card-prime / .mv-card-icono). The share card is the thing people
+  // post, so a drafted icon has to be recognisable in it as an icon.
+  prime: ["#7ff0dd", "#17a892", "#0c5f56", "#04201d"],
+  icono: ["#ffffff", "#dfe6f2", "#b3bed6", "#14161c"],
 };
 
 const mean = (xs: number[]) =>
@@ -217,7 +222,8 @@ export function ShareCard({
     let cx = (SIZE - (cw * 3 + cgap * 2)) / 2;
     for (const p of top) {
       const rounded = Math.round(p.overall);
-      const [c1, c2, c3, ink] = TIER_COLORS[tierOf(rounded)] ?? TIER_COLORS.bronze;
+      const design = p.kind === "prime" || p.kind === "icono" ? p.kind : tierOf(rounded);
+      const [c1, c2, c3, ink] = TIER_COLORS[design] ?? TIER_COLORS.bronze;
 
       const grad = ctx.createLinearGradient(cx, 690, cx + cw, 690 + ch);
       grad.addColorStop(0, c1);
