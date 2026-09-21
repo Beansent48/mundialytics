@@ -184,6 +184,11 @@ def match_positions(src: Path) -> dict[str, str]:
     if not src.exists():
         return {}
     df = pd.read_csv(src, usecols=lambda c: c in {"player", "position"}, low_memory=False)
+    # A file written by a fetcher that did not record positions (every match
+    # from 2026-09-07 to 09-21, and any file rebuilt in that window) has no
+    # such column. That means "no evidence", not a crash in the squad build.
+    if "position" not in df.columns:
+        return {}
     df["pg"] = df["position"].fillna("").map(position_group)
     # "SUB" maps to "Unknown", not to the empty string, and an unused backup
     # keeper is SUB in every match he is named in — left in, "Unknown" wins his

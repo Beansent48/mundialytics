@@ -192,6 +192,12 @@ def roster_rows(s: dict, game: dict, canon) -> list[dict]:
                 continue
             row = {"event_id": game["event_id"], "competition": game["competition"],
                    "date": game["date"], "team": team, "player": who,
+                   # Where he stood in THIS match ("G", "CD-L", "AM", "F"...).
+                   # build_current_squads reads it to settle the one boundary
+                   # the roster endpoint gets wrong -- a keeper filed as a
+                   # defender -- so dropping it is not cosmetic: every match
+                   # fetched without it was invisible to that check.
+                   "position": ((p.get("position") or {}).get("abbreviation") or ""),
                    "starter": bool(p.get("starter")),
                    "subbed_in": bool(p.get("subbedIn"))}
             for k, col in STATS.items():
