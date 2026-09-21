@@ -189,8 +189,26 @@ def _load_player_props():
         return None
     if pp is None:
         print("  player props: el cache no trae modelo de jugador")
+        return pp
+
+    # The cache is written by the app, not by this script, so it can predate the
+    # latest squad refresh. That matters here more than anywhere: these rows are
+    # the pre-kickoff track record, and a squad a transfer window out of date
+    # logs markets for players who have left.
+    try:
+        from mundialytics.identity.current_squads import squads_fingerprint
+        live = squads_fingerprint()
+    except Exception:
+        live = ""
+    cached = getattr(pp, "_squads_fp", "")
+    if not cached:
+        print("  player props: OJO, el cache se ajusto SIN plantillas actuales "
+              "(abre la app una vez para regenerarlo)")
+    elif live and cached != live:
+        print(f"  player props: OJO, plantillas del cache ({cached}) != actuales ({live}) "
+              "-- abre la app una vez para regenerarlo")
     else:
-        print("  player props: OK")
+        print("  player props: OK (plantillas al dia)")
     return pp
 
 
