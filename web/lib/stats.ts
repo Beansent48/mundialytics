@@ -1,30 +1,39 @@
 /**
  * Headline figures shown on the landing page.
  *
- * Hard-coded on purpose *for now*: these come from the benchmark script
- * (`scripts/benchmark_vs_bet365.py`) and the foundation, and they change only
- * when the model or the dataset does. Once the API exists this file becomes a
- * fetch — keeping them in one place is what makes that swap a one-file change
- * instead of a hunt through the markup.
+ * The benchmark is read from `data/benchmark_vs_bet365.json`, which
+ * `scripts/benchmark_vs_bet365.py` writes (with the hash of the predictions it
+ * scored) and the API's /track-record serves too. Nothing here is typed in by
+ * hand any more: the constant this replaced kept saying 0.2025 for months after
+ * the deployed engine reached 0.2008.
  *
  * Every number here must be reproducible. If it cannot be pointed at a script,
  * it does not belong on the page.
  */
+import benchmark from "@/data/benchmark_vs_bet365.json";
+
+const rpsOf = (key: string) => {
+  const row = benchmark.rows.find((r) => r.key === key);
+  if (!row) throw new Error(`benchmark_vs_bet365.json has no "${key}" row`);
+  return row.rps;
+};
+
 export const STATS = {
-  matches: 45_938,
+  /** Offline fallback only; the hero asks the API for the live count. */
+  matches: 46_091,
   seasons: 27,
   markets: 30,
   leagues: 5,
   /** Big Five matches in the 2020/21–2025/26 benchmark window. */
-  benchmarkSample: 10_080,
+  benchmarkSample: benchmark.sample,
 } as const;
 
 /** Ranked probability score on 1X2 — lower is better. */
 const RPS = {
-  uniform: 0.2356,
-  baseRates: 0.2308,
-  engine: 0.2025,
-  market: 0.1946,
+  uniform: rpsOf("uniform"),
+  baseRates: rpsOf("baseRates"),
+  engine: rpsOf("engine"),
+  market: rpsOf("market"),
 } as const;
 
 /**
