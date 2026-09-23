@@ -35,7 +35,43 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+from mundialytics.utils import atomic_to_csv  # noqa: E402
+
 PY = sys.executable
+STEPS_JSON = ROOT / "data/processed/logs/last_steps.json"
+# Exit codes: 0 all good, 1 aborted (foundation rolled back), 2 finished but a
+# required step failed. Before this, a failed step only printed "FAILED" and the
+# run still exited 0 -- ESPN answered 403 three days running (2026-09-16..18),
+# the player markets went unsettled, and last_run.json said ok every time.
+EXIT_STEP_FAILED = 2
+STEPS: list[dict] = []
+
+
+def record(name: str, ok: bool, optional: bool = False, seconds: float = 0.0,
+           detail: str = "") -> bool:
+    STEPS.append({"step": name, "ok": bool(ok), "optional": bool(optional),
+                  "seconds": round(seconds, 1), "detail": detail[:200]})
+    return ok
+
+
+def failed_steps() -> list[str]:
+    return [s["step"] for s in STEPS if not s["ok"] and not s["optional"]]
+
+
+def write_steps(exit_code: int) -> None:
+    import json
+
+    STEPS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    STEPS_JSON.write_text(json.dumps({
+        "finished_at": pd.Timestamp.now().isoformat(timespec="seconds"),
+        "exit_code": exit_code,
+        "failed": failed_steps(),
+        "failed_optional": [s["step"] for s in STEPS if not s["ok"] and s["optional"]],
+        "steps": STEPS,
+    }, indent=2), encoding="utf-8")
+
+
 UNDERSTAT_LEAGUES = ["ENG-Premier League", "ESP-La Liga", "GER-Bundesliga",
                      "ITA-Serie A", "FRA-Ligue 1"]
 SHOTS_CSV = ROOT / "data/external/advanced/understat/understat_shots.csv"
@@ -142,7 +178,7 @@ def run_step(name: str, cmd: list[str], optional: bool = False,
         ok = False
     tag = "OK" if ok else ("FAILED (opcional, se continua)" if optional else "FAILED")
     print(f"    {tag} ({time.time()-t0:.0f}s)", flush=True)
-    return ok
+    return record(name, ok, optional, time.time() - t0)
 
 
 def update_understat(season: str) -> None:
@@ -168,7 +204,7 @@ def update_understat(season: str) -> None:
         keys = [k for k in dedupe if k in combined.columns]
         if keys:
             combined = combined.drop_duplicates(subset=keys, keep="first")
-        combined.to_csv(out, index=False)
+        atomic_to_csv(combined, out)
         print(f"    {out.name}: {len(existing)} -> {len(combined)} rows", flush=True)
 
 
@@ -189,7 +225,7 @@ def augment_foundation_with_xg() -> None:
     tm["date"] = pd.to_datetime(tm["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     tm = tm.drop_duplicates(subset=["date", "home_team", "away_team"], keep="first")
     merged = found.merge(tm, on=["date", "home_team", "away_team"], how="left")
-    merged.to_csv(FOUND, index=False)
+    atomic_to_csv(merged, FOUND)
     cov = merged["home_xg"].notna().mean()
     cur_mask = merged["date"] >= "2026-07-01"
     cur_cov = merged.loc[cur_mask, "home_xg"].notna().mean() if cur_mask.any() else float("nan")
@@ -218,9 +254,17 @@ def main() -> None:
               "--mode", "csv", "--leagues", "E0", "SP1", "I1", "D1", "F1"])
 
     if not args.skip_understat:
+        # Optional: Understat has served a JS stub since 2026-05 and fails on
+        # every league; the history it holds is already on disk.
         print("\n=== 2/8 Understat (shots + player-match) ===", flush=True)
-        sys.path.insert(0, str(ROOT / "src"))
-        update_understat(cur)
+        t0 = time.time()
+        try:
+            update_understat(cur)
+            record("2/8 Understat", True, optional=True, seconds=time.time() - t0)
+        except Exception as exc:
+            print(f"    FAILED (opcional): {str(exc)[:120]}", flush=True)
+            record("2/8 Understat", False, optional=True, seconds=time.time() - t0,
+                   detail=str(exc))
     else:
         print("\n=== 2/8 Understat SKIPPED ===", flush=True)
 
@@ -238,19 +282,28 @@ def main() -> None:
     backup_found = FOUND.with_suffix(".csv.prev")
     if FOUND.exists():
         backup_found.write_bytes(FOUND.read_bytes())   # rollback safety net
-    run_step("4/8 foundation rebuild", [PY, "scripts/build_foundation_big5_historical.py"])
-
-    print("\n=== 5/8 foundation xG augment ===", flush=True)
-    augment_foundation_with_xg()
-
-    print("\n=== 5b/8 foundation integrity check ===", flush=True)
+    # Steps 4-5b land together or not at all. Any failure in between, not only a
+    # failed integrity check, restores the backup and stops the run: the xG
+    # augment raising used to leave a half-built foundation in place.
     try:
+        if not run_step("4/8 foundation rebuild",
+                        [PY, "scripts/build_foundation_big5_historical.py"]):
+            raise IntegrityError("the foundation builder failed")
+
+        print("\n=== 5/8 foundation xG augment ===", flush=True)
+        augment_foundation_with_xg()
+        record("5/8 foundation xG augment", True)
+
+        print("\n=== 5b/8 foundation integrity check ===", flush=True)
         check_foundation_integrity(prev_rows)
-    except IntegrityError as exc:
-        print(f"    ABORT: foundation failed integrity check -> {exc}", flush=True)
+        record("5b/8 foundation integrity", True)
+    except Exception as exc:
+        print(f"    ABORT: foundation step failed -> {str(exc)[:200]}", flush=True)
+        record("4-5b/8 foundation", False, detail=str(exc))
         if backup_found.exists():
-            FOUND.write_bytes(backup_found.read_bytes())
+            os.replace(backup_found, FOUND)
             print("    rolled back to the previous foundation; models untouched.", flush=True)
+        write_steps(1)
         raise SystemExit(1) from exc
     finally:
         backup_found.unlink(missing_ok=True)
@@ -279,8 +332,10 @@ def main() -> None:
                 print(f"    OK   {slug} {yr}: {len(df)} partidos, {res_n} con resultado", flush=True)
             else:
                 print(f"    ---  {slug} {yr}: aún no publicado", flush=True)
+        record("6b/8 European fixtures", True, optional=True)
     except Exception as exc:
         print(f"    FAIL europeo: {str(exc)[:120]}", flush=True)
+        record("6b/8 European fixtures", False, optional=True, detail=str(exc))
 
     print("\n=== 7/8 prune fitted-model caches + backup prediction log ===", flush=True)
     n = 0
@@ -346,8 +401,15 @@ def main() -> None:
         # every weekly refresh instead of depending on someone remembering to
         # click a button -- which is exactly why the log held a single
         # retroactive matchday for a whole season (see the quarantine README).
+        # Fails (exit 3/4) when any fixture in the window is left without a
+        # prediction or a league's calendar is missing -- a lost matchday is a
+        # test of the model that can never be run again.
         run_step("7b/8 log upcoming round (pre-match track record)",
                  [PY, "scripts/log_upcoming_round.py"])
+        # And looking back: anything played this week with no prediction logged
+        # before kick-off (catches days the logger never ran at all).
+        run_step("7b2/8 prediction coverage audit (last 7 days)",
+                 [PY, "scripts/audit_prediction_coverage.py", "--days", "7"])
     else:
         print("\n=== 7b/8 upcoming-round logging SKIPPED ===", flush=True)
 
@@ -376,6 +438,13 @@ def main() -> None:
             df = pd.read_csv(p, low_memory=False)
             last = f" | last: {pd.to_datetime(df[datecol], errors='coerce').max():%Y-%m-%d}" if datecol else ""
             print(f"  {label:14s} {len(df):>8,} rows{last}", flush=True)
+
+    failed = failed_steps()
+    code = EXIT_STEP_FAILED if failed else 0
+    write_steps(code)
+    if failed:
+        print(f"\n  PASOS FALLIDOS: {', '.join(failed)}", flush=True)
+    raise SystemExit(code)
 
 
 if __name__ == "__main__":

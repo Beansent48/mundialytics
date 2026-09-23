@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.ratings.clubelo_local import (  # noqa: E402
     EloParams, load_seed, roll_forward, to_frame)
 from mundialytics.statistical_core.competition.european import make_resolver  # noqa: E402
+from mundialytics.utils import atomic_to_csv  # noqa: E402
 
 FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 PARAMS = ROOT / "data/processed/local_elo_params.json"
@@ -87,7 +88,7 @@ def main() -> None:
     elo, last = roll_forward(seed, matches, p, resolver=resolver)
 
     df = to_frame(elo, last, seed_date)
-    df.to_csv(OUT, index=False)
+    atomic_to_csv(df, OUT)
     moved = int((~df["stale"]).sum())
     print(f"\nESCRITO {OUT}")
     print(f"  {len(df)} clubes, {moved} actualizados, {len(df)-moved} sin partidos (stale)")

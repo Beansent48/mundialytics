@@ -77,14 +77,30 @@ $code = $proc.ExitCode
 # A heartbeat a monitor (or you) can read to spot a gap without opening logs.
 # stdout carries the SUMMARY; stderr (warnings) stays in the sibling .stderr file.
 $tail = (Get-Content $log -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
+# update_season.py writes which steps failed; exit 2 means it finished but a
+# required step did not (before, every such run still reported ok).
+$failed = @()
+$failedOptional = @()
+$stepsFile = Join-Path $root 'data\processed\logs\last_steps.json'
+if (Test-Path $stepsFile) {
+    try {
+        $steps = Get-Content $stepsFile -Raw | ConvertFrom-Json
+        if ($steps.finished_at -ge $logIso.Substring(0, 19)) {
+            $failed = @($steps.failed)
+            $failedOptional = @($steps.failed_optional)
+        }
+    } catch { }
+}
 $state = [ordered]@{
-    finished_at = (Get-Date).ToString('o')
-    started_at  = $logIso
-    full        = [bool]$isFull
-    exit_code   = $code
-    ok          = ($code -eq 0)
-    log         = $log
-    tail        = $tail
+    finished_at     = (Get-Date).ToString('o')
+    started_at      = $logIso
+    full            = [bool]$isFull
+    exit_code       = $code
+    ok              = ($code -eq 0)
+    failed_steps    = $failed
+    failed_optional = $failedOptional
+    log             = $log
+    tail            = $tail
 }
 $state | ConvertTo-Json -Depth 4 |
     Out-File -FilePath (Join-Path $root 'data\processed\logs\last_run.json') -Encoding utf8
@@ -97,7 +113,9 @@ $state | ConvertTo-Json -Depth 4 |
 # windows still refresh on their own, so a failure here never fails the run.
 # Point MUNDIALYTICS_WEB_URL at the deployed origin if it is not localhost:3000,
 # and set REVALIDATE_SECRET (same value on the web app) to require auth.
-if ($code -eq 0) {
+# Exit 2 still refreshed the data (a later, non-foundation step failed), so the
+# site should see it; exit 1 rolled everything back and there is nothing new.
+if ($code -eq 0 -or $code -eq 2) {
     $webUrl = if ($env:MUNDIALYTICS_WEB_URL) { $env:MUNDIALYTICS_WEB_URL } else { 'http://localhost:3000' }
     $revUrl = "$webUrl/api/revalidate"
     if ($env:REVALIDATE_SECRET) { $revUrl += "?secret=$($env:REVALIDATE_SECRET)" }
@@ -109,11 +127,54 @@ if ($code -eq 0) {
     }
 }
 
+# Say it out loud when something failed. A failed step used to be visible only
+# to someone who opened last_run.json; a lost matchday of predictions cannot be
+# recovered later, so it has to reach a person the same day. A Windows toast
+# needs no module or account (WinRT is built into PowerShell 5.1); if it cannot
+# be shown the run itself is unaffected.
+function Send-Toast([string]$title, [string]$body) {
+    try {
+        [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+        [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+        $esc = { param($s) [System.Security.SecurityElement]::Escape($s) }
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml("<toast><visual><binding template=`"ToastGeneric`"><text>$(& $esc $title)</text><text>$(& $esc $body)</text></binding></visual></toast>")
+        # PowerShell's own AppUserModelID: always registered, so the toast shows
+        $app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app).Show(
+            [Windows.UI.Notifications.ToastNotification]::new($xml))
+    } catch {
+        Write-Warning "toast not shown: $($_.Exception.Message)"
+    }
+}
+
+if ($code -ne 0) {
+    $lines = @()
+    if ($failed.Count) { $lines += "Pasos fallidos: $($failed -join ', ')" }
+    elseif ($code -eq 1) { $lines += 'Abortado: la fundacion no paso el control y se restauro.' }
+    else { $lines += "update_season.py termino con codigo $code." }
+    # the partidos left without a pre-kickoff prediction, by name
+    foreach ($f in @('coverage_last.json', 'coverage_audit.json')) {
+        $p = Join-Path $root "data\processed\logs\$f"
+        if (Test-Path $p) {
+            try {
+                $c = Get-Content $p -Raw | ConvertFrom-Json
+                $miss = @($c.missing) + @($c.unexplained) | Where-Object { $_ } | Select-Object -Unique
+                if ($miss.Count) { $lines += "Sin prediccion: $(($miss | Select-Object -First 4) -join '; ')" }
+            } catch { }
+        }
+    }
+    Send-Toast 'Mundialytics: la actualizacion diaria fallo' (($lines -join "`n") + "`nLog: $log")
+}
+
 # Retain the 30 most recent runs (each is a .log plus its sibling .stderr).
 Get-ChildItem $logDir -Filter 'update_*.log*' |
     Sort-Object LastWriteTime -Descending |
     Select-Object -Skip 60 |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
-if ($code -ne 0) { Write-Warning "update_season.py exited $code (see $log)" }
+if ($code -ne 0) {
+    $what = if ($failed.Count) { " -- failed: $($failed -join ', ')" } else { '' }
+    Write-Warning "update_season.py exited $code$what (see $log)"
+}
 exit $code
