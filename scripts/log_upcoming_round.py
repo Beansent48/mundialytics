@@ -467,7 +467,10 @@ def main() -> None:
             rows.append({**base, "mercado": "ht_goles", "ambito": "Total", "linea": ln,
                          "prob": round(float(pr), 4),
                          "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
-        paths = htm.predict_ht_ft(p.lambda_home, p.lambda_away)
+        # full-time margin pinned to the logged 1X2 (validated 6/6 seasons for
+        # the domestic engine; the European Elo model is not sharpened)
+        paths = htm.predict_ht_ft(p.lambda_home, p.lambda_away,
+                                  ft_trio=(p.p_home_win, p.p_draw, p.p_away_win))
         best = max(paths, key=paths.get)
         rows.append({**base, "mercado": "ht_ft", "ambito": "Total", "linea": "",
                      "prob": round(paths[best], 4), "seleccion": best})

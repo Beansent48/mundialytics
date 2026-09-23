@@ -90,11 +90,17 @@ class HalfTimeModel:
                 "over": over}
 
     # ── half-time / full-time ────────────────────────────────────────────────
-    def predict_ht_ft(self, lam_home: float, lam_away: float) -> dict:
+    def predict_ht_ft(self, lam_home: float, lam_away: float,
+                      ft_trio: tuple[float, float, float] | None = None) -> dict:
         """The nine HT/FT combinations, e.g. "X/1" = level at the break, home win.
 
         Halves are treated as independent (measured correlation +0.054) except
         for a game-state adjustment on second-half intensity.
+
+        `ft_trio` (home, draw, away) rescales the paths so their full-time margin
+        is that 1X2. Without it the paths implied their own full-time 1X2, 3.8
+        points off the published one on average; with it the HT/FT log loss
+        improved on 6/6 walk-forward seasons (scripts/experiment_market_coherence.py).
         """
         ht = self.ht_matrix(lam_home, lam_away)
         l2h = lam_home * (1.0 - self.share_home)
@@ -121,6 +127,11 @@ class HalfTimeModel:
                         fh, fa = h1 + h2, a1 + a2
                         ft_res = "1" if fh > fa else ("X" if fh == fa else "2")
                         out[f"{ht_res}/{ft_res}"] += p1 * p2
+        if ft_trio is not None:
+            target = dict(zip("1X2", ft_trio))
+            ft = {b: sum(v for k, v in out.items() if k.endswith("/" + b)) for b in "1X2"}
+            out = {k: v * target[k[-1]] / ft[k[-1]] if ft[k[-1]] > 0 else 0.0
+                   for k, v in out.items()}
         tot = sum(out.values())
         return {k: v / tot for k, v in out.items()}
 
