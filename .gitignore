@@ -43,4 +43,7 @@ data/processed/*
 data/processed/logs/backup/
 # Unattended-run artifacts (run_update.ps1): heartbeat + per-run stdout/stderr logs
 data/processed/logs/last_run.json
+data/processed/logs/last_steps.json
+data/processed/logs/coverage_last.json
+data/processed/logs/coverage_audit.json
 data/processed/logs/runs/

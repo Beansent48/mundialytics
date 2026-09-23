@@ -59,9 +59,26 @@ app.add_middleware(
 
 
 def _predict(home: str, away: str, competition: str):
-    engine, _, _ = club_engine()
+    """The engine's prediction, or a stand-in price for a club it has never seen.
+
+    An unknown name used to go straight to predict_match, which quietly prices
+    it as team index 0 -- another club. Debutants are priced from last season's
+    relegated clubs instead, the same as the pre-kickoff log does.
+    """
+    from mundialytics.serving.debutants import predict_match_or_proxy
+
+    engine, teams, df = club_engine()
     try:
-        return engine.predict_match(home, away, competition=competition, neutral=False)
+        # by the date, not the foundation: on matchday one it holds no match of
+        # the new season, and the new season's clubs are what matters here
+        today = date.today()
+        y = today.year if today.month >= 7 else today.year - 1
+        season = f"{y}-{y + 1}"
+        cal = cat.season_calendar(competition, season)
+        current = (set(cal["home_team"]) | set(cal["away_team"])) if len(cal) else set()
+        pred, _ = predict_match_or_proxy(engine, df, home, away, competition, season,
+                                         current, known=set(teams))
+        return pred
     except Exception:
         return None
 
