@@ -29,6 +29,8 @@ import pandas as pd
 FIELD_TO_SQUAD = {
     "Atletico": "ath madrid",
     "Bodoe Glimt": "bodo glimt",
+    # ClubElo and our seed file spell it the Czech way, ESPN the English one
+    "Slavia Praha": "slavia prague",
 }
 
 # How much a man's own record counts against the prior for his position. Six

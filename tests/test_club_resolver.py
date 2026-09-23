@@ -48,3 +48,12 @@ def test_manual_seed_file_is_well_formed():
     df = pd.read_csv(ROOT / "data/curated/clubelo_manual_seeds.csv")
     # every value must say how it was chosen
     assert df[["rule", "peer"]].notna().all().all()
+
+
+def test_short_name_resolves_to_a_longer_name_by_whole_words():
+    # SquadLab maps the field's ClubElo names onto ESPN's longer squad names
+    r = make_resolver(["Bayern Munich", "FC Porto", "AEK Athens", "Ironi Tiberias"])
+    assert r("Bayern") == "Bayern Munich"
+    assert r("Porto") == "FC Porto"
+    assert r("AEK") == "AEK Athens"
+    assert r("Iberia") is None
