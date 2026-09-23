@@ -43,7 +43,10 @@ def main() -> None:
                                   competition=str(r.competition), neutral=bool(r.get("neutral", 0)))
             rows.append({"season": s, "match_id": r.match_id, "hg": int(r.home_goals),
                          "ag": int(r.away_goals), "ph": p.p_home_win, "pd": p.p_draw,
-                         "pa": p.p_away_win, "po25": p.p_over_25})
+                         "pa": p.p_away_win, "po25": p.p_over_25,
+                         # the lambdas, so any goal market can be rebuilt and
+                         # scored without refitting (market-coherence checks)
+                         "lh": p.lambda_home, "la": p.lambda_away})
             if eng.xg_rate_model_ is not None:
                 eng.xg_rate_model_.update_form(r.home_team, r.away_team, r.home_xg, r.away_xg)
         print(f"  {s}: {len(test)} matches ({time.time()-t0:.0f}s)", flush=True)

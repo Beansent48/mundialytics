@@ -13,37 +13,22 @@ hash of the engine code, so only the first start after a change pays the
 """
 from __future__ import annotations
 
-import hashlib
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 CACHE_DIR = ROOT / "data/processed/cache"
 
 
-def _code_fingerprint(*rel_paths: str) -> str:
-    """8-char hash of the given sources, folded into the cache key so a fitted
-    model self-invalidates when the code behind it changes."""
-    h = hashlib.sha256()
-    for rel in sorted(rel_paths):
-        p = ROOT / rel
-        try:
-            h.update(p.read_bytes())
-        except OSError:
-            h.update(b"missing")
-    return h.hexdigest()[:8]
+from mundialytics.serving.provenance import code_fingerprint as _code_fingerprint  # noqa: E402
+from mundialytics.serving.provenance import engine_code_fingerprint  # noqa: E402
 
-
-ENGINE_FP = _code_fingerprint(
-    "src/mundialytics/statistical_core/prediction_engine.py",
-    "src/mundialytics/statistical_core/attack_defense_model.py",
-    "src/mundialytics/statistical_core/distributions.py",
-    "src/mundialytics/models/goal_model.py",
-    "src/mundialytics/models/xg_rate_model.py",
-    "src/mundialytics/ratings/elo.py",
-)
+# One definition, shared with the pre-kickoff logger (serving/provenance.py).
+ENGINE_FP = engine_code_fingerprint()
 PROPS_FP = _code_fingerprint(
     "src/mundialytics/props/team_props.py",
     "src/mundialytics/props/player_props.py",
@@ -75,8 +60,31 @@ def _cached_fit(tag: str, df: pd.DataFrame, build):
     return engine
 
 
-@lru_cache(maxsize=1)
+FOUNDATION = ROOT / "data/processed/foundation_big5_multi_season.csv"
+
+
+def data_version() -> float:
+    """The foundation's modification time: changes when a refresh lands.
+
+    The fitted models below used to be cached for the life of the process, so a
+    running API kept serving the data it started with, and the daily refresh
+    (plus the web's cache revalidation) reached the site only after someone
+    restarted uvicorn. Keying the caches on this makes the next request after a
+    refresh pick the new data up; the joblib fit cache, warmed by the refresh
+    itself, keeps that request from paying for a full refit.
+    """
+    try:
+        return FOUNDATION.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def club_engine():
+    return _club_engine(data_version())
+
+
+@lru_cache(maxsize=1)
+def _club_engine(_version: float):
     from mundialytics.ratings.elo import EloConfig, EloRater
     from mundialytics.statistical_core.engine_utils import load_clubs_data
     from mundialytics.statistical_core.prediction_engine import (
@@ -98,9 +106,13 @@ def club_engine():
     return engine, teams, df
 
 
-@lru_cache(maxsize=1)
 def props_models():
     """Team-event and player-prop models. Fails soft: (None, None)."""
+    return _props_models(data_version())
+
+
+@lru_cache(maxsize=1)
+def _props_models(_version: float):
     import joblib
 
     from mundialytics.identity.current_squads import load_current_squads, squads_fingerprint

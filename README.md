@@ -43,9 +43,9 @@ Head to head with the closing line:
 
 | | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
 |---|---|---|---|
-| This engine | 0.2008 | 0.9881 | 0.6795 |
+| This engine | 0.2008 | 0.9881 | 0.6793 |
 | Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
-| gap | +0.0062 | +0.0201 | +0.0085 |
+| gap | +0.0062 | +0.0201 | +0.0082 |
 
 It does **not** beat the closing line — about 3% behind, and the gap holds in
 every season and every league (worst Premier League +0.0083, best Bundesliga and
@@ -60,6 +60,15 @@ generate it first):
 python scripts/generate_deployed_walkforward.py   # writes the deployed cache
 python scripts/benchmark_vs_bet365.py
 ```
+
+The benchmark script also writes `web/data/benchmark_vs_bet365.json`, with a
+hash of the predictions it scored. The site reads its figures from that file,
+so the page and this README quote the same run; a test fails if they drift.
+
+A played match's page grades the prediction **logged before kick-off**, never a
+re-run of today's engine (which has seen the result). Each logged row carries
+the kick-off time, the training cutoff, a model fingerprint and both lambdas,
+so the whole prediction can be rebuilt exactly.
 
 ## Is it calibrated?
 
@@ -355,7 +364,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  204 tests green on a clean checkout; 102 more
+tests/                  233 tests green on a clean checkout; 102 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```

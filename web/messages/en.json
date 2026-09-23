@@ -216,7 +216,13 @@
     "predicted": "we said",
     "rangeNote": "✓ means the real value landed inside the range we called most likely; the % is the probability we gave it.",
     "metaUpcoming": "{home} vs {away}: {h}% home, {d}% draw, {a}% away. Probabilities from a model fitted on 45,938 matches.",
-    "metaPlayed": "{home} {score} {away} — the result next to what our model predicted before kick-off."
+    "metaPlayed": "{home} {score} {away} — the result next to what our model predicted before kick-off.",
+    "sourceLogged": "Logged on {date}, before kick-off: these are the numbers we published then.",
+    "sourceLoggedPartial": "The log from {date}, before kick-off, kept only the chosen result and the over/under 2.5, so those are what gets graded. Everything else is recomputed.",
+    "sourceRecomputed": "We logged no prediction before this match. These numbers were recomputed by the current model, which has already seen this result, so they are not counted as hits.",
+    "recomputedTag": "recomputed",
+    "rangeNoteRecomputed": "Ranges recomputed by the current model, which has already seen this match: shown for reference, not graded.",
+    "recomputedScore": "Recomputed"
   },
   "results": {
     "eyebrow": "Proof",
