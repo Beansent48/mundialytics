@@ -166,11 +166,23 @@ def normalize_club(s: str) -> str:
     return re.sub(r"[^a-z]", "", t.lower())
 
 
+def _word_runs(name: str) -> set[str]:
+    """Every run of consecutive whole words of a club name, normalised.
+
+    "FC Bayern Munich" -> {"fc", "bayern", "munich", "fcbayern", "bayernmunich", ...}
+    """
+    words = [normalize_club(w) for w in re.split(r"[\s\-./&]+", str(name))]
+    words = [w for w in words if w]
+    return {"".join(words[i:j]) for i in range(len(words))
+            for j in range(i + 1, len(words) + 1)}
+
+
 def make_resolver(elo_names) -> "callable":
     """fixturedownload club name -> ClubElo name (aliases + normalized + substring)."""
     from mundialytics.statistical_core.competition.club_aliases import CLUB_ALIASES
     names = set(elo_names)
     by_norm = {normalize_club(n): n for n in names}
+    word_runs = {n: _word_runs(n) for n in names}
 
     def resolver(name: str):
         low = str(name).lower().strip()
@@ -190,12 +202,14 @@ def make_resolver(elo_names) -> "callable":
             an = normalize_club(alias)
             if an in by_norm:
                 return by_norm[an]
-        # One direction only: the rated name inside the listed one ("Roma" in
-        # "AS Roma", "Celta" in "Celta Vigo"). The reverse let a short listed
-        # name land inside a longer, different club: "Iberia 1999" (Georgia)
-        # normalises to "iberia" and was handed Ironi Tiberias (Israel).
-        cands = [v for k, v in by_norm.items() if k and k in n]
-        return cands[0] if len(cands) == 1 else None
+        # The known name inside the queried one ("Roma" in "AS Roma") matches
+        # anywhere. The other way round it must be whole words: "Bayern" is a
+        # word of "Bayern Munich", but "Iberia 1999" (Georgia) normalises to
+        # "iberia", which only sits INSIDE "Tiberias" -- and plain substring
+        # matching handed it Ironi Tiberias (Israel).
+        cands = {v for k, v in by_norm.items() if k and k in n}
+        cands |= {v for v, runs in word_runs.items() if n in runs}
+        return next(iter(cands)) if len(cands) == 1 else None
 
     return resolver
 
