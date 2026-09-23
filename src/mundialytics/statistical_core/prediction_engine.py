@@ -57,6 +57,34 @@ DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
 }
 
 
+def markets_from_lambdas(lh: float, la: float, *, max_goals: int = 10, rho: float = 0.0,
+                         temper: float = 1.0, sharpen_gamma: float = 1.0):
+    """(market probabilities, scoreline distribution) for one pair of lambdas."""
+    # Probabilities from score matrix
+    probs = outcome_probabilities(lh, la, max_goals=max_goals, dixon_coles_rho=rho,
+                                  temper=temper)
+    # Post-hoc 1X2 sharpening (see PredictionEngine.__init__): trio only,
+    # renormalized. Other markets and the scoreline matrix stay raw.
+    if abs(sharpen_gamma - 1.0) > 1e-9:
+        trio = np.clip(np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]], dtype=float), 1e-9, 1.0)
+        trio = trio ** sharpen_gamma
+        trio = trio / trio.sum()
+        probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
+    dist = scoreline_distribution(lh, la, max_goals=max_goals, normalize=True,
+                                  dixon_coles_rho=rho, temper=temper)
+    return probs, dist
+
+
+def deployed_markets_from_lambdas(lh: float, la: float):
+    """markets_from_lambdas with the deployed configuration's parameters."""
+    k = DEPLOYED_CLUB_ENGINE_KWARGS
+    return markets_from_lambdas(
+        lh, la, rho=k.get("outcome_rho", k.get("ad_rho", 0.0)),
+        temper=k.get("goal_temper", 1.0),
+        sharpen_gamma=float(np.clip(k.get("sharpen_gamma_1x2", 1.0), 0.5, 2.0)),
+    )
+
+
 # ── Match prediction dataclass ─────────────────────────────────────────────────
 
 @dataclass
@@ -518,20 +546,7 @@ class PredictionEngine:
         lh = float(np.clip(lh, 0.05, 6.0))
         la = float(np.clip(la, 0.05, 6.0))
 
-        # Probabilities from score matrix
-        rho_m = self.outcome_rho if self.outcome_rho is not None else self.ad_rho
-        temper_m = self.goal_temper if self.goal_temper is not None else 1.0
-        probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=rho_m,
-                                      temper=temper_m)
-        # Post-hoc 1X2 sharpening (see __init__): trio only, renormalized. Other
-        # markets and the scoreline matrix stay raw.
-        if abs(self.sharpen_gamma_1x2 - 1.0) > 1e-9:
-            trio = np.clip(np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]], dtype=float), 1e-9, 1.0)
-            trio = trio ** self.sharpen_gamma_1x2
-            trio = trio / trio.sum()
-            probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
-        dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True,
-                                      dixon_coles_rho=rho_m, temper=temper_m)
+        probs, dist = self.markets_from_lambdas(lh, la)
 
         # Event lambdas
         sh, sa = self._event_lambda("shots_for", h, a, competition)
@@ -555,6 +570,19 @@ class PredictionEngine:
             expected_fouls_home=fh, expected_fouls_away=fa,
             expected_yellows_home=yh, expected_yellows_away=ya,
             model_source=model_src,
+        )
+
+    def markets_from_lambdas(self, lh: float, la: float):
+        """Every goal market, and the scoreline matrix, from the two lambdas.
+
+        Split out of predict_match so a logged prediction (which stores the
+        lambdas) can be rebuilt exactly, without refitting anything.
+        """
+        return markets_from_lambdas(
+            lh, la, max_goals=self.max_goals,
+            rho=self.outcome_rho if self.outcome_rho is not None else self.ad_rho,
+            temper=self.goal_temper if self.goal_temper is not None else 1.0,
+            sharpen_gamma=self.sharpen_gamma_1x2,
         )
 
     # ── Tournament helpers ────────────────────────────────────────────────────

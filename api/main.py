@@ -636,6 +636,23 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
     if pred is None:
         raise HTTPException(503, "The model could not price this fixture")
 
+    # A played match is graded against what was LOGGED before kick-off. The
+    # engine in memory has been fitted on this match, so re-running it would
+    # grade the model on its own homework. When the log holds the lambdas the
+    # whole prediction is rebuilt from them; when it holds only the pick, that
+    # pick is what gets graded and the page says the rest is recomputed.
+    source = None
+    if base["played"]:
+        from mundialytics.serving.logged_prediction import as_prediction, find_logged
+
+        logged = find_logged(row.home_team, row.away_team, row.date)
+        if logged is None:
+            source = {"kind": "recomputed"}
+        else:
+            source = logged.source()
+            if logged.full:
+                pred = as_prediction(logged, fallback=pred)
+
     # Team-stat distributions once: they feed both the expected-stat ranges below
     # and the team-props card, so they must be ready before the payload is built.
     tp, pp = props_models()
@@ -702,6 +719,7 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
         ],
         "scoreMatrix": [[round(float(v), 5) for v in r] for r in matrix.values],
         "expectedStats": _expected_stats(pred, fx),
+        "source": source,
     }
 
     base["scorers"] = _scorers(pp, row.home_team, row.away_team, pred)
@@ -748,26 +766,22 @@ def fixtures(
     }
 
 # ── Track record ───────────────────────────────────────────────────────────────
-# The RPS ladder is a fixed measurement, reproduced by scripts/benchmark_vs_bet365.py
-# over 10,080 Big Five matches (2020/21–2025/26). It changes when the model does,
-# not when someone reloads the page.
-BENCHMARK = {
-    "sample": 10_080,
-    "window": "2020/21–2025/26",
-    "rows": [
-        {"key": "market", "rps": 0.1946},
-        {"key": "engine", "rps": 0.2025},
-        {"key": "baseRates", "rps": 0.2308},
-        {"key": "uniform", "rps": 0.2356},
-    ],
-    "byLeague": [
-        {"league": "Bundesliga", "gap": 0.0060},
-        {"league": "LaLiga", "gap": 0.0064},
-        {"league": "Ligue 1", "gap": 0.0075},
-        {"league": "Serie A", "gap": 0.0092},
-        {"league": "Premier League", "gap": 0.0099},
-    ],
-}
+# The RPS ladder is a fixed measurement, written by scripts/benchmark_vs_bet365.py
+# to a versioned file next to the code (with the hash of the predictions it
+# scored). It changes when the model does, not when someone reloads the page, and
+# it is never typed in by hand: the constant that used to live here said 0.2025
+# for months after the deployed engine reached 0.2008.
+BENCHMARK_JSON = ROOT / "web/data/benchmark_vs_bet365.json"
+
+
+def _benchmark() -> dict | None:
+    import json
+
+    try:
+        b = json.loads(BENCHMARK_JSON.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return {k: b[k] for k in ("sample", "window", "rows", "byLeague", "provenance") if k in b}
 
 
 def _calibration() -> list[dict] | None:
@@ -843,7 +857,7 @@ def track_record() -> dict:
                 ],
             }
         return {
-            "benchmark": BENCHMARK,
+            "benchmark": _benchmark(),
             "calibration": _calibration(),
             "live": live,
             "dataThrough": str(df["date"].max())[:10],

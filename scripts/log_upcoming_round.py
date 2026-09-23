@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
     DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 from mundialytics.props.half_time import HalfTimeModel  # noqa: E402
+from mundialytics.utils import atomic_to_csv  # noqa: E402
 from mundialytics.ratings.elo import EloConfig, EloRater  # noqa: E402
 
 FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
@@ -74,10 +75,16 @@ def fetch_fixtures_espn(year: int) -> pd.DataFrame:
             "date": fx["date"], "competition": comp,
             "jornada": fx["matchday"], "home": fx["home_team"],
             "away": fx["away_team"], "played": fx["completed"].astype(bool),
+            "kickoff": fx["kickoff_utc"],
         })
         print(f"  {comp}: {len(out)} partidos ({int(out.played.sum())} jugados)")
         rows.append(out)
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+
+def _iso(ts) -> str:
+    """A kick-off as ISO-8601 UTC, or "" when the source gave none."""
+    return "" if ts is None or pd.isna(ts) else pd.Timestamp(ts).strftime("%Y-%m-%dT%H:%MZ")
 
 
 def fetch_fixtures(year: int) -> pd.DataFrame:
@@ -107,6 +114,7 @@ def fetch_fixtures(year: int) -> pd.DataFrame:
             print(f"  {slug}: FALLA {str(exc)[:70]}")
             continue
         f["date"] = pd.to_datetime(f["Date"], dayfirst=True, errors="coerce")
+        f["kickoff"] = f["date"].dt.tz_localize("UTC")   # the file is the -UTC one
         f["competition"] = comp
         f["jornada"] = pd.to_numeric(f.get("Round Number"), errors="coerce")
         f["home"] = f["Home Team"].map(alias)
@@ -259,6 +267,14 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
         return []
     ev_calib = load_event_calibration(ROOT)
     resolver = make_resolver(elo.keys())
+    # The European model is Elo + calibration, so that pair is its fingerprint.
+    import hashlib
+    import json
+    euro_fp = "euro-" + hashlib.sha256(json.dumps(
+        {"calib": calib, "elo": sorted(elo.items())}, default=str).encode()).hexdigest()[:8]
+    local = ROOT / "data/processed/clubelo_local.csv"
+    elo_asof = (str(pd.read_csv(local)["last_updated"].max())[:10]
+                if local.exists() else "")
     htm = HalfTimeModel()
     c, hfa, b = calib["c"], calib["hfa"], calib["b"]
 
@@ -294,7 +310,13 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
             base = dict(logged_at=stamp, season=season,
                         jornada=int(rnd) if pd.notna(rnd) else 0,
                         partido=label, fecha=f"{r_date:%Y-%m-%d}",
-                        home=str(h_raw).lower(), away=str(a_raw).lower())
+                        home=str(h_raw).lower(), away=str(a_raw).lower(),
+                        kickoff_utc=_iso(r_date.tz_localize("UTC") if r_date.tzinfo is None
+                                         else r_date.tz_convert("UTC")),
+                        train_cutoff=elo_asof, model_fp=euro_fp,
+                        lambda_home=round(lam_h, 6), lambda_away=round(lam_a, 6),
+                        p_home=round(dist.p_home_win, 4), p_draw=round(dist.p_draw, 4),
+                        p_away=round(dist.p_away_win, 4))
             trio = {"1": dist.p_home_win, "X": dist.p_draw, "2": dist.p_away_win}
             pick = max(trio, key=trio.get)
             rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
@@ -342,17 +364,32 @@ def main() -> None:
     year = args.year or (now.year if now.month >= 7 else now.year - 1)
     print(f"fixtures {year}/{year+1}, ventana {args.days} dias desde {now:%Y-%m-%d %H:%M}")
 
+    season = f"{year}-{year+1}"
+    stamp = now.isoformat(timespec="seconds")
+
     fx = fetch_fixtures(year)
     if fx.empty:
-        print("Sin fixtures. Nada que registrar.")
-        return
+        print("Sin fixtures domesticos.")
+        return _europe_only(args, year, now, stamp, season)
 
     horizon = now + timedelta(days=args.days)
-    up = fx[(~fx.played) & (fx.date > now) & (fx.date <= horizon)].sort_values("date")
+    # Compare against the real kick-off, not the day: `date` is midnight, so a
+    # match tonight looked already started and was never logged on its own day.
+    now_utc = pd.Timestamp.now(tz="UTC")
+    if "kickoff" in fx:
+        kickoff = pd.to_datetime(fx["kickoff"], errors="coerce", utc=True)
+    else:
+        kickoff = pd.Series(pd.NaT, index=fx.index, dtype="datetime64[ns, UTC]")
+    upcoming = (kickoff > now_utc) & (kickoff <= now_utc + timedelta(days=args.days))
+    upcoming = upcoming.where(kickoff.notna(), (fx.date > now) & (fx.date <= horizon))
+    fx = fx.assign(kickoff=kickoff)
+    up = fx[(~fx.played) & upcoming.astype(bool)].sort_values("date")
     print(f"\npartidos por jugar en la ventana: {len(up)}")
     if up.empty:
-        print("Nada dentro de la ventana. Prueba --days mayor.")
-        return
+        # An international break empties the league window but not Europe's,
+        # so this must not return before the European ties are logged.
+        print("Nada domestico dentro de la ventana.")
+        return _europe_only(args, year, now, stamp, season)
     for c, g in up.groupby("competition"):
         js = sorted(set(g.jornada.dropna().astype(int)))
         print(f"  {c:16s} {len(g):3d} partidos  jornada(s) {js}")
@@ -369,6 +406,13 @@ def main() -> None:
     eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
     eng.fit(df, elo_history=pd.DataFrame(elo.history))
     known = set(df.home_team) | set(df.away_team)
+    # Provenance on every row: which model, trained up to when. With the lambdas
+    # and the full 1X2 the whole score matrix can be rebuilt from the log, so a
+    # played match can show what was actually said before kick-off.
+    from mundialytics.serving.provenance import model_fingerprint, train_cutoff
+    prov = dict(train_cutoff=train_cutoff(df),
+                model_fp=model_fingerprint(df, DEPLOYED_CLUB_ENGINE_KWARGS))
+    print(f"  huella del modelo {prov['model_fp']} (corte {prov['train_cutoff']})")
 
     htm = HalfTimeModel()   # stateless: a scaling of the lambdas above
 
@@ -384,22 +428,27 @@ def main() -> None:
     if not args.skip_players:
         pp = _load_player_props()
 
-    season = f"{year}-{year+1}"
-    stamp = now.isoformat(timespec="seconds")
     rows, skipped = [], []
     for r in up.itertuples(index=False):
         if r.home not in known or r.away not in known:
             skipped.append(f"{r.home} vs {r.away}")
             continue
-        base = dict(logged_at=stamp, season=season,
-                    jornada=int(r.jornada) if pd.notna(r.jornada) else 0,
-                    partido=f"{r.home} vs {r.away}", fecha=f"{r.date:%Y-%m-%d}",
-                    home=r.home, away=r.away)
         try:
             p = eng.predict_match(r.home, r.away, competition=r.competition, neutral=False)
         except Exception:
             skipped.append(f"{r.home} vs {r.away}")
             continue
+        base = dict(logged_at=stamp, season=season,
+                    jornada=int(r.jornada) if pd.notna(r.jornada) else 0,
+                    partido=f"{r.home} vs {r.away}", fecha=f"{r.date:%Y-%m-%d}",
+                    home=r.home, away=r.away,
+                    kickoff_utc=_iso(r.kickoff), **prov,
+                    lambda_home=round(p.lambda_home, 6), lambda_away=round(p.lambda_away, 6),
+                    p_home=round(p.p_home_win, 4), p_draw=round(p.p_draw, 4),
+                    p_away=round(p.p_away_win, 4),
+                    **{f"exp_{k}_{side}": round(float(getattr(p, f"expected_{k}_{side}")), 3)
+                       for k in ("shots", "sot", "corners", "fouls", "yellows")
+                       for side in ("home", "away")})
         trio = {"1": p.p_home_win, "X": p.p_draw, "2": p.p_away_win}
         pick = max(trio, key=trio.get)
         rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
@@ -449,7 +498,18 @@ def main() -> None:
     if not args.skip_europe:
         print("\ncompeticiones europeas:")
         rows += european_rows(year, horizon, now, stamp, season)
+    _write(rows, skipped, args)
 
+
+def _europe_only(args, year: int, now: pd.Timestamp, stamp: str, season: str) -> None:
+    if args.skip_europe:
+        return
+    print("\ncompeticiones europeas:")
+    horizon = now + timedelta(days=args.days)
+    _write(european_rows(year, horizon, now, stamp, season), [], args)
+
+
+def _write(rows: list[dict], skipped: list[str], args) -> None:
     if skipped:
         print(f"\nomitidos (equipo sin historial): {len(skipped)} -> {skipped[:6]}")
     new = pd.DataFrame(rows)
@@ -493,7 +553,7 @@ def main() -> None:
     comb = comb.drop_duplicates(subset=LOG_KEYS, keep="first")  # NOT + seleccion:
     # including the pick in the key let the SAME line survive twice once its
     # probability crossed 0.5 between runs, logging both OVER and UNDER for it.
-    comb.to_csv(PRED_LOG, index=False)
+    atomic_to_csv(comb, PRED_LOG)
     print(f"\nREGISTRADAS {len(comb) - len(old):,} filas nuevas -> {PRED_LOG} "
           f"(total {len(comb):,})")
     print("Todas con fecha de partido en el futuro: track record honesto.")

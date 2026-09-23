@@ -216,7 +216,13 @@
     "predicted": "dijimos",
     "rangeNote": "✓ indica que el valor real cayó dentro del rango más probable que dimos; el % es la probabilidad que le asignábamos.",
     "metaUpcoming": "{home} vs {away}: {h}% local, {d}% empate, {a}% visitante. Probabilidades de un modelo ajustado sobre 45.938 partidos.",
-    "metaPlayed": "{home} {score} {away} — el resultado junto a lo que nuestro modelo predijo antes del partido."
+    "metaPlayed": "{home} {score} {away} — el resultado junto a lo que nuestro modelo predijo antes del partido.",
+    "sourceLogged": "Registrada el {date}, antes del inicio: estos son los números que publicamos entonces.",
+    "sourceLoggedPartial": "Del registro del {date}, antes del inicio, solo guardamos el resultado elegido y el over/under 2,5: eso es lo que se evalúa. Lo demás está recalculado.",
+    "sourceRecomputed": "No registramos ninguna predicción antes de este partido. Estos números los ha recalculado el modelo actual, que ya incluye este resultado, así que no se cuentan como aciertos.",
+    "recomputedTag": "recalculado",
+    "rangeNoteRecomputed": "Rangos recalculados con el modelo actual, que ya ha visto este partido: se muestran como referencia, no se evalúan.",
+    "recomputedScore": "Recalculado"
   },
   "results": {
     "eyebrow": "La prueba",
