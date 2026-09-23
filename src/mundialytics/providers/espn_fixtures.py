@@ -42,7 +42,8 @@ _BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/{code}/scoreboard"
 _ALIASES = Path("data/curated/fixture_team_aliases.csv")
 
 COLUMNS = ["match_id", "competition", "season", "date", "matchday",
-           "home_team", "away_team", "completed", "home_goals", "away_goals"]
+           "home_team", "away_team", "completed", "home_goals", "away_goals",
+           "kickoff_utc"]
 
 
 # ESPN's edge refuses browser-shaped User-Agents. A request that claims to be
@@ -153,6 +154,9 @@ def fetch_season_fixtures(
             "competition": competition,
             "season": season,
             "date": pd.to_datetime(str(ev.get("date", ""))[:10], errors="coerce"),
+            # `date` is the day only; the pre-kickoff logger needs the minute, or
+            # a match kicking off tonight looks already started at 00:00
+            "kickoff_utc": pd.to_datetime(ev.get("date"), errors="coerce", utc=True),
             "home_team": canon(home["team"]["displayName"]),
             "away_team": canon(away["team"]["displayName"]),
             "completed": done,
