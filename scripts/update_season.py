@@ -70,6 +70,8 @@ def write_steps(exit_code: int) -> None:
         "failed_optional": [s["step"] for s in STEPS if not s["ok"] and s["optional"]],
         "steps": STEPS,
     }, indent=2), encoding="utf-8")
+
+
 UNDERSTAT_LEAGUES = ["ENG-Premier League", "ESP-La Liga", "GER-Bundesliga",
                      "ITA-Serie A", "FRA-Ligue 1"]
 SHOTS_CSV = ROOT / "data/external/advanced/understat/understat_shots.csv"
@@ -399,8 +401,15 @@ def main() -> None:
         # every weekly refresh instead of depending on someone remembering to
         # click a button -- which is exactly why the log held a single
         # retroactive matchday for a whole season (see the quarantine README).
+        # Fails (exit 3/4) when any fixture in the window is left without a
+        # prediction or a league's calendar is missing -- a lost matchday is a
+        # test of the model that can never be run again.
         run_step("7b/8 log upcoming round (pre-match track record)",
                  [PY, "scripts/log_upcoming_round.py"])
+        # And looking back: anything played this week with no prediction logged
+        # before kick-off (catches days the logger never ran at all).
+        run_step("7b2/8 prediction coverage audit (last 7 days)",
+                 [PY, "scripts/audit_prediction_coverage.py", "--days", "7"])
     else:
         print("\n=== 7b/8 upcoming-round logging SKIPPED ===", flush=True)
 

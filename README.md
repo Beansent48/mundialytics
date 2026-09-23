@@ -70,6 +70,14 @@ re-run of today's engine (which has seen the result). Each logged row carries
 the kick-off time, the training cutoff, a model fingerprint and both lambdas,
 so the whole prediction can be rebuilt exactly.
 
+No fixture is allowed to go unpredicted: the daily run fails, and a Windows
+notification names the match, if any fixture in the next eight days has no
+logged prediction or anything played in the last week had none before kick-off
+(`scripts/audit_prediction_coverage.py`). A club new to the Big Five is priced
+from last season's relegated clubs until it has history of its own, which beat
+the base rates on its first three matches (RPS 0.179 vs 0.223, 60 matches,
+`scripts/experiment_debutant_proxy.py`).
+
 ## Is it calibrated?
 
 Being close to the market is one question; saying 30% and being right 30% of

@@ -8,6 +8,7 @@ or research runs kept for reproducibility — **you only need the handful below.
 | Command | What it does |
 |---|---|
 | `python scripts/update_season.py` | The one command that matters. Downloads new results, rebuilds the modelling foundation (integrity check + rollback), settles the logged markets and logs the upcoming round before kick-off. `--full` also regenerates the walk-forward cache below. `scripts/run_update.ps1` runs it daily as a Windows scheduled task. |
+| `python scripts/audit_prediction_coverage.py` | Which played matches had no prediction logged before kick-off. `--season` for the whole season; without it, the last 7 days, failing on any miss not listed in `data/curated/coverage_known_gaps.csv`. Runs inside the daily refresh. |
 | `python scripts/generate_deployed_walkforward.py` | Walk-forward predictions of the deployed engine over 2020/21–2025/26 — the file the benchmark and the calibration figure score. |
 | `python scripts/benchmark_vs_bet365.py` | Reproduces the headline number: engine vs Bet365 closing odds, RPS and log loss, split by season and league. |
 | `python scripts/plot_calibration.py` | Regenerates the reliability diagram in the README. |

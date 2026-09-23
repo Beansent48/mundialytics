@@ -45,6 +45,18 @@ FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 ALIASES = ROOT / "data/curated/fixture_team_aliases.csv"
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
 LOG_KEYS = ["season", "jornada", "partido", "mercado", "ambito", "linea"]
+COVERAGE_JSON = ROOT / "data/processed/logs/coverage_last.json"
+
+# Every fixture this run was responsible for, as (partido, fecha). Filled while
+# the window is built -- BEFORE any skipping -- so a fixture dropped for any
+# reason (unknown team, unresolved club, a predict error, a source outage) is
+# still owed a prediction and the coverage check at the end catches it.
+EXPECTED: list[tuple[str, str]] = []
+# Leagues whose calendar could not be fetched this run.
+MISSING_SOURCES: list[str] = []
+# Exit codes (update_season treats any non-zero as a failed step):
+EXIT_UNCOVERED = 3     # a fixture in the window has no pre-kickoff prediction
+EXIT_NO_CALENDAR = 4   # a league's calendar was unavailable in season
 SLUGS = {"epl": "Premier League", "la-liga": "LaLiga", "serie-a": "Serie A",
          "bundesliga": "Bundesliga", "ligue-1": "Ligue 1"}
 
@@ -70,6 +82,7 @@ def fetch_fixtures_espn(year: int) -> pd.DataFrame:
         fx = fetch_season_fixtures(comp, season, root=ROOT)
         if fx.empty:
             print(f"  {comp}: ESPN sin datos")
+            MISSING_SOURCES.append(comp)
             continue
         out = pd.DataFrame({
             "date": fx["date"], "competition": comp,
@@ -263,8 +276,10 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
         elo = fetch_current_elo(ROOT)
         calib = load_calibration(ROOT)
     except Exception as exc:
-        print(f"  europa no disponible: {str(exc)[:70]}")
-        return []
+        # keep going: the fixtures are still owed predictions, and walking
+        # them records each one as uncovered instead of silently skipping Europe
+        print(f"  europa sin ratings: {str(exc)[:70]}")
+        elo, calib = {}, {"c": 0.0, "hfa": 0.0, "b": 0.0}
     ev_calib = load_event_calibration(ROOT)
     resolver = make_resolver(elo.keys())
     # The European model is Elo + calibration, so that pair is its fingerprint.
@@ -298,6 +313,8 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
             h_raw, a_raw = row["Home Team"], row["Away Team"]
             rnd = row.get("Round Number")
             r_date = row["date"]
+            EXPECTED.append((f"{str(h_raw).lower()} vs {str(a_raw).lower()}",
+                             f"{r_date:%Y-%m-%d}"))
             h, a = resolver(str(h_raw)), resolver(str(a_raw))
             if not h or not a or h not in elo or a not in elo:
                 skipped.append(f"{h_raw} vs {a_raw}")
@@ -352,14 +369,22 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
 
 
 def main() -> None:
+    args = _parse_args()
+    _log(args)
+    raise SystemExit(check_coverage(args))
+
+
+def _parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=8, help="ventana hacia delante")
     ap.add_argument("--dry-run", action="store_true", help="no escribe el log")
     ap.add_argument("--year", type=int, default=None, help="temporada fixturedownload")
     ap.add_argument("--skip-europe", action="store_true", help="solo ligas domesticas")
     ap.add_argument("--skip-players", action="store_true", help="omitir props de jugador")
-    args = ap.parse_args()
+    return ap.parse_args()
 
+
+def _log(args) -> None:
     now = pd.Timestamp.now()
     year = args.year or (now.year if now.month >= 7 else now.year - 1)
     print(f"fixtures {year}/{year+1}, ventana {args.days} dias desde {now:%Y-%m-%d %H:%M}")
@@ -393,6 +418,8 @@ def main() -> None:
     for c, g in up.groupby("competition"):
         js = sorted(set(g.jornada.dropna().astype(int)))
         print(f"  {c:16s} {len(g):3d} partidos  jornada(s) {js}")
+    EXPECTED.extend((f"{r.home} vs {r.away}", f"{r.date:%Y-%m-%d}")
+                    for r in up.itertuples(index=False))
 
     # engine fitted on PLAYED matches only -> predictions are genuinely pre-match
     df = pd.read_csv(FOUND, low_memory=False)
@@ -428,16 +455,23 @@ def main() -> None:
     if not args.skip_players:
         pp = _load_player_props()
 
+    # A club new to the Big Five has no history until its first match reaches
+    # the foundation; it is priced from last season's relegated clubs instead of
+    # being skipped (see serving/debutants.py and experiment_debutant_proxy.py).
+    from mundialytics.serving.debutants import predict_match_or_proxy
+    season_teams = {c: set(g.home) | set(g.away) for c, g in fx.groupby("competition")}
+
     rows, skipped = [], []
     for r in up.itertuples(index=False):
-        if r.home not in known or r.away not in known:
-            skipped.append(f"{r.home} vs {r.away}")
-            continue
         try:
-            p = eng.predict_match(r.home, r.away, competition=r.competition, neutral=False)
-        except Exception:
-            skipped.append(f"{r.home} vs {r.away}")
+            p, stand_in = predict_match_or_proxy(
+                eng, df, r.home, r.away, r.competition, season,
+                season_teams.get(r.competition, set()), known=known)
+        except Exception as exc:
+            skipped.append(f"{r.home} vs {r.away} ({str(exc)[:40]})")
             continue
+        if stand_in:
+            print(f"  debutante: {r.home} vs {r.away} -> sustituto {stand_in}")
         base = dict(logged_at=stamp, season=season,
                     jornada=int(r.jornada) if pd.notna(r.jornada) else 0,
                     partido=f"{r.home} vs {r.away}", fecha=f"{r.date:%Y-%m-%d}",
@@ -446,6 +480,7 @@ def main() -> None:
                     lambda_home=round(p.lambda_home, 6), lambda_away=round(p.lambda_away, 6),
                     p_home=round(p.p_home_win, 4), p_draw=round(p.p_draw, 4),
                     p_away=round(p.p_away_win, 4),
+                    stand_in="; ".join(f"{t}={'+'.join(v)}" for t, v in stand_in.items()),
                     **{f"exp_{k}_{side}": round(float(getattr(p, f"expected_{k}_{side}")), 3)
                        for k in ("shots", "sot", "corners", "fouls", "yellows")
                        for side in ("home", "away")})
@@ -514,12 +549,13 @@ def _europe_only(args, year: int, now: pd.Timestamp, stamp: str, season: str) ->
 
 def _write(rows: list[dict], skipped: list[str], args) -> None:
     if skipped:
-        print(f"\nomitidos (equipo sin historial): {len(skipped)} -> {skipped[:6]}")
+        print(f"\nomitidos: {len(skipped)} -> {skipped[:6]}")
     new = pd.DataFrame(rows)
     n_matches = new.partido.nunique() if len(new) else 0
     print(f"predicciones generadas: {len(new):,} filas sobre {n_matches} partidos")
     if new.empty:
         return
+    _write.last = new   # the coverage check reads it on a dry run
 
     if args.dry_run:
         print("\n--dry-run: no se escribe nada. Muestra:")
@@ -560,6 +596,56 @@ def _write(rows: list[dict], skipped: list[str], args) -> None:
     print(f"\nREGISTRADAS {len(comb) - len(old):,} filas nuevas -> {PRED_LOG} "
           f"(total {len(comb):,})")
     print("Todas con fecha de partido en el futuro: track record honesto.")
+
+
+def check_coverage(args) -> int:
+    """Did every fixture in the window get a pre-kickoff prediction?
+
+    A fixture counts as covered when the log holds a 1X2 row for it (same
+    teams, a date within four days to absorb a reschedule), from this run or an
+    earlier one. Anything else -- a team without history, a club the rating
+    table cannot place, a predict error -- is a hole in the track record, and
+    it must fail the step loudly: on 2026-09-04..14 the logger found no
+    fixtures at all and reported OK for ten days.
+    """
+    import json
+
+    log = pd.read_csv(PRED_LOG, low_memory=False) if PRED_LOG.exists() else pd.DataFrame()
+    last = getattr(_write, "last", None)
+    if args.dry_run and last is not None:
+        log = pd.concat([log, last], ignore_index=True)
+    have: dict[str, list[pd.Timestamp]] = {}
+    if len(log):
+        x = log[log["mercado"] == "1X2"]
+        for partido, fecha in zip(x["partido"], pd.to_datetime(x["fecha"], errors="coerce")):
+            have.setdefault(str(partido), []).append(fecha)
+
+    missing = []
+    for partido, fecha in dict.fromkeys(EXPECTED):
+        day = pd.Timestamp(fecha)
+        if not any(abs((d - day).days) <= 4 for d in have.get(partido, []) if pd.notna(d)):
+            missing.append(f"{partido} ({fecha})")
+
+    in_season = pd.Timestamp.now().month not in (6, 7)
+    no_calendar = sorted(set(MISSING_SOURCES)) if in_season else []
+    COVERAGE_JSON.parent.mkdir(parents=True, exist_ok=True)
+    COVERAGE_JSON.write_text(json.dumps({
+        "checked_at": pd.Timestamp.now().isoformat(timespec="seconds"),
+        "window_days": args.days,
+        "expected": len(dict.fromkeys(EXPECTED)),
+        "missing": missing,
+        "no_calendar": no_calendar,
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print(f"\ncobertura: {len(dict.fromkeys(EXPECTED)) - len(missing)}"
+          f"/{len(dict.fromkeys(EXPECTED))} partidos de la ventana con prediccion previa")
+    if missing:
+        print(f"  SIN PREDICCION ({len(missing)}): {missing[:12]}")
+        return EXIT_UNCOVERED
+    if no_calendar:
+        print(f"  SIN CALENDARIO en plena temporada: {no_calendar}")
+        return EXIT_NO_CALENDAR
+    return 0
 
 
 if __name__ == "__main__":

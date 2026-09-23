@@ -127,6 +127,46 @@ if ($code -eq 0 -or $code -eq 2) {
     }
 }
 
+# Say it out loud when something failed. A failed step used to be visible only
+# to someone who opened last_run.json; a lost matchday of predictions cannot be
+# recovered later, so it has to reach a person the same day. A Windows toast
+# needs no module or account (WinRT is built into PowerShell 5.1); if it cannot
+# be shown the run itself is unaffected.
+function Send-Toast([string]$title, [string]$body) {
+    try {
+        [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+        [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+        $esc = { param($s) [System.Security.SecurityElement]::Escape($s) }
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml("<toast><visual><binding template=`"ToastGeneric`"><text>$(& $esc $title)</text><text>$(& $esc $body)</text></binding></visual></toast>")
+        # PowerShell's own AppUserModelID: always registered, so the toast shows
+        $app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app).Show(
+            [Windows.UI.Notifications.ToastNotification]::new($xml))
+    } catch {
+        Write-Warning "toast not shown: $($_.Exception.Message)"
+    }
+}
+
+if ($code -ne 0) {
+    $lines = @()
+    if ($failed.Count) { $lines += "Pasos fallidos: $($failed -join ', ')" }
+    elseif ($code -eq 1) { $lines += 'Abortado: la fundacion no paso el control y se restauro.' }
+    else { $lines += "update_season.py termino con codigo $code." }
+    # the partidos left without a pre-kickoff prediction, by name
+    foreach ($f in @('coverage_last.json', 'coverage_audit.json')) {
+        $p = Join-Path $root "data\processed\logs\$f"
+        if (Test-Path $p) {
+            try {
+                $c = Get-Content $p -Raw | ConvertFrom-Json
+                $miss = @($c.missing) + @($c.unexplained) | Where-Object { $_ } | Select-Object -Unique
+                if ($miss.Count) { $lines += "Sin prediccion: $(($miss | Select-Object -First 4) -join '; ')" }
+            } catch { }
+        }
+    }
+    Send-Toast 'Mundialytics: la actualizacion diaria fallo' (($lines -join "`n") + "`nLog: $log")
+}
+
 # Retain the 30 most recent runs (each is a .log plus its sibling .stderr).
 Get-ChildItem $logDir -Filter 'update_*.log*' |
     Sort-Object LastWriteTime -Descending |
