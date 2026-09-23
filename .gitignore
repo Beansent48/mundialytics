@@ -47,3 +47,6 @@ data/processed/logs/last_steps.json
 data/processed/logs/coverage_last.json
 data/processed/logs/coverage_audit.json
 data/processed/logs/runs/
+
+# Local scratch space (not part of the project)
+tmp/

@@ -31,6 +31,9 @@ app/[locale]/        pages: matchday + match view, leagues, competitions,
                      results (track record), awards, squadlab
 app/api/revalidate/  cache invalidation hook for the data refresh
 components/          one folder per page area, plus ui/ and layout/
+data/                benchmark_vs_bet365.json, written by
+                     scripts/benchmark_vs_bet365.py; the landing page and the
+                     API both read it. Never edit it by hand.
 lib/api.ts           typed API client (timeouts, revalidate windows)
 messages/            en.json / es.json — same keys in both
 i18n/, proxy.ts      locale routing

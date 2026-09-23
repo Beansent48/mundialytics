@@ -65,19 +65,6 @@ The benchmark script also writes `web/data/benchmark_vs_bet365.json`, with a
 hash of the predictions it scored. The site reads its figures from that file,
 so the page and this README quote the same run; a test fails if they drift.
 
-A played match's page grades the prediction **logged before kick-off**, never a
-re-run of today's engine (which has seen the result). Each logged row carries
-the kick-off time, the training cutoff, a model fingerprint and both lambdas,
-so the whole prediction can be rebuilt exactly.
-
-No fixture is allowed to go unpredicted: the daily run fails, and a Windows
-notification names the match, if any fixture in the next eight days has no
-logged prediction or anything played in the last week had none before kick-off
-(`scripts/audit_prediction_coverage.py`). A club new to the Big Five is priced
-from last season's relegated clubs until it has history of its own, which beat
-the base rates on its first three matches (RPS 0.179 vs 0.223, 60 matches,
-`scripts/experiment_debutant_proxy.py`).
-
 ## Is it calibrated?
 
 Being close to the market is one question; saying 30% and being right 30% of
@@ -91,6 +78,40 @@ genuinely rarely the favourite. The figure scores all 10,403 walk-forward
 predictions, so its RPS reads 0.2013; the benchmark above uses the 10,080 of them
 that have Bet365 odds attached. Regenerate with
 `python scripts/plot_calibration.py`.
+
+## Keeping the track record honest
+
+A backtest can be tuned until it flatters; a forward test cannot, provided the
+predictions really were made before the matches and the page shows those and
+nothing else. Four rules, each added after finding it broken:
+
+- **Graded against what was logged, not what the model says now.** A played
+  match's page reads the prediction written before kick-off. Re-running today's
+  engine would grade a model already fitted on that very result. On Valencia
+  2–3 Real Sociedad the log said Valencia 53.8%; a re-run said 48.1%. Where the
+  log only kept the pick (rows before 2026-09-23), only the pick is graded.
+  Where nothing was logged, the numbers are shown and not graded.
+- **Every prediction is reproducible.** Each logged row carries the kick-off
+  time (UTC), the training cutoff, a fingerprint of the code, parameters and
+  data behind the fit, both lambdas and the full 1X2. The whole prediction can
+  be rebuilt from the row without refitting anything.
+- **No fixture goes unpredicted.** The logger lists every fixture in its
+  eight-day window before anything can skip it. The daily run fails if one ends
+  up without a prediction, or a league's calendar goes missing in season. A
+  second check looks back at what was actually played in the last week, which
+  catches days the logger never ran (`scripts/audit_prediction_coverage.py`).
+  A failure pops up as a Windows notification naming the matches. Misses whose
+  cause is known and fixed are listed with that cause in
+  `data/curated/coverage_known_gaps.csv`; any other miss fails the run.
+- **Newcomers get a fair price, not someone else's.** A club new to the Big
+  Five has no history until its first match lands, and the engine would
+  silently price an unknown name as another club. It is priced from last
+  season's relegated clubs instead. Walk-forward on 20 debutants' first three
+  matches: RPS 0.179, against 0.195 for the silent fallback and 0.223 for base
+  rates (`scripts/experiment_debutant_proxy.py`).
+
+The log itself started on 2026-09-03. The 97 matches played before that have no
+pre-kickoff prediction and never will, because one made now would not be one.
 
 ## How it works
 
@@ -124,11 +145,15 @@ FBref / ESPN ──────────┘                                 �
   Strength parameters are not comparable across contexts, so mixing them would
   quietly corrupt both.
 - **Markets** — the score matrix is derived once and every market (totals,
-  BTTS, half-time, correct score) is read off it, so they stay mutually
-  consistent by construction. The headline "likely score" is reported *per
-  outcome* (most likely home win, draw, away win), because the single global
-  modal score of a product-Poisson matrix is a near-constant low draw and says
-  little about who is favoured.
+  BTTS, half-time, correct score) is read off it. The 1X2 is sharpened after
+  the fact (the raw model is under-confident), and the matrix is reweighted so
+  each outcome region carries exactly that 1X2, so no page can show a 1X2 its
+  own scoreline grid contradicts. Scored out of sample before it was switched
+  on: no market got worse, and exact score and HT/FT improved in 5 of 6 and 6
+  of 6 seasons (`scripts/experiment_market_coherence.py`). The headline "likely
+  score" is reported *per outcome* (most likely home win, draw, away win),
+  because the single global modal score of a product-Poisson matrix is a
+  near-constant low draw and says little about who is favoured.
 
 Validation is **temporal out-of-sample throughout**: train on seasons up to
 year *N*, test on *N+1*. Never k-fold — shuffled folds leak the future into the
@@ -277,7 +302,7 @@ the SquadLab calibration reported under In progress.
 | Data quality | canonical team registry, entity guardrails, leakage-safe snapshots |
 | Odds layer | odds contract and readiness checks, de-vigging, value, pick policy |
 | Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
-| Live logging | every prediction written pre-kickoff and settled afterwards |
+| Live logging | every prediction written pre-kickoff with its provenance, settled afterwards; coverage checked forward and back every day |
 
 The odds layer is dormant by choice: built while the betting question was still
 open, kept because the benchmark above depends on it.
@@ -303,8 +328,12 @@ Listed because half-finished work is normal and hiding it helps nobody.
   [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
-- **European fixture coverage** — 84% of UEFA fixtures have a ClubElo history
-  for both clubs; the other 16% cannot be priced. This is **not** an alias
+- **European fixture coverage** — this season's 108 participants are all
+  priced. Three had no ClubElo rating at all (Slavia Praha, Torreense, Iberia
+  1999) and carry an explicit seed with its rule and peer in
+  `data/curated/clubelo_manual_seeds.csv`; Slavia's is probably low until the
+  ClubElo API is back. Historically, 84% of UEFA fixtures have a ClubElo history
+  for both clubs; the other 16% cannot be priced for evaluation. This is **not** an alias
   problem, which was the first guess and was wrong: none of the 46 blocked clubs
   is present on disk under any spelling. They are champions of smaller
   associations — Cyprus, Israel, Bulgaria, Czechia, the Nordics — whose Elo
@@ -350,6 +379,14 @@ settles the logged markets and writes the upcoming round's predictions before
 kick-off. `scripts/run_update.ps1` wraps it for a daily Windows scheduled task, so
 results and forward predictions stay current without a manual run.
 
+A run never fails quietly. Each step is recorded in
+`data/processed/logs/last_steps.json`; exit code 0 is clean, 1 means the
+foundation failed its checks and was restored, and 2 means the run finished but
+a required step failed (a missing prediction counts). The wrapper copies the
+failures into `last_run.json` and shows a Windows notification. Data files are
+written to a temporary file and swapped in, and the API reloads its models when
+the foundation changes, so a refresh reaches the site without a restart.
+
 ## Layout
 
 ```
@@ -360,7 +397,8 @@ src/mundialytics/
 ├── ratings/            internal Elo, local ClubElo
 ├── props/              player, team and half-time markets
 ├── evaluation/         RPS, Brier, log loss, walk-forward backtesting
-├── serving/            track record, scorer race, SquadLab rosters (for the API)
+├── serving/            logged predictions, provenance, debutant prices,
+│                       track record, scorer race, SquadLab rosters
 ├── betting/            odds contract, de-vig, value, pick policy (dormant)
 ├── data/               canonical schema, provider adapters, loaders
 ├── data_quality/       team registry, entity guardrails, leakage-safe snapshots
