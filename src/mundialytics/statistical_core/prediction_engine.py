@@ -64,6 +64,13 @@ DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     "goal_temper": 1.05,
     "xg_rate_kwargs": {"use_ewma": True},
     "coherent_markets": True,
+    # squad market value (2026-09-29): weekly-refit LOSO 2020/21-2025/26, values
+    # rebuilt the way production sees them -> 1X2 RPS 0.2006 -> 0.1999 (5/6),
+    # O/U unchanged; season forecasts at matchday 5 improve too (title Brier 6/6,
+    # top 4 and relegation 5/6). Constants fitted on all six seasons. Reads
+    # data/processed/squad_values.csv (scripts/build_squad_values.py); without the
+    # file the lambdas are left alone. See scripts/squad_value/README.md.
+    "squad_value_shift": {"beta": 0.1051, "kappa": -0.2148},
 }
 
 

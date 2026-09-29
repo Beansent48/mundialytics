@@ -89,7 +89,7 @@ def test_missing_value_leaves_the_lambdas_alone():
 
 
 def test_off_by_default():
-    eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
+    eng = PredictionEngine()
     eng.set_squad_values({"arsenal": 1.2e9, "ipswich": 2.6e8})
     assert eng._squad_value_tilt("arsenal", "ipswich", 1.5, 1.1) == (1.5, 1.1, False)
 
@@ -103,3 +103,7 @@ def test_historical_fit_without_asof_is_refused(tmp_path):
         eng._load_squad_values(old, None)
     eng._load_squad_values(old, "2024-09-01")
     assert eng.squad_values_ == {"arsenal": 1.1e9, "ipswich": 1.5e8}
+
+
+def test_deployed_config_carries_the_validated_constants():
+    assert DEPLOYED_CLUB_ENGINE_KWARGS["squad_value_shift"] == {"beta": 0.1051, "kappa": -0.2148}
