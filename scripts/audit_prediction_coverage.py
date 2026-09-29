@@ -80,8 +80,12 @@ def main() -> int:
     if not args.season:
         fx = fx[fx["date"] >= now.normalize() - pd.Timedelta(days=args.days)]
 
-    fx = fx.assign(logged=[find_logged(r.home, r.away, r.date) is not None
-                           for r in fx.itertuples(index=False)])
+    # dtype=bool on purpose: with no matches in the window (an international
+    # break) an empty list becomes float64, and ~float turns fx[...] into a
+    # column selection that drops every column.
+    fx = fx.assign(logged=pd.Series([find_logged(r.home, r.away, r.date) is not None
+                                     for r in fx.itertuples(index=False)],
+                                    index=fx.index, dtype=bool))
     missed = fx[~fx["logged"]].sort_values("date")
     known = set()
     if KNOWN_GAPS.exists():
