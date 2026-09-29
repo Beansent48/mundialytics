@@ -122,8 +122,12 @@ def _props_models(_version: float):
 
     _, _, df = club_engine()
     squads = load_current_squads()
+    # the current season's player rows move the player state (see
+    # PlayerPropsModel._append_current); ESPN can land before the foundation does
+    espn_cur = ROOT / "data/external/advanced/espn/espn_player_match_current.csv"
+    espn_tag = f"{espn_cur.stat().st_size}" if espn_cur.exists() else "none"
     key = (f"{len(df)}_{str(df['date'].max())[:10]}_{PROPS_FP}"
-           f"_{squads_fingerprint(squads)}")
+           f"_{squads_fingerprint(squads)}_{espn_tag}")
     cache_f = CACHE_DIR / f"props_models_{key}.joblib"
     if cache_f.exists():
         try:
@@ -152,6 +156,7 @@ def _props_models(_version: float):
             pm,
             shots_path=ROOT / "data/external/advanced/understat/understat_shots.csv",
             current_squads=squads,
+            current=espn_cur if espn_cur.exists() else None,
         )
     except Exception:
         pp = None
