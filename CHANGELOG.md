@@ -1,5 +1,56 @@
 # Changelog
 
+## v0.56.0 — Event markets: season level, referees, lineup-priced players (2026-09-29)
+
+The live 2026/27 log showed the event markets drifting: shots under-predicted
+(63% over said, 77% happened) and cards over-predicted. The season itself moved:
+28.2 shots per match against ~25 in every season before, in all five leagues and
+in ESPN's counts as well as football-data's, and yellows 3.60 against 3.89. Five
+ideas were tested walk-forward. Three shipped, one partly, and one failed.
+
+### Added
+- **League-season terms for the team event models** (`props/team_props.py`).
+  - Fouls get a `lg_lvl` feature: this league-season's mean so far, shrunk to the
+    previous season with 70 matches. −0.0013 log-loss, 5/5 folds.
+  - Yellows get a running residual correction: actual/predicted over the season
+    so far, shrunk to 1 with 120 matches. −0.0005 on totals and sides, 4/5.
+- **Referees for LaLiga, Bundesliga, Serie A and Ligue 1.**
+  - Source: `scripts/fetch_espn_referees.py` reads `gameInfo.officials` from
+    ESPN's match summary. It holds 9,153 matches since 2021/22, and there is no
+    ESPN referee data before that. It runs as daily step 7h (optional,
+    incremental).
+  - Feature: the referee's shrunk mean deviation from his league's level. It
+    improved all 11 card and foul lines in 3/3 folds, stacked on the terms
+    above: yellows −0.0018 to −0.0029, fouls −0.0015 to −0.0057.
+  - The EPL keeps its football-data referee model; the ESPN feature was mixed
+    there.
+  - The morning logger passes the referee when ESPN lists it, for fixtures
+    within 4 days. An unknown referee is priced as league-typical, as before.
+- **Player props priced on the confirmed lineup**
+  (`PlayerPropsModel.predict_lineup`).
+  - Once the XIs are out, each player is priced on the minutes of his role
+    that night, starter or bench, with exponent and scale picked on pre-2021
+    seasons.
+  - All six props beat the morning price in 5/5 folds: anytime scorer
+    −0.0047, shots over 1.5 −0.025, assist −0.0031, yellow −0.0040. Top-1
+    scorer picks rose from 37.6% to 39.7%.
+  - The lineup pass logs them to `lineup_pass_players_log.csv`, and
+    `evaluate_lineup_pass.py` grades them against the morning price.
+  - The morning price is unchanged: the new code path only runs when a
+    lineup is passed.
+
+### Measured, not shipped
+- **Shots/SOT season correction.** It fixes the 2026/27 bias (−0.0096) but
+  costs slightly in normal seasons (2/5 folds). Gating it on large deviations
+  only switches it off.
+- **The same level factor for player shots and cards:** worse on shots (2/5),
+  flat on cards. The player's recent-form blend already carries the level.
+- **Corners:** no variant moved them.
+
+All scripts are `scripts/experiment_league_level.py`,
+`experiment_player_league_level.py`, `experiment_player_lineup_minutes.py` and
+`experiment_referee_all_leagues.py`.
+
 ## v0.55.0 — Live squad values and the lineup pass (2026-09-29)
 
 Three follow-ups to the squad-value release, each measured before it was built:
