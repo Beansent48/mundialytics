@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.55.0 — Live squad values and the lineup pass (2026-09-29)
+
+Three follow-ups to the squad-value release, each measured before it was built:
+fresher values, the team news the market has and we did not, and match context.
+Two survived.
+
+### Added
+- **Live squad values from transfermarkt.com.** Every Big Five squad is read once
+  a week: about 100 pages, 3 s apart, identified as this project, with pages
+  `robots.txt` allows. If the site fails, the refresh falls back to ESPN rosters
+  × the June dump. The first read mapped 96/96 teams with 98.8% of players
+  valued (the fallback reaches 82%).
+  - The history now uses each snapshot's own valuations. Fresh values measured
+    −0.00109 RPS against −0.00079 June-frozen (5/6 both).
+  - β/κ refitted on the fresh history: 0.1337 / −0.2617.
+  - `providers/transfermarkt.py`; `build_squad_values.py` refreshes weekly
+    (`--force-live`, `--offline`).
+- **Pre-kickoff lineup pass** (`scripts/log_lineup_pass.py`, `run_lineup_pass.ps1`).
+  About an hour before kick-off, once both XIs are on ESPN, each Big Five match
+  is re-priced. The new input is the share of each side's usual starters (most
+  starts in the last 10 league matches) missing from the XI, applied as a
+  total-preserving tilt (θ −0.3647).
+  - Backtest with production's exact definition, on top of the squad value:
+    0.1995 → 0.1989, better in **6 of 6** seasons, O/U unchanged.
+  - Logged once per match to `data/processed/logs/lineup_pass_log.csv`. The
+    morning log stays the track record, and `scripts/evaluate_lineup_pass.py`
+    grades one against the other.
+  - The match page serves the lineup price in the last hour and names the
+    missing regulars; the API cache follows the log.
+- **A production-like replay against Bet365.** Weekly refits, values as each week
+  saw them, and the lineup pass score 0.1983 on the 10,080 matches with odds:
+  90% of the way to the closing line, 0.0037 behind it. The published
+  once-a-season benchmark stays at 0.1999: it fits once before each season, so
+  it cannot see fresher values or lineups.
+
+### Measured and rejected
+- **Match context without the lineup:** rest days, a Champions League match
+  before or after, a new manager, relegation fight, race for Europe, nothing to
+  play for, champion already crowned. The market prices several of them, and it
+  disagrees with us most in exactly those matches. None held up out of sample
+  (at best 4/6 seasons, or a gain near zero). Crowned champions: a large effect
+  on 74 matches, too few to validate.
+- **The away-favourite calibration miss** is not significant (z −1.5). Bet365
+  was less confident than us on those matches. Separate exponents per outcome
+  or for strong favourites all lost out of sample; the free away exponent fits
+  1.297 against the deployed 1.3.
+- **Lesson:** a context adjustment fitted on the 1X2 alone buys RPS by moving
+  total goals and wrecks O/U. Test the total-preserving form.
+
 ## v0.54.0 — Squad market value (2026-09-29)
 
 The question was whether something was wrong with promoted sides. They are

@@ -131,6 +131,46 @@ def find_logged(home: str, away: str, match_date, window_days: int = 4) -> Logge
     )
 
 
+LINEUP_LOG = ROOT / "data/processed/logs/lineup_pass_log.csv"
+
+
+def find_lineup_pass(home: str, away: str, match_date, window_days: int = 2) -> tuple[LoggedPrediction, dict] | None:
+    """(prediction, lineup details) from the pre-kickoff lineup pass, or None.
+
+    scripts/log_lineup_pass.py re-prices a match once both XIs are confirmed, about an
+    hour before kick-off. The morning row stays the track record; this is what the
+    match page shows in the last hour, when it knows who is playing.
+    """
+    try:
+        df = pd.read_csv(LINEUP_LOG, dtype={"event_id": str})
+    except (OSError, pd.errors.EmptyDataError):
+        return None
+    day = pd.Timestamp(match_date).normalize()
+    ko = pd.to_datetime(df["kickoff_utc"], errors="coerce").dt.normalize()
+    m = df[(df["home"] == str(home).lower()) & (df["away"] == str(away).lower())
+           & ((ko - day).abs() <= pd.Timedelta(days=window_days))]
+    if m.empty:
+        return None
+    r = m.sort_values("logged_at_utc").iloc[-1]
+    trio = {"home": float(r["p_home"]), "draw": float(r["p_draw"]), "away": float(r["p_away"])}
+    pick = max(trio, key=trio.get)
+    lp = LoggedPrediction(
+        logged_at=str(r["logged_at_utc"]), full=True, pick={"home": "1", "draw": "X", "away": "2"}[pick],
+        pick_prob=trio[pick], over25=_num(r.get("p_over_25")), trio=trio,
+        lambdas=(float(r["lambda_home"]), float(r["lambda_away"])),
+        model_fp=None if pd.isna(r.get("model_fp")) else str(r.get("model_fp")),
+        train_cutoff=None if pd.isna(r.get("train_cutoff")) else str(r.get("train_cutoff")),
+    )
+
+    def names(v) -> list[str]:
+        return [x.strip() for x in str(v).split(";") if x.strip()] if isinstance(v, str) else []
+
+    details = {"loggedAtUtc": str(r["logged_at_utc"]), "kickoffUtc": str(r["kickoff_utc"]),
+               "absentHome": _num(r.get("absent_home")), "absentAway": _num(r.get("absent_away")),
+               "missingHome": names(r.get("missing_home")), "missingAway": names(r.get("missing_away"))}
+    return lp, details
+
+
 def as_prediction(lp: LoggedPrediction, fallback) -> SimpleNamespace:
     """A MatchPrediction-shaped object rebuilt from a full logged row.
 
