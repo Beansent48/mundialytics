@@ -49,6 +49,13 @@ WAKE_BEFORE_MIN = 70     # the watcher starts polling this long before a kick-of
 POLL_MIN = 5
 LOCK = ROOT / "data/processed/logs/lineup_watch.lock"
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
+PLAYER_LOG = ROOT / "data/processed/logs/lineup_pass_players_log.csv"
+# The morning player markets, re-priced on the confirmed matchday squad: each
+# player on the minutes of his role tonight (PlayerPropsModel.predict_lineup).
+# Backtest: every prop 5/5 folds better than the morning price.
+PLAYER_COLS = {"p_anytime_scorer": ("jug_goleador", ""), "p_2plus_goals": ("jug_2goles", ""),
+               "p_shots_over_1_5": ("jug_tiros", 1.5), "p_shots_over_2_5": ("jug_tiros", 2.5),
+               "p_assist": ("jug_asistencia", ""), "p_yellow": ("jug_amarilla", "")}
 ROSTERS = ROOT / "data/external/advanced/espn/espn_team_rosters_current.csv"
 PLAYER_VALUES = ROOT / "data/processed/squad_player_values.csv"   # scripts/build_squad_values.py
 
@@ -76,8 +83,8 @@ def upcoming(now: pd.Timestamp, lookahead_min: int) -> list[dict]:
 
 
 def confirmed_xis(summary: dict, canon) -> dict[str, dict] | None:
-    """{home|away: {team, starters, squad}} when both sides list exactly eleven starters.
-    `squad` is everyone named for the match, starters and bench."""
+    """{home|away: {team, starters, bench, squad}} when both sides list exactly eleven
+    starters. `squad` is everyone named for the match, starters and bench."""
     sides = {}
     for side in summary.get("rosters", []) or []:
         roster = side.get("roster", []) or []
@@ -86,8 +93,10 @@ def confirmed_xis(summary: dict, canon) -> dict[str, dict] | None:
         if len(starters) != 11:
             return None
         squad = [n for n in ((p.get("athlete") or {}).get("displayName") for p in roster) if n]
+        bench = [(p.get("athlete") or {}).get("displayName") for p in roster if not p.get("starter")]
         sides[side.get("homeAway")] = {"team": canon(side.get("team", {}).get("displayName", "")),
-                                       "starters": starters, "squad": squad}
+                                       "starters": starters, "bench": [b for b in bench if b],
+                                       "squad": squad}
     return sides if {"home", "away"} <= set(sides) else None
 
 
@@ -99,6 +108,34 @@ def team_values(team: str, names, table: pd.DataFrame | None) -> dict:
     if t.empty:
         return {}
     return match_values(names, t[t["snap"] == t["snap"].max()])
+
+
+def lineup_player_rows(pp, e: dict, xis: dict, lams: dict, now: pd.Timestamp) -> list[dict]:
+    """Player markets for both confirmed squads, one row per (player, market)."""
+    h, a = xis["home"]["team"], xis["away"]["team"]
+    out = []
+    for side in ("home", "away"):
+        team = xis[side]["team"]
+        try:
+            props, missing = pp.predict_lineup(team, xis[side]["starters"], xis[side]["bench"],
+                                               atk_factor=pp._atk_factor(team, float(lams[side]), None))
+        except Exception as exc:
+            print(f"    player props {team}: failed ({str(exc)[:60]})", flush=True)
+            continue
+        for r in props.itertuples(index=False):
+            for col, (mk, line) in PLAYER_COLS.items():
+                prob = getattr(r, col, None)
+                if prob is None or pd.isna(prob):
+                    continue
+                out.append({"logged_at_utc": now.strftime("%Y-%m-%dT%H:%M:%S"), "event_id": e["event_id"],
+                            "kickoff_utc": e["kickoff"].strftime("%Y-%m-%dT%H:%M:%S"),
+                            "competition": e["competition"], "partido": f"{h} vs {a}",
+                            "team": team, "side": side, "player": r.player, "started": bool(r.started),
+                            "exp_min": int(r.exp_min), "mercado": mk, "linea": line,
+                            "prob": round(float(prob), 4)})
+        print(f"    {team}: {len(props)} players priced on their role"
+              + (f", {len(missing)} without big-five history" if missing else ""), flush=True)
+    return out
 
 
 def logged_ids() -> set[str]:
@@ -121,7 +158,8 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
     hist["team"] = hist["team"].map(canon)
     values = pd.read_csv(PLAYER_VALUES) if PLAYER_VALUES.exists() else None
     engine = None
-    rows = []
+    pp = None
+    rows, player_rows = [], []
     for e in todo:
         s = espn_json(f"{BASE.format(code=e['code'])}/summary?event={e['event_id']}", timeout=30)
         xis = confirmed_xis(s, canon)
@@ -161,6 +199,13 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
             "p_home": round(p.p_home_win, 4), "p_draw": round(p.p_draw, 4), "p_away": round(p.p_away_win, 4),
             "p_over_25": round(p.p_over_25, 4), "model_source": p.model_source, **prov,
         })
+        if pp is None:
+            from api.engine import props_models
+            _, pp = props_models()
+            pp = pp if pp is not None else False
+        if pp:
+            prow = lineup_player_rows(pp, e, xis, {"home": p.lambda_home, "away": p.lambda_away}, now)
+            player_rows.extend(prow)
         print(f"  {h} vs {a}: regulars out of the squad {len(missing['home'])}/{len(missing['away'])} -> "
               f"1X2 {p.p_home_win:.2f}/{p.p_draw:.2f}/{p.p_away_win:.2f} ({p.model_source})", flush=True)
 
@@ -171,6 +216,12 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
         LOG.parent.mkdir(parents=True, exist_ok=True)
         out.to_csv(LOG, index=False)
         print(f"logged {len(rows)} match(es) to {LOG}", flush=True)
+        if player_rows:
+            pl = pd.DataFrame(player_rows)
+            if PLAYER_LOG.exists():
+                pl = pd.concat([pd.read_csv(PLAYER_LOG, dtype={"event_id": str}), pl], ignore_index=True)
+            pl.to_csv(PLAYER_LOG, index=False)
+            print(f"logged {len(player_rows)} player-market rows to {PLAYER_LOG}", flush=True)
         revalidate_web()
     return len(rows)
 
