@@ -1,6 +1,6 @@
 """LOSO test of the squad-value lambda shift for one squad-value file.
 
-usage: python scripts/squad_value/tm_test_prod.py FILE.csv [FILE2.csv ...]
+usage: python scripts/squad_value/tm_eval_prod.py FILE.csv [FILE2.csv ...]
 Prints pooled / per-season dRPS, O/U 2.5 log-loss, and the split by promoted side and league.
 """
 import sys

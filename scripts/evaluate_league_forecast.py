@@ -47,12 +47,15 @@ from mundialytics.statistical_core.schemas import canonical_name  # noqa: E402
 LEAGUES = ["Premier League", "LaLiga", "Serie A", "Bundesliga", "Ligue 1"]
 
 
-def build_engine(train: pd.DataFrame) -> PredictionEngine:
+def build_engine(train: pd.DataFrame, asof=None) -> PredictionEngine:
     """The deployed club configuration, from its single source of truth."""
     elo = EloRater(EloConfig(season_reset_fraction=0.40))
     elo.fit(train)
     eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
-    eng.fit(train, elo_history=pd.DataFrame(elo.history))
+    # squads as of the season start (summer signings in, today's squads out);
+    # a no-op while the squad-value shift is off
+    eng.fit(train, elo_history=pd.DataFrame(elo.history),
+            squad_value_asof=asof if asof is not None else pd.to_datetime(train["date"]).max())
     return eng
 
 
@@ -77,7 +80,7 @@ def main() -> None:
         season_start = sl["date"].min()
         train = found[found["date"] < season_start]
         print(f"{season}: fitting on {len(train)} matches before {season_start:%Y-%m-%d}")
-        engine = build_engine(train)
+        engine = build_engine(train, asof=season_start)
 
         for league in LEAGUES:
             full = sl[sl.competition == league]

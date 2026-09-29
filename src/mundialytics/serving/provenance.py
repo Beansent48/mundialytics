@@ -23,6 +23,7 @@ ENGINE_SOURCES = (
     "src/mundialytics/models/goal_model.py",
     "src/mundialytics/models/xg_rate_model.py",
     "src/mundialytics/ratings/elo.py",
+    "src/mundialytics/features/squad_value.py",
 )
 
 

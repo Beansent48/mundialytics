@@ -386,6 +386,14 @@ def main() -> None:
     else:
         print("\n=== 7d/8 player stats SKIPPED ===", flush=True)
 
+    # Squad market value per club: today's ESPN rosters, each player carrying his
+    # latest Transfermarkt value (the Kaggle dump is frozen at June 2026, and a
+    # player's value does not change when he moves). Read by the engine when
+    # squad_value_shift is on. Before the logger, so the round is priced with
+    # today's squads. Optional: without it the engine serves unshifted lambdas.
+    run_step("7g/8 squad market values (ESPN rosters x Transfermarkt)",
+             [PY, "scripts/build_squad_values.py"], optional=True, timeout=1200)
+
     # Rebuild the locally-advanced ClubElo before logging, so European
     # predictions use ratings carried forward to today's results rather than a
     # snapshot frozen whenever the API last worked (it was 502 for three days

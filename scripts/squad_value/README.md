@@ -17,8 +17,8 @@ lambda components, so any lambda-level change can be scored without refitting
 | Deployed chain, weekly refit | 0.2006 (published frozen harness: 0.2013) |
 | Re-tuning w / gamma on this harness (`retune.py`) | no gain, 0/6 |
 | Promoted-team lambda handicap (`lofo.py`, `lofo2.py`) | −0.00006 (4/6) or worse; D2 stats add nothing |
-| **+ squad value, full history (`tm_test.py`)** | **0.1995 (−0.0011, 5/6)** |
-| + squad value, values frozen at June (`tm_test_frozen.py`) | −0.0008 (5/6) |
+| **+ squad value, full history (`tm_eval.py`)** | **0.1995 (−0.0011, 5/6)** |
+| + squad value, values frozen at June (`tm_eval_frozen.py`) | −0.0008 (5/6) |
 
 The squad-value shift is s = β·Δlog(top-18 value) + κ·log(λh/λa), applied as λh·e^{s/2},
 λa·e^{−s/2} (totals unchanged). β ≈ 0.12–0.15 and κ ≈ −0.21 to −0.29, stable across folds.
@@ -49,7 +49,7 @@ League One). Everyone else gets DEFAULT_EUR. Visible share is 81.7% (production 
 82%). Promoted sides average 71%, with lows of 13–36% (Clermont, Cádiz, Spezia), as harsh as
 2026/27.
 
-`tm_test_prod.py` (value+stretch, LOSO):
+`tm_eval_prod.py` (value+stretch, LOSO):
 
 | Value file | pooled dRPS | seasons better | promoted | rest |
 |---|---|---|---|---|
@@ -61,7 +61,7 @@ League One). Everyone else gets DEFAULT_EUR. Visible share is 81.7% (production 
 
 O/U 2.5 is unchanged (the shift keeps totals). **The roster × June-value path is viable.**
 
-Bundesliga (`tm_test_league.py`): in every fold it fits β≈0 and κ≈0, and the global shift
+Bundesliga (`tm_eval_league.py`): in every fold it fits β≈0 and κ≈0, and the global shift
 makes it worse (+0.0014 to +0.0017). The data is fine: corr(Δvalue, goal residual) is +0.10
 there vs +0.11 to +0.15 elsewhere. Per-league params, shrunk params, and skipping the
 Bundesliga all reach about −0.0010 pooled but only **4/6** seasons, so they fail the bar.
