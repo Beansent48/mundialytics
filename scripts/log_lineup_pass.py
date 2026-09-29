@@ -5,13 +5,15 @@ from __future__ import annotations
 The morning logger (log_upcoming_round.py) prices the round at 06:30, before anyone knows
 who plays. About an hour before kick-off ESPN publishes the lineups. This pass finds Big
 Five matches kicking off within LOOKAHEAD_MIN, waits until both XIs are confirmed, measures
-how many of each side's usual starters are missing (features/lineup_absence.py), and logs
-the deployed engine's prediction with that tilt to data/processed/logs/lineup_pass_log.csv,
-once per match. The morning prediction stays the track record of record; this log is
-graded next to it (scripts/evaluate_lineup_pass.py).
+the market-value share of each side's usual starters who are not even in the matchday
+squad (features/lineup_absence.py), and logs the deployed engine's prediction with that
+tilt to data/processed/logs/lineup_pass_log.csv, once per match. The morning prediction
+stays the track record of record; this log is graded next to it
+(scripts/evaluate_lineup_pass.py).
 
-Backtest of the signal: 1X2 RPS better in 6 of 6 seasons on top of the squad-value
-shift, O/U unchanged (scripts/lineup_pass/backtest_absence.py).
+Backtest of the signal: 1X2 RPS -0.00118, better in 6 of 6 seasons on top of the
+squad-value shift, O/U not worse (scripts/lineup_pass/eval_signals.py). A regular on the
+bench is rotation and carries nothing; the first version counted him and was worth half.
 
 How it runs: the daily refresh (run_update.ps1) starts it once with --watch. The watcher
 reads the day's Big Five kick-offs, sleeps until 70 minutes before the first, polls every
@@ -32,7 +34,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
-from mundialytics.features.lineup_absence import absent_share, regular_xi  # noqa: E402
+from mundialytics.features.lineup_absence import match_values, regular_xi, unavailable_share  # noqa: E402
 from mundialytics.identity.normalization import canonical_team_name  # noqa: E402
 from mundialytics.providers.espn_fixtures import espn_json  # noqa: E402
 
@@ -48,6 +50,7 @@ POLL_MIN = 5
 LOCK = ROOT / "data/processed/logs/lineup_watch.lock"
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
 ROSTERS = ROOT / "data/external/advanced/espn/espn_team_rosters_current.csv"
+PLAYER_VALUES = ROOT / "data/processed/squad_player_values.csv"   # scripts/build_squad_values.py
 
 
 def _canon():
@@ -73,17 +76,29 @@ def upcoming(now: pd.Timestamp, lookahead_min: int) -> list[dict]:
 
 
 def confirmed_xis(summary: dict, canon) -> dict[str, dict] | None:
-    """{home|away: {team, starters}} when both sides list exactly eleven starters."""
+    """{home|away: {team, starters, squad}} when both sides list exactly eleven starters.
+    `squad` is everyone named for the match, starters and bench."""
     sides = {}
     for side in summary.get("rosters", []) or []:
-        starters = [(p.get("athlete") or {}).get("displayName") for p in side.get("roster", []) or []
-                    if p.get("starter")]
+        roster = side.get("roster", []) or []
+        starters = [(p.get("athlete") or {}).get("displayName") for p in roster if p.get("starter")]
         starters = [s for s in starters if s]
         if len(starters) != 11:
             return None
+        squad = [n for n in ((p.get("athlete") or {}).get("displayName") for p in roster) if n]
         sides[side.get("homeAway")] = {"team": canon(side.get("team", {}).get("displayName", "")),
-                                       "starters": starters}
+                                       "starters": starters, "squad": squad}
     return sides if {"home", "away"} <= set(sides) else None
+
+
+def team_values(team: str, names, table: pd.DataFrame | None) -> dict:
+    """{ESPN name: EUR} for `names` from the team's latest live Transfermarkt squad."""
+    if table is None:
+        return {}
+    t = table[table["team"] == team]
+    if t.empty:
+        return {}
+    return match_values(names, t[t["snap"] == t["snap"].max()])
 
 
 def logged_ids() -> set[str]:
@@ -104,6 +119,7 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
 
     hist = pd.read_csv(HISTORY)
     hist["team"] = hist["team"].map(canon)
+    values = pd.read_csv(PLAYER_VALUES) if PLAYER_VALUES.exists() else None
     engine = None
     rows = []
     for e in todo:
@@ -118,8 +134,10 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
             team = xis[side]["team"]
             regs = regular_xi(season_hist[season_hist["team"] == team],
                               before=e["kickoff"].tz_localize(None).normalize())
-            absent[side] = absent_share(regs, xis[side]["starters"]) if regs else None
-            missing[side] = [p for p in (regs or []) if p not in set(xis[side]["starters"])]
+            squad = set(xis[side]["squad"])
+            absent[side] = (unavailable_share(regs, squad, team_values(team, regs, values))
+                            if regs else None)
+            missing[side] = [p for p in (regs or []) if p not in squad]
         if engine is None:
             from api.engine import club_engine
             from mundialytics.serving.provenance import model_fingerprint, train_cutoff
@@ -143,7 +161,7 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
             "p_home": round(p.p_home_win, 4), "p_draw": round(p.p_draw, 4), "p_away": round(p.p_away_win, 4),
             "p_over_25": round(p.p_over_25, 4), "model_source": p.model_source, **prov,
         })
-        print(f"  {h} vs {a}: missing regulars {len(missing['home'])}/{len(missing['away'])} -> "
+        print(f"  {h} vs {a}: regulars out of the squad {len(missing['home'])}/{len(missing['away'])} -> "
               f"1X2 {p.p_home_win:.2f}/{p.p_draw:.2f}/{p.p_away_win:.2f} ({p.model_source})", flush=True)
 
     if rows and not dry_run:

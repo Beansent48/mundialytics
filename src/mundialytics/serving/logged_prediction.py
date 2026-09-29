@@ -132,17 +132,32 @@ def find_logged(home: str, away: str, match_date, window_days: int = 4) -> Logge
 
 
 LINEUP_LOG = ROOT / "data/processed/logs/lineup_pass_log.csv"
+MORNING_LOG = ROOT / "data/processed/logs/morning_pass_log.csv"
 
 
 def find_lineup_pass(home: str, away: str, match_date, window_days: int = 2) -> tuple[LoggedPrediction, dict] | None:
     """(prediction, lineup details) from the pre-kickoff lineup pass, or None.
 
-    scripts/log_lineup_pass.py re-prices a match once both XIs are confirmed, about an
-    hour before kick-off. The morning row stays the track record; this is what the
+    scripts/log_lineup_pass.py re-prices a match once both squads are confirmed, about an
+    hour before kick-off. The first logged row stays the track record; this is what the
     match page shows in the last hour, when it knows who is playing.
     """
+    return _find_pass(LINEUP_LOG, home, away, match_date, window_days)
+
+
+def find_morning_pass(home: str, away: str, match_date, window_days: int = 2) -> tuple[LoggedPrediction, dict] | None:
+    """(prediction, details) from the matchday morning pass, or None.
+
+    scripts/log_morning_pass.py re-prices a team's next league match with the regulars
+    who missed its previous squad without a ban (likely still injured). The match page
+    shows it until the lineup pass replaces it.
+    """
+    return _find_pass(MORNING_LOG, home, away, match_date, window_days)
+
+
+def _find_pass(path: Path, home: str, away: str, match_date, window_days: int) -> tuple[LoggedPrediction, dict] | None:
     try:
-        df = pd.read_csv(LINEUP_LOG, dtype={"event_id": str})
+        df = pd.read_csv(path, dtype={"event_id": str})
     except (OSError, pd.errors.EmptyDataError):
         return None
     day = pd.Timestamp(match_date).normalize()

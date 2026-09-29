@@ -65,10 +65,16 @@ export type MatchPrediction = {
   source?: PredictionSource | null;
   /**
    * Upcoming matches only, in the last hour before kick-off: the prediction was
-   * re-priced with the confirmed starting XIs (scripts/log_lineup_pass.py).
-   * `missing*` are the team's usual starters left out of the lineup.
+   * re-priced with the confirmed squads (scripts/log_lineup_pass.py).
+   * `missing*` are the team's usual starters left out of the matchday squad.
    */
   lineupPass?: LineupPass | null;
+  /**
+   * Upcoming matches only, on matchday before the lineups: re-priced with the usual
+   * starters who missed the team's previous squad without a ban, i.e. likely still
+   * injured (scripts/log_morning_pass.py). Replaced by `lineupPass` once it exists.
+   */
+  morningPass?: LineupPass | null;
 };
 
 export type LineupPass = {
