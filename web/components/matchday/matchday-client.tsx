@@ -2,18 +2,17 @@
 
 import { CalendarDays, ChevronLeft, ChevronRight, ListOrdered, Star } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { CompetitionBrowser } from "@/components/matchday/competition-browser";
 import { FixtureRow } from "@/components/matchday/fixture-row";
 import {
   api,
   type Competition,
-  type DayFixtures,
   type Fixture,
-  type UpcomingDay,
 } from "@/lib/api";
 import { useFavorites } from "@/lib/favorites";
+import { setMatchdaySelection, useMatchdayQuery, useMatchdaySelection } from "@/lib/matchday-state";
 import { cn } from "@/lib/utils";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -38,7 +37,7 @@ export function MatchdayClient({
   competitions: Competition[];
 }) {
   const t = useTranslations("matchday");
-  const [tab, setTab] = useState<"day" | "round" | "favorites">("day");
+  const { tab } = useMatchdaySelection();
   const { favorites, ready } = useFavorites();
 
   return (
@@ -50,7 +49,7 @@ export function MatchdayClient({
             <button
               key={v}
               type="button"
-              onClick={() => setTab(v)}
+              onClick={() => setMatchdaySelection({ tab: v })}
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-[8px] px-3.5 py-1.5 text-[0.83rem] font-medium transition-colors duration-200",
                 tab === v ? "bg-brand-ghost text-text" : "text-muted hover:text-text",
@@ -139,6 +138,7 @@ function DateStrip({
             <button
               key={d}
               type="button"
+              aria-label={new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(date)}
               data-selected={isSelected}
               onClick={() => onSelect(d)}
               className={cn(
@@ -194,39 +194,15 @@ function DateStrip({
 function DayView({ today }: { today: string }) {
   const t = useTranslations("matchday");
   const locale = useLocale();
-  const [selected, setSelected] = useState(today);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  // Keyed on the date it answers; the previous day's list is kept on failure.
-  const [result, setResult] = useState<{
-    date: string;
-    day: DayFixtures | null;
-    failed: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    api
-      .fixturesCalendar()
-      .then((c) => setCounts(c.counts))
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .fixturesDay(selected)
-      .then((d) => !cancelled && setResult({ date: selected, day: d, failed: false }))
-      .catch(() => {
-        if (cancelled) return;
-        setResult((prev) => ({ date: selected, day: prev?.day ?? null, failed: true }));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selected]);
-
-  const loading = result?.date !== selected;
-  const failed = !loading && (result?.failed ?? false);
-  const day = result?.day ?? null;
+  const selection = useMatchdaySelection();
+  const selected = selection.day || today;
+  const calendar = useMatchdayQuery(`calendar:${today}`, api.fixturesCalendar, 900_000);
+  const counts = calendar.data?.counts ?? {};
+  const loadDay = useCallback(() => api.fixturesDay(selected), [selected]);
+  const result = useMatchdayQuery(`day:${selected}`, loadDay);
+  const { loading } = result;
+  const failed = result.failed && !result.data;
+  const day = result.data ?? null;
 
   const label =
     selected === today
@@ -243,7 +219,7 @@ function DayView({ today }: { today: string }) {
         today={today}
         selected={selected}
         counts={counts}
-        onSelect={setSelected}
+        onSelect={(day) => setMatchdaySelection({ day })}
       />
 
       <div className="mt-8 flex items-baseline gap-3">
@@ -299,24 +275,19 @@ function DayView({ today }: { today: string }) {
 
 /* ── The teams you follow ───────────────────────────────────────────────── */
 
+const loadFavorites = () => api.upcoming(21);
+
 function FavoritesView() {
   const t = useTranslations("matchday");
   const locale = useLocale();
   const { favorites, ready } = useFavorites();
-  const [days, setDays] = useState<UpcomingDay[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api
-      .upcoming(14)
-      .then((r) => setDays(r.days))
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
-  }, []);
+  const result = useMatchdayQuery("favorites:21", loadFavorites);
+  const { loading } = result;
+  const days = result.data?.days;
 
   const mine: { date: string; fixtures: Fixture[] }[] = useMemo(() => {
     if (!ready || !favorites.teams.length) return [];
-    return days
+    return (days ?? [])
       .map((d) => ({
         date: d.date,
         fixtures: d.fixtures.filter(
@@ -356,7 +327,7 @@ function FavoritesView() {
   if (!mine.length) {
     return (
       <p className="rounded-[12px] border border-border bg-surface px-5 py-12 text-center text-[0.88rem] text-muted">
-        {t("noFavoriteFixtures")}
+        {t(result.failed ? "failed" : "noFavoriteFixtures")}
       </p>
     );
   }

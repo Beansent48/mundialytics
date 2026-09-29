@@ -479,7 +479,8 @@ export const api = {
     request<{ status: string; matches: number; dataThrough: string }>("/health", 3600),
   competitions: () => request<Competition[]>("/catalogue", 3600),
   fixturesDay: (day: string) => request<DayFixtures>(`/fixtures/day?day=${day}`, 300),
-  fixturesCalendar: () => request<FixtureCalendar>("/fixtures/calendar", 900),
+  fixturesCalendar: () =>
+    request<FixtureCalendar>("/fixtures/calendar?days_back=14&days_forward=21", 900),
   upcoming: (days = 8) =>
     request<{ days: UpcomingDay[]; count: number }>(
       `/fixtures/upcoming?days=${days}`,
