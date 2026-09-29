@@ -63,6 +63,21 @@ export type MatchPrediction = {
    * everything comes from the current engine, which has already seen the match.
    */
   source?: PredictionSource | null;
+  /**
+   * Upcoming matches only, in the last hour before kick-off: the prediction was
+   * re-priced with the confirmed starting XIs (scripts/log_lineup_pass.py).
+   * `missing*` are the team's usual starters left out of the lineup.
+   */
+  lineupPass?: LineupPass | null;
+};
+
+export type LineupPass = {
+  loggedAtUtc: string;
+  kickoffUtc: string;
+  absentHome: number | null;
+  absentAway: number | null;
+  missingHome: string[];
+  missingAway: string[];
 };
 
 export type PredictionSource =

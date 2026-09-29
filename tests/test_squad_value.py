@@ -106,4 +106,4 @@ def test_historical_fit_without_asof_is_refused(tmp_path):
 
 
 def test_deployed_config_carries_the_validated_constants():
-    assert DEPLOYED_CLUB_ENGINE_KWARGS["squad_value_shift"] == {"beta": 0.1051, "kappa": -0.2148}
+    assert DEPLOYED_CLUB_ENGINE_KWARGS["squad_value_shift"] == {"beta": 0.1337, "kappa": -0.2617}

@@ -126,8 +126,13 @@ def _load_dump(tm_dir: Path):
 
 def build_history(tm_dir: Path = TM_DIR, club_map: pd.DataFrame | None = None,
                   start: str = "2019-07-01", end: str | None = None,
-                  default_eur: float = DEFAULT_EUR) -> pd.DataFrame:
-    """Weekly snapshots, production-faithful (see module docstring)."""
+                  default_eur: float = DEFAULT_EUR, freeze_june: bool = False) -> pd.DataFrame:
+    """Weekly snapshots, production-faithful (see module docstring).
+
+    freeze_june=False (the default since the live Transfermarkt source): each snapshot
+    reads valuations up to its own date, as a weekly live refresh would. True rebuilds
+    the June-frozen history of the first deployment (values as of June 12 all season).
+    """
     club_map = club_map if club_map is not None else build_club_map(tm_dir)
     club2team = dict(zip(club_map["club_id"], club_map["team"]))
     g = pd.read_csv(tm_dir / "games.csv", usecols=["competition_id", "season", "home_club_id", "away_club_id"])
@@ -150,7 +155,8 @@ def build_history(tm_dir: Path = TM_DIR, club_map: pd.DataFrame | None = None,
     end = pd.Timestamp(end) if end else max(ev["date"].max(), vv["date"].max())
     rows = []
     for s in pd.date_range(start, end, freq="W-MON"):
-        vc = min(pd.Timestamp(year=(s.year if s.month >= 7 else s.year - 1), month=6, day=12), s)
+        vc = (min(pd.Timestamp(year=(s.year if s.month >= 7 else s.year - 1), month=6, day=12), s)
+              if freeze_june else s)
         lv = vv[vv["date"] < vc].groupby("player_id").tail(1).set_index("player_id")["market_value_in_eur"]
         le = ev[ev["date"] < s].groupby("player_id").tail(1)
         le = le[(le["date"] >= s - pd.Timedelta(days=550)) & le["club"].isin(club2team)]
@@ -307,3 +313,51 @@ def upsert_snapshots(existing: pd.DataFrame | None, new: pd.DataFrame) -> pd.Dat
         return new.sort_values(["snap", "team"]).reset_index(drop=True)
     keep = existing[~existing["snap"].isin(set(new["snap"]))]
     return pd.concat([keep, new], ignore_index=True).sort_values(["snap", "team"]).reset_index(drop=True)
+
+
+# ── live: Transfermarkt squads ─────────────────────────────────────────────────
+
+_CLUB_NOISE = re.compile(r"\b(fc|cf|ac|as|ss|ssc|us|uc|sv|vfb|vfl|tsg|sc|rc|rcd|ca|cd|ud|sd|ogc|afc|"
+                         r"calcio|club|de|du|football|futbol|1|1899|1846|1904|1907|1909|04|05|07|09)\b")
+
+
+def _club_key(name: str) -> str:
+    return re.sub(r"\s+", " ", _CLUB_NOISE.sub(" ", _norm(name))).strip()
+
+
+def map_live_clubs(tm: pd.DataFrame, club_map: pd.DataFrame, current: pd.DataFrame) -> dict[int, str]:
+    """TM club_id -> canonical team for this season's clubs.
+
+    Known ids come from the history club map. A club new to the Big Five (not in the map)
+    is matched by name to the still-unmatched current team of the same competition
+    (`current`: competition, team -- from the ESPN rosters).
+    """
+    known = dict(zip(club_map["club_id"], club_map["team"]))
+    out = {int(c): known[c] for c in tm["club_id"].unique() if c in known}
+    for comp, grp in tm.drop_duplicates("club_id").groupby("competition"):
+        free = sorted(set(current.loc[current["competition"] == comp, "team"]) - set(out.values()))
+        for r in grp.itertuples():
+            if r.club_id in out or not free:
+                continue
+            k = _club_key(r.club_name)
+            scored = sorted(((SequenceMatcher(None, k, _club_key(t)).ratio(), t) for t in free), reverse=True)
+            if scored and scored[0][0] >= 0.6:
+                out[int(r.club_id)] = scored[0][1]
+                free.remove(scored[0][1])
+    return out
+
+
+def build_live(tm: pd.DataFrame, club_map: pd.DataFrame, current: pd.DataFrame,
+               snap=None) -> tuple[pd.DataFrame, list[str]]:
+    """(team snapshot rows, unmapped TM clubs) from a Transfermarkt squad scrape."""
+    snap = pd.Timestamp(snap).normalize() if snap is not None else pd.Timestamp.now().normalize()
+    ids = map_live_clubs(tm, club_map, current)
+    t = tm.assign(team=tm["club_id"].map(ids))
+    unmapped = sorted(t.loc[t["team"].isna(), "club_name"].unique())
+    t = t.dropna(subset=["team"])
+    teams = (t.groupby("team")
+              .agg(v18=("value_eur", lambda s: float(s.dropna().nlargest(TOP_N).sum())),
+                   n=("player_id", "size"), known_share=("value_eur", lambda s: float(s.notna().mean())))
+              .reset_index())
+    teams.insert(0, "snap", snap)
+    return teams[teams["v18"] > 0], unmapped

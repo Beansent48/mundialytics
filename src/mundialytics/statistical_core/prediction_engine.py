@@ -64,13 +64,17 @@ DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     "goal_temper": 1.05,
     "xg_rate_kwargs": {"use_ewma": True},
     "coherent_markets": True,
-    # squad market value (2026-09-29): weekly-refit LOSO 2020/21-2025/26, values
-    # rebuilt the way production sees them -> 1X2 RPS 0.2006 -> 0.1999 (5/6),
-    # O/U unchanged; season forecasts at matchday 5 improve too (title Brier 6/6,
-    # top 4 and relegation 5/6). Constants fitted on all six seasons. Reads
-    # data/processed/squad_values.csv (scripts/build_squad_values.py); without the
-    # file the lambdas are left alone. See scripts/squad_value/README.md.
-    "squad_value_shift": {"beta": 0.1051, "kappa": -0.2148},
+    # squad market value: weekly-refit LOSO 2020/21-2025/26 on values as a weekly
+    # live Transfermarkt read sees them -> 1X2 RPS 0.2006 -> 0.1995 (5/6), O/U
+    # unchanged (June-frozen values, the first deployment: 0.1999). Constants
+    # fitted on all six seasons. Reads data/processed/squad_values.csv
+    # (scripts/build_squad_values.py); without the file the lambdas are left alone.
+    # See scripts/squad_value/README.md.
+    "squad_value_shift": {"beta": 0.1337, "kappa": -0.2617},
+    # regulars missing from the confirmed XI, used only by the pre-kickoff lineup
+    # pass (scripts/log_lineup_pass.py): on top of the squad value, 0.1995 ->
+    # 0.1989, 6/6 seasons, O/U unchanged (scripts/lineup_pass/backtest_absence.py).
+    "lineup_shift": {"theta": -0.3647},
 }
 
 
@@ -247,6 +251,7 @@ class PredictionEngine:
         goal_temper: float | None = None,  # marginal pmf tempering >1 (goals are sub-Poisson, Pearson ~0.91); None = off
         coherent_markets: bool = False,  # read every goal market from a matrix that agrees with the sharpened 1X2
         squad_value_shift: dict | None = None,  # {"beta", "kappa"[, "path"]}: tilt lambdas by squad market value; None = off
+        lineup_shift: dict | None = None,  # {"theta"}: tilt by regulars missing from the XI (lineup pass); None = off
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -298,6 +303,12 @@ class PredictionEngine:
         # 1X2 RPS -0.0008, 5/6 seasons, O/U unchanged. See scripts/squad_value/README.md.
         self.squad_value_shift = dict(squad_value_shift) if squad_value_shift else None
         self.squad_values_: dict[str, float] = {}
+        # Regulars missing from the starting XI (known ~1h before kick-off, so only
+        # the pre-kickoff lineup pass passes it). s = theta*(absent_home - absent_away),
+        # a total-goals-preserving tilt like the squad value. Backtest (production
+        # definition, on top of the squad-value shift): 1X2 RPS better in 6 of 6
+        # seasons, O/U unchanged. See scripts/lineup_pass/backtest_absence.py.
+        self.lineup_shift = dict(lineup_shift) if lineup_shift else None
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -442,6 +453,17 @@ class PredictionEngine:
             return lh, la, False
         s = (float(shift.get("beta", 0.0)) * np.log(vh / va)
              + float(shift.get("kappa", 0.0)) * np.log(lh / la))
+        return lh * float(np.exp(s / 2)), la * float(np.exp(-s / 2)), True
+
+    def _lineup_tilt(self, lh: float, la: float,
+                     absent: tuple[float, float] | None) -> tuple[float, float, bool]:
+        shift = getattr(self, "lineup_shift", None)   # engines pickled before it existed
+        if not shift or absent is None:
+            return lh, la, False
+        ah, aa = absent
+        if ah is None or aa is None:
+            return lh, la, False
+        s = float(shift.get("theta", 0.0)) * (float(ah) - float(aa))
         return lh * float(np.exp(s / 2)), la * float(np.exp(-s / 2)), True
 
     def _learn_blend_weight(
@@ -616,8 +638,14 @@ class PredictionEngine:
         away_team: str,
         competition: str = "unknown",
         neutral: bool = False,
+        lineup_absent: tuple[float, float] | None = None,
     ) -> MatchPrediction:
-        """Full match prediction: 1X2, goals, events."""
+        """Full match prediction: 1X2, goals, events.
+
+        lineup_absent: (home, away) share of each side's regular XI missing from the
+        confirmed lineup (features/lineup_absence.py). Only the pre-kickoff lineup pass
+        has it; None leaves the prediction as it would be in the morning.
+        """
         h, a = canonical_name(home_team), canonical_name(away_team)
 
         # Goal lambdas. When the dedicated xG-rate predictor is available it takes
@@ -648,6 +676,9 @@ class PredictionEngine:
         lh, la, tilted = self._squad_value_tilt(h, a, lh, la)
         if tilted:
             model_src += "_sv"
+        lh, la, lined = self._lineup_tilt(lh, la, lineup_absent)
+        if lined:
+            model_src += "_xi"
 
         probs, dist = self.markets_from_lambdas(lh, la)
 
