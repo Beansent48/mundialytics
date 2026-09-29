@@ -39,13 +39,40 @@ when he moves club in the summer. Matching reaches 82% of players, with 41–59%
 promoted sides (Paderborn, Elversberg, Le Mans, Troyes, Santander, Málaga): their D2 players
 are simply not in the dump.
 
+## Production-faithful test (2026-09-29, second session)
+
+`tm_value_prod.py DEFAULT_EUR MATCH_LOSS` simulates what production can see. A player counts
+only if, before the June cutoff, he was at a club **playing a covered top-flight league that
+season**. That is point-in-time from `games.csv`, because `player_club_domestic_competition_id`
+on the valuations is the club's CURRENT league (Leif Davis shows "GB1" at Ipswich in
+League One). Everyone else gets DEFAULT_EUR. Visible share is 81.7% (production matching:
+82%). Promoted sides average 71%, with lows of 13–36% (Clermont, Cádiz, Spezia), as harsh as
+2026/27.
+
+`tm_test_prod.py` (value+stretch, LOSO):
+
+| Value file | pooled dRPS | seasons better | promoted | rest |
+|---|---|---|---|---|
+| frozen June, full visibility | −0.00082 | 5/6 | −0.00124 | −0.00066 |
+| invisible = 0.5 M€ | −0.00077 | 5/6 | −0.00097 | −0.00069 |
+| invisible = 1 M€ | −0.00079 | 5/6 | −0.00105 | −0.00069 |
+| invisible = 2 M€ | −0.00083 | 5/6 | −0.00125 | −0.00068 |
+| 1 M€ + 10% of visible lost at random | −0.00075 | 5/6 | −0.00112 | −0.00061 |
+
+O/U 2.5 is unchanged (the shift keeps totals). **The roster × June-value path is viable.**
+
+Bundesliga (`tm_test_league.py`): in every fold it fits β≈0 and κ≈0, and the global shift
+makes it worse (+0.0014 to +0.0017). The data is fine: corr(Δvalue, goal residual) is +0.10
+there vs +0.11 to +0.15 elsewhere. Per-league params, shrunk params, and skipping the
+Bundesliga all reach about −0.0010 pooled but only **4/6** seasons, so they fail the bar.
+Keep the global version.
+
 ## Next steps
 
-1. `tm_value_prod.py DEFAULT_EUR` (written, **not run yet**): the backtest simulates the
-   production limitation. A player only counts if he had been valued at a covered top-flight
-   club before the date; everyone else gets a default value. Then re-run `tm_test.py` on that
-   file. If the gain survives, the roster × June-value path is production-viable.
-2. Try a per-league β (the Bundesliga regression).
-3. If it passes: opt-in engine flag, weekly squad-value build in `update_season`, README
-   numbers, and debutant handling (the 4 unmapped 2026/27 clubs take their value from rosters
-   anyway).
+1. ~~Production-faithful backtest~~ passed (see above).
+2. ~~Per-league β~~ fails the bar; keep the global version.
+3. Implement it opt-in. A squad-value builder turns ESPN rosters × TM values
+   (`roster_value.py`, 82% matched, unmatched players at 1–2 M€) into a file refreshed in
+   `update_season`. The engine gets a `squad_value_shift` parameter (default None =
+   byte-identical) with β/κ fitted on all six seasons. Validate end-to-end on the
+   weekly-refit harness before switching it on, then update the README numbers.
