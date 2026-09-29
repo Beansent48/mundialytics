@@ -46,6 +46,8 @@ LOOKAHEAD_MIN = 75
 WAKE_BEFORE_MIN = 70     # the watcher starts polling this long before a kick-off
 POLL_MIN = 5
 LOCK = ROOT / "data/processed/logs/lineup_watch.lock"
+PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
+ROSTERS = ROOT / "data/external/advanced/espn/espn_team_rosters_current.csv"
 
 
 def _canon():
@@ -180,8 +182,34 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
+def fixtures_logged_ahead(now: pd.Timestamp, horizon_h: int) -> int | None:
+    """Big Five fixtures the morning logger wrote for the next `horizon_h` hours, from the
+    local log -- no network. None when the local files cannot answer (then ask ESPN).
+
+    The daily refresh logs every fixture of the coming days before this runs (and fails
+    loudly when it misses one), so an empty answer means no match today.
+    """
+    try:
+        log = pd.read_csv(PRED_LOG, usecols=["fecha", "kickoff_utc", "home", "mercado"], low_memory=False)
+        big5 = set(pd.read_csv(ROSTERS, usecols=["team"])["team"].str.lower())
+    except Exception:
+        return None
+    x = log[(log["mercado"] == "1X2") & log["home"].str.lower().isin(big5)]
+    kick = pd.to_datetime(x["kickoff_utc"], errors="coerce", utc=True)
+    end = now + pd.Timedelta(hours=horizon_h)
+    by_kick = (kick >= now) & (kick <= end)
+    days = {now.tz_convert("Europe/Madrid").strftime("%Y-%m-%d"), end.tz_convert("Europe/Madrid").strftime("%Y-%m-%d")}
+    by_day = kick.isna() & x["fecha"].astype(str).isin(days)
+    return int((by_kick | by_day).sum())
+
+
 def watch(horizon_h: int = 20) -> int:
     """Sleep until each kick-off's lineup window, poll through it, exit after the last."""
+    ahead = fixtures_logged_ahead(pd.Timestamp.now(tz="UTC"), horizon_h)
+    if ahead == 0:
+        print(f"watch: no Big Five fixture logged for the next {horizon_h} h; exiting without "
+              f"contacting ESPN", flush=True)
+        return 0
     if LOCK.exists():
         try:
             other = int(LOCK.read_text().strip())

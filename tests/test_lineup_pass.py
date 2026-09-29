@@ -125,6 +125,7 @@ def test_watcher_sleeps_to_the_window_polls_and_exits(tmp_path, monkeypatch):
     passes: list = []
 
     monkeypatch.setattr(L, "LOCK", tmp_path / "watch.lock")
+    monkeypatch.setattr(L, "fixtures_logged_ahead", lambda now, h: 1)   # the morning log has the match
     monkeypatch.setattr(L.pd.Timestamp, "now", classmethod(lambda cls, tz=None: clock["now"]))
     monkeypatch.setattr(L, "upcoming", lambda now, minutes: [{"event_id": "1", "code": "eng.1",
                                                                "competition": "Premier League", "kickoff": kickoff}])
@@ -143,3 +144,25 @@ def test_watcher_sleeps_to_the_window_polls_and_exits(tmp_path, monkeypatch):
     assert all(b - a == pd.Timedelta(minutes=L.POLL_MIN) for a, b in zip(passes, passes[1:]))
     assert "1" in logged and len(passes) == 4
     assert not (tmp_path / "watch.lock").exists()
+
+
+def test_no_fixture_logged_means_no_network(tmp_path, monkeypatch):
+    """On a day the morning log holds no Big Five fixture the watcher exits without
+    asking ESPN anything."""
+    import log_lineup_pass as L
+
+    pd.DataFrame([{"fecha": "2026-10-22", "kickoff_utc": "2026-10-22T19:00Z", "home": "braga", "mercado": "1X2"},
+                  {"fecha": "2026-10-10", "kickoff_utc": "2026-10-10T14:00Z", "home": "sunderland", "mercado": "1X2"}]
+                 ).to_csv(tmp_path / "log.csv", index=False)
+    pd.DataFrame({"team": ["sunderland", "brighton"]}).to_csv(tmp_path / "rosters.csv", index=False)
+    monkeypatch.setattr(L, "PRED_LOG", tmp_path / "log.csv")
+    monkeypatch.setattr(L, "ROSTERS", tmp_path / "rosters.csv")
+    assert L.fixtures_logged_ahead(pd.Timestamp("2026-10-10T06:00Z"), 20) == 1
+    assert L.fixtures_logged_ahead(pd.Timestamp("2026-10-22T06:00Z"), 20) == 0   # braga is not Big Five
+
+    def boom(*a, **k):
+        raise AssertionError("ESPN must not be called")
+
+    monkeypatch.setattr(L, "upcoming", boom)
+    monkeypatch.setattr(L.pd.Timestamp, "now", classmethod(lambda cls, tz=None: pd.Timestamp("2026-10-22T06:00Z")))
+    assert L.watch() == 0
