@@ -17,7 +17,7 @@ Two survived.
   - β/κ refitted on the fresh history: 0.1337 / −0.2617.
   - `providers/transfermarkt.py`; `build_squad_values.py` refreshes weekly
     (`--force-live`, `--offline`).
-- **Pre-kickoff lineup pass** (`scripts/log_lineup_pass.py --watch`, started detached by the daily refresh: it sleeps until 70 min before each kick-off, polls every 5 min until both XIs are out, and exits after the last match -- no all-day polling, no extra scheduled task).
+- **Pre-kickoff lineup pass** (`scripts/log_lineup_pass.py --watch`, started detached by the daily refresh: it sleeps until 70 min before each kick-off, polls every 5 min until both XIs are out, and exits after the last match -- no all-day polling, no extra scheduled task. It first reads the morning log locally: on a day with no Big Five fixture it exits without a single network request).
   About an hour before kick-off, once both XIs are on ESPN, each Big Five match
   is re-priced. The new input is the share of each side's usual starters (most
   starts in the last 10 league matches) missing from the XI, applied as a
