@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.59.0 — Market drift report (2026-09-29)
+
+### Added
+- **`scripts/report_market_drift.py`, daily step 7b4 (optional,
+  informational).** Why: the 2026/27 shots bias sat in the pre-kickoff log
+  for three weeks before a one-off scorecard caught it. Hit rates hide a bias
+  that pushes every line the same way; this report looks for exactly that.
+  - Per-match counts: goals, shots, shots on target, corners, fouls and
+    yellows, logged expectation vs result, per league, as a z-score.
+  - Calibration: every over/under line and player market, predicted vs
+    happened, as a z-score.
+  - Windows are the season and the last 28 days. An alert fires at |z| ≥ 3
+    on 60+ observations. Output goes to
+    `data/processed/logs/market_drift.json`.
+  - Replayed as of 2026-09-07, the first date with settled pre-kickoff
+    rows, it already flagged player shots (8% said, 14% happened, z = +5.0).
+    Today it flags every shots total line and both player-shot lines.
+  - The per-match counts start with the next round: the log has carried the
+    expected counts only since 2026-09-14.
+
 ## v0.58.0 — This season's penalties for the player model (2026-09-29)
 
 ### Fixed
