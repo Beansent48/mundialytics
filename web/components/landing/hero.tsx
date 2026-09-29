@@ -4,6 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { buttonStyles } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { Link } from "@/i18n/navigation";
+import { api } from "@/lib/api";
 import { STATS } from "@/lib/stats";
 import { cn, formatNumber } from "@/lib/utils";
 
@@ -11,8 +12,14 @@ export async function Hero() {
   const t = await getTranslations("landing");
   const locale = await getLocale();
 
+  // The live count from the API; the constant is only for when it is down.
+  const matches = await api
+    .health()
+    .then((h) => h.matches)
+    .catch(() => STATS.matches);
+
   const stats = [
-    { value: formatNumber(STATS.matches, locale), label: t("stats.matches") },
+    { value: formatNumber(matches, locale), label: t("stats.matches") },
     { value: String(STATS.seasons), label: t("stats.seasons") },
     { value: `${STATS.markets}+`, label: t("stats.markets") },
     { value: String(STATS.leagues), label: t("stats.leagues") },
@@ -82,7 +89,7 @@ export async function Hero() {
         <Reveal delay={0.3}>
           <p className={cn("mt-5 text-[0.78rem] text-dim")}>
             {t("heroNote", {
-              matches: formatNumber(STATS.matches, locale),
+              matches: formatNumber(matches, locale),
               seasons: STATS.seasons,
             })}
           </p>

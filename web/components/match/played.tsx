@@ -181,7 +181,21 @@ export function PlayedMatch({ match }: { match: Match }) {
     { id: "X", label: t("draw"), p: pred.probabilities.draw, color: "var(--draw)" },
     { id: "2", label: match.away, p: pred.probabilities.away, color: "var(--away)" },
   ];
-  const pick = outcomes.reduce((a, b) => (b.p > a.p ? b : a));
+  // Grade what was said BEFORE kick-off. The engine serving this page has been
+  // fitted on this match, so its numbers are only shown, never graded, unless
+  // they were rebuilt from the pre-kickoff log.
+  const source = pred.source ?? { kind: "recomputed" as const };
+  const graded = source.kind !== "recomputed";
+  const partial = source.kind === "logged-partial";
+  const recomputedDistribution = source.kind !== "logged";
+  const modelPick = outcomes.reduce((a, b) => (b.p > a.p ? b : a));
+  const pick =
+    source.kind === "logged-partial"
+      ? {
+          ...outcomes.find((o) => o.id === source.pick)!,
+          p: source.pickProbability,
+        }
+      : modelPick;
   const resultHit = pick.id === outcome;
 
   // Where the real score fell in our distribution of likeliest scorelines.
@@ -191,7 +205,7 @@ export function PlayedMatch({ match }: { match: Match }) {
   const rankProb = rank > 0 ? pred.scorelines[rank - 1].p : 0;
   const xgTotal = pred.expectedGoals.home + pred.expectedGoals.away;
 
-  const calls = [
+  const allCalls = [
     {
       market: t("result"),
       said: pick.id,
@@ -221,6 +235,24 @@ export function PlayedMatch({ match }: { match: Match }) {
       hit: bothScored === pred.goals.btts >= 0.5,
     },
   ];
+
+  // A partial log holds the 1X2 pick and the O/U 2.5 call; nothing else was said.
+  const over25Logged = source.kind === "logged-partial" ? source.over25 : null;
+  const calls = partial
+    ? [
+        allCalls[0],
+        ...(over25Logged === null
+          ? []
+          : [
+              {
+                ...allCalls[1],
+                said: over25Logged >= 0.5 ? t("over") : t("under"),
+                conf: Math.max(over25Logged, 1 - over25Logged),
+                hit: total > 2.5 === over25Logged >= 0.5,
+              },
+            ]),
+      ]
+    : allCalls;
 
   const predByKey = new Map(pred.expectedStats.map((s) => [s.key, s]));
   const hits = calls.filter((c) => c.hit).length;
@@ -367,70 +399,85 @@ export function PlayedMatch({ match }: { match: Match }) {
         <p className={eyebrow}>{t("sectionCall")}</p>
         <div className="mb-6 mt-2 flex items-baseline gap-3">
           <h2 className={heading}>{t("callsTitle")}</h2>
-          <span className="text-[0.78rem] text-dim">
-            {t("callsScore", { hits, total: calls.length })}
-          </span>
-        </div>
-
-        <div className="flex h-16 overflow-hidden rounded-[12px] sm:h-20">
-          {outcomes.map((o) => {
-            const happened = o.id === outcome;
-            return (
-              <div
-                key={o.id}
-                className={cn(
-                  "relative flex flex-col items-center justify-center transition-[flex-grow] duration-700 ease-[var(--ease-out-quint)]",
-                  // The outcome that happened is full colour with white on top; the
-                  // others are a pale tint of their colour with legible muted text —
-                  // dimming the whole segment with opacity left white text unreadable
-                  // over the pale result in the light theme.
-                  happened ? "text-white" : "text-muted",
-                )}
-                style={{
-                  flexGrow: o.p,
-                  flexBasis: 0,
-                  background: happened
-                    ? o.color
-                    : `color-mix(in srgb, ${o.color} 16%, var(--surface))`,
-                }}
-              >
-                <span className="text-[1.15rem] font-semibold leading-none sm:text-[1.5rem]">
-                  {pct(o.p)}
-                </span>
-                {happened ? (
-                  <span className="mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.12em]">
-                    {t("happened")}
-                  </span>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-2.5 flex justify-between text-[0.78rem] text-muted">
-          {outcomes.map((o) => (
-            <span
-              key={o.id}
-              className={cn(
-                "max-w-[33%] truncate",
-                o.id === outcome ? "font-semibold text-text" : undefined,
-              )}
-            >
-              {o.label}
+          {graded ? (
+            <span className="text-[0.78rem] text-dim">
+              {t("callsScore", { hits, total: calls.length })}
             </span>
-          ))}
+          ) : null}
         </div>
+        <p className="-mt-3 mb-6 text-[0.8rem] text-dim">
+          {source.kind === "recomputed"
+            ? t("sourceRecomputed")
+            : t(source.kind === "logged" ? "sourceLogged" : "sourceLoggedPartial", {
+                date: source.loggedAt.slice(0, 10),
+              })}
+        </p>
+
+        {partial ? null : (
+          <>
+            <div className="flex h-16 overflow-hidden rounded-[12px] sm:h-20">
+              {outcomes.map((o) => {
+                const happened = o.id === outcome;
+                return (
+                  <div
+                    key={o.id}
+                    className={cn(
+                      "relative flex flex-col items-center justify-center transition-[flex-grow] duration-700 ease-[var(--ease-out-quint)]",
+                      // The outcome that happened is full colour with white on top; the
+                      // others are a pale tint of their colour with legible muted text —
+                      // dimming the whole segment with opacity left white text unreadable
+                      // over the pale result in the light theme.
+                      happened ? "text-white" : "text-muted",
+                    )}
+                    style={{
+                      flexGrow: o.p,
+                      flexBasis: 0,
+                      background: happened
+                        ? o.color
+                        : `color-mix(in srgb, ${o.color} 16%, var(--surface))`,
+                    }}
+                  >
+                    <span className="text-[1.15rem] font-semibold leading-none sm:text-[1.5rem]">
+                      {pct(o.p)}
+                    </span>
+                    {happened ? (
+                      <span className="mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.12em]">
+                        {t("happened")}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2.5 flex justify-between text-[0.78rem] text-muted">
+              {outcomes.map((o) => (
+                <span
+                  key={o.id}
+                  className={cn(
+                    "max-w-[33%] truncate",
+                    o.id === outcome ? "font-semibold text-text" : undefined,
+                  )}
+                >
+                  {o.label}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
 
         <p className="mt-4 flex items-center gap-2 text-[0.85rem] text-muted">
-          <span
-            className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded-full",
-              resultHit
-                ? "bg-positive/15 text-positive"
-                : "bg-negative/15 text-negative",
-            )}
-          >
-            {resultHit ? <Check className="size-3" /> : <X className="size-3" />}
-          </span>
+          {graded ? (
+            <span
+              className={cn(
+                "flex size-5 shrink-0 items-center justify-center rounded-full",
+                resultHit
+                  ? "bg-positive/15 text-positive"
+                  : "bg-negative/15 text-negative",
+              )}
+            >
+              {resultHit ? <Check className="size-3" /> : <X className="size-3" />}
+            </span>
+          ) : null}
           {t("favouriteWas", { pick: pick.label, p: pct(pick.p) })}
         </p>
 
@@ -439,7 +486,7 @@ export function PlayedMatch({ match }: { match: Match }) {
           <div className="grid grid-cols-2 divide-x divide-border">
             <div className="px-5 py-5">
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-dim">
-                {t("predicted")}
+                {t(recomputedDistribution ? "recomputedScore" : "predicted")}
               </p>
               <p className="font-display mt-2 text-[1.7rem] leading-none tabular-nums text-muted">
                 {pred.headline.likelyScore}
@@ -459,6 +506,7 @@ export function PlayedMatch({ match }: { match: Match }) {
               {rank > 0
                 ? t("scorelineRank", { rank, p: pct(rankProb) })
                 : t("scorelineOutside")}
+              {partial ? ` · ${t("recomputedTag")}` : ""}
             </span>
             <span className="tabular-nums">
               {t("goalsExpectedReal", { expected: xgTotal.toFixed(1), real: total })}
@@ -485,7 +533,7 @@ export function PlayedMatch({ match }: { match: Match }) {
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      c.hit ? "bg-positive" : "bg-negative",
+                      !graded ? "bg-dim" : c.hit ? "bg-positive" : "bg-negative",
                     )}
                     style={{ width: `${Math.round(c.conf * 100)}%` }}
                   />
@@ -494,16 +542,18 @@ export function PlayedMatch({ match }: { match: Match }) {
                   {t("realWas", { value: c.real })}
                 </p>
               </div>
-              <span
-                className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full",
-                  c.hit
-                    ? "bg-positive/15 text-positive"
-                    : "bg-negative/15 text-negative",
-                )}
-              >
-                {c.hit ? <Check className="size-3.5" /> : <X className="size-3.5" />}
-              </span>
+              {graded ? (
+                <span
+                  className={cn(
+                    "flex size-6 shrink-0 items-center justify-center rounded-full",
+                    c.hit
+                      ? "bg-positive/15 text-positive"
+                      : "bg-negative/15 text-negative",
+                  )}
+                >
+                  {c.hit ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
@@ -568,17 +618,21 @@ export function PlayedMatch({ match }: { match: Match }) {
                           {p.away}
                         </span>
                       </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <RangeHit actual={s.home} range={p.homeRange} />
-                        <RangeHit actual={s.away} range={p.awayRange} />
-                      </div>
+                      {recomputedDistribution ? null : (
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <RangeHit actual={s.home} range={p.homeRange} />
+                          <RangeHit actual={s.away} range={p.awayRange} />
+                        </div>
+                      )}
                     </div>
                   ) : null}
                 </div>
               );
             })}
           </div>
-          <p className="mt-4 text-[0.78rem] text-dim">{t("rangeNote")}</p>
+          <p className="mt-4 text-[0.78rem] text-dim">
+            {recomputedDistribution ? t("rangeNoteRecomputed") : t("rangeNote")}
+          </p>
         </Reveal>
       ) : null}
     </div>

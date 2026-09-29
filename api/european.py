@@ -80,12 +80,17 @@ def load_state(comp_id: str, year: int) -> dict:
     elo_by_norm = {normalize_club(k): v for k, v in elo_all.items()}
 
     raw = fetch_season_fixtures(ROOT, comp_id, year)
-    league, ko, teams = None, None, {}
+    league, ko, teams, unresolved = None, None, {}, []
     if raw is not None:
         league, ko = parse_fixturedownload(raw, resolver)
         real = sorted(set(league.home) | set(league.away))
         teams = {t: elo_by_norm.get(normalize_club(t)) for t in real}
         teams = {t: e for t, e in teams.items() if e is not None}
+        # A club the resolver cannot place is dropped from the field along with
+        # every fixture it plays, and the simulation still runs -- on 35 teams.
+        # Name them so the page and the refresh log can say so.
+        listed = set(raw["Home Team"].astype(str)) | set(raw["Away Team"].astype(str))
+        unresolved = sorted(n for n in listed if resolver(n) is None)
 
     return {
         "calib": calib,
@@ -96,6 +101,7 @@ def load_state(comp_id: str, year: int) -> dict:
         "league": league,
         "ko": ko,
         "teams": teams,
+        "unresolved": unresolved,
     }
 
 
@@ -116,7 +122,8 @@ def _cache_path(comp_id: str, year: int) -> Path:
 
 def forecast(comp_id: str, year: int, n_sims: int = 2000) -> dict:
     """Round-by-round probabilities for every team, from the current state."""
-    from mundialytics.statistical_core.competition.european import EuropeanTournament
+    from mundialytics.statistical_core.competition.european import (
+        FORMATS, EuropeanTournament)
 
     state = load_state(comp_id, year)
     league, ko, teams = state["league"], state["ko"], state["teams"]
@@ -172,6 +179,10 @@ def forecast(comp_id: str, year: int, n_sims: int = 2000) -> dict:
         "leaguePhaseTotal": int(len(league)) if league is not None else 0,
         "preDraw": pre_draw,
         "simulations": n_sims,
+        # Clubs on the calendar we could not rate. Empty when the field is whole;
+        # otherwise the table is missing them and every match they play.
+        "expectedTeams": FORMATS[comp_id]["n"],
+        "unresolved": state["unresolved"],
         "standings": rows,
     }
     try:

@@ -120,14 +120,29 @@ def fetch_current_elo(root: str | Path, date_str: str | None = None) -> dict[str
             if local.exists():
                 loc = pd.read_csv(local).dropna(subset=["club", "elo"])
                 if len(loc):
-                    return dict(zip(loc["club"].astype(str), loc["elo"].astype(float)))
+                    return _with_manual_seeds(
+                        root, dict(zip(loc["club"].astype(str), loc["elo"].astype(float))))
             # otherwise the most recent cached snapshot, so the layer still works
             snaps = sorted(daily_dir.glob("*.csv")) if daily_dir.exists() else []
             if not snaps:
                 raise
             df = pd.read_csv(snaps[-1])
     df = df.dropna(subset=["Club", "Elo"])
-    return dict(zip(df["Club"].astype(str), df["Elo"].astype(float)))
+    return _with_manual_seeds(root, dict(zip(df["Club"].astype(str), df["Elo"].astype(float))))
+
+
+def _with_manual_seeds(root, elo: dict[str, float]) -> dict[str, float]:
+    """Add the participants ClubElo never rated (data/curated/clubelo_manual_seeds.csv).
+
+    Only fills gaps: a real rating always wins.
+    """
+    from mundialytics.ratings.clubelo_local import load_manual_seeds
+
+    by_norm = {normalize_club(k) for k in elo}
+    for club, value in load_manual_seeds(root).items():
+        if normalize_club(club) not in by_norm:
+            elo[club] = value
+    return elo
 
 
 KO_ROUNDS = ["playoff", "r16", "qf", "sf", "final"]
@@ -151,11 +166,23 @@ def normalize_club(s: str) -> str:
     return re.sub(r"[^a-z]", "", t.lower())
 
 
+def _word_runs(name: str) -> set[str]:
+    """Every run of consecutive whole words of a club name, normalised.
+
+    "FC Bayern Munich" -> {"fc", "bayern", "munich", "fcbayern", "bayernmunich", ...}
+    """
+    words = [normalize_club(w) for w in re.split(r"[\s\-./&]+", str(name))]
+    words = [w for w in words if w]
+    return {"".join(words[i:j]) for i in range(len(words))
+            for j in range(i + 1, len(words) + 1)}
+
+
 def make_resolver(elo_names) -> "callable":
     """fixturedownload club name -> ClubElo name (aliases + normalized + substring)."""
     from mundialytics.statistical_core.competition.club_aliases import CLUB_ALIASES
     names = set(elo_names)
     by_norm = {normalize_club(n): n for n in names}
+    word_runs = {n: _word_runs(n) for n in names}
 
     def resolver(name: str):
         low = str(name).lower().strip()
@@ -175,8 +202,14 @@ def make_resolver(elo_names) -> "callable":
             an = normalize_club(alias)
             if an in by_norm:
                 return by_norm[an]
-        cands = [v for k, v in by_norm.items() if n in k or k in n]
-        return cands[0] if len(cands) == 1 else None
+        # The known name inside the queried one ("Roma" in "AS Roma") matches
+        # anywhere. The other way round it must be whole words: "Bayern" is a
+        # word of "Bayern Munich", but "Iberia 1999" (Georgia) normalises to
+        # "iberia", which only sits INSIDE "Tiberias" -- and plain substring
+        # matching handed it Ironi Tiberias (Israel).
+        cands = {v for k, v in by_norm.items() if k and k in n}
+        cands |= {v for v, runs in word_runs.items() if n in runs}
+        return next(iter(cands)) if len(cands) == 1 else None
 
     return resolver
 
