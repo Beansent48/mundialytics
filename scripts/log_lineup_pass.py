@@ -13,12 +13,18 @@ graded next to it (scripts/evaluate_lineup_pass.py).
 Backtest of the signal: 1X2 RPS better in 6 of 6 seasons on top of the squad-value
 shift, O/U unchanged (scripts/lineup_pass/backtest_absence.py).
 
-Run every ~10 minutes on match days (run_lineup_pass.ps1 / the scheduled task):
-    python scripts/log_lineup_pass.py [--lookahead 75] [--dry-run]
+How it runs: the daily refresh (run_update.ps1) starts it once with --watch. The watcher
+reads the day's Big Five kick-offs, sleeps until 70 minutes before the first, polls every
+5 minutes until both XIs are out, sleeps again until the next match, and exits after the
+last kick-off (or at once on a day without matches). One watcher at a time (a lock file).
+    python scripts/log_lineup_pass.py --watch          # the daily watcher
+    python scripts/log_lineup_pass.py [--dry-run]      # one pass now (manual / debugging)
 """
 
 import argparse
+import os
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -37,6 +43,9 @@ LOG = ROOT / "data/processed/logs/lineup_pass_log.csv"
 HISTORY = ROOT / "data/external/advanced/espn/espn_player_match_current.csv"
 ALIASES = ROOT / "data/curated/fixture_team_aliases.csv"
 LOOKAHEAD_MIN = 75
+WAKE_BEFORE_MIN = 70     # the watcher starts polling this long before a kick-off
+POLL_MIN = 5
+LOCK = ROOT / "data/processed/logs/lineup_watch.lock"
 
 
 def _canon():
@@ -75,18 +84,19 @@ def confirmed_xis(summary: dict, canon) -> dict[str, dict] | None:
     return sides if {"home", "away"} <= set(sides) else None
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--lookahead", type=int, default=LOOKAHEAD_MIN)
-    ap.add_argument("--dry-run", action="store_true", help="print, do not write the log")
-    args = ap.parse_args()
+def logged_ids() -> set[str]:
+    return set(pd.read_csv(LOG, dtype={"event_id": str})["event_id"]) if LOG.exists() else set()
+
+
+def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
+    """One pass: log every match in the window whose two XIs are out. Returns rows logged."""
     now = pd.Timestamp.now(tz="UTC")
     canon = _canon()
 
-    done = set(pd.read_csv(LOG, dtype={"event_id": str})["event_id"]) if LOG.exists() else set()
-    todo = [e for e in upcoming(now, args.lookahead) if e["event_id"] not in done]
+    done = logged_ids()
+    todo = [e for e in upcoming(now, lookahead) if e["event_id"] not in done]
     if not todo:
-        print(f"{now:%Y-%m-%d %H:%M} UTC: nothing kicking off in the next {args.lookahead} min "
+        print(f"{now:%Y-%m-%d %H:%M} UTC: nothing kicking off in the next {lookahead} min "
               f"without a lineup pass", flush=True)
         return 0
 
@@ -134,7 +144,7 @@ def main() -> int:
         print(f"  {h} vs {a}: missing regulars {len(missing['home'])}/{len(missing['away'])} -> "
               f"1X2 {p.p_home_win:.2f}/{p.p_draw:.2f}/{p.p_away_win:.2f} ({p.model_source})", flush=True)
 
-    if rows and not args.dry_run:
+    if rows and not dry_run:
         out = pd.DataFrame(rows)
         if LOG.exists():
             out = pd.concat([pd.read_csv(LOG, dtype={"event_id": str}), out], ignore_index=True)
@@ -142,6 +152,80 @@ def main() -> int:
         out.to_csv(LOG, index=False)
         print(f"logged {len(rows)} match(es) to {LOG}", flush=True)
         revalidate_web()
+    return len(rows)
+
+
+def _pid_alive(pid: int) -> bool:
+    """Whether a process is still running, without touching it.
+
+    Not os.kill(pid, 0): on Windows that TERMINATES the process.
+    """
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        h = k32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        code = ctypes.c_ulong()
+        ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+        k32.CloseHandle(h)
+        return bool(ok) and code.value == 259     # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)                           # POSIX: signal 0 only checks
+    except OSError:
+        return False
+    return True
+
+
+def watch(horizon_h: int = 20) -> int:
+    """Sleep until each kick-off's lineup window, poll through it, exit after the last."""
+    if LOCK.exists():
+        try:
+            other = int(LOCK.read_text().strip())
+        except ValueError:
+            other = -1
+        if other != os.getpid() and _pid_alive(other):
+            print(f"another watcher is running (pid {other}); exiting", flush=True)
+            return 0
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    LOCK.write_text(str(os.getpid()))
+    try:
+        schedule = upcoming(pd.Timestamp.now(tz="UTC"), horizon_h * 60)
+        print(f"watch: {len(schedule)} Big Five kick-off(s) in the next {horizon_h} h", flush=True)
+        while True:
+            now = pd.Timestamp.now(tz="UTC")
+            done = logged_ids()
+            left = [e for e in schedule if e["kickoff"] > now and e["event_id"] not in done]
+            if not left:
+                print(f"{now:%H:%M} UTC: no kick-off left to watch; done", flush=True)
+                return 0
+            wake = min(e["kickoff"] for e in left) - pd.Timedelta(minutes=WAKE_BEFORE_MIN)
+            if now < wake:
+                # sleep in slices so the log shows it is alive and a clock change is absorbed
+                time.sleep(min((wake - now).total_seconds(), 1800))
+                continue
+            try:
+                run_pass(LOOKAHEAD_MIN)
+            except Exception as exc:  # ESPN hiccup: keep watching, the next poll retries
+                print(f"{now:%H:%M} UTC: pass failed ({type(exc).__name__}: {exc}); retrying", flush=True)
+            time.sleep(POLL_MIN * 60)
+    finally:
+        if LOCK.exists() and LOCK.read_text().strip() == str(os.getpid()):
+            LOCK.unlink()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--watch", action="store_true", help="the daily watcher (see the module docstring)")
+    ap.add_argument("--lookahead", type=int, default=LOOKAHEAD_MIN)
+    ap.add_argument("--dry-run", action="store_true", help="print, do not write the log")
+    args = ap.parse_args()
+    if args.watch:
+        return watch()
+    run_pass(args.lookahead, args.dry_run)
     return 0
 
 
