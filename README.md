@@ -130,7 +130,7 @@ pre-kickoff prediction and never will, because one made now would not be one.
 
 ```
 football-data.co.uk ──┐
-Understat / Sofascore  ├─→ canonical match schema ─→ features ─→ models ─→ markets
+Understat / ESPN text  ├─→ canonical match schema ─→ features ─→ models ─→ markets
 StatsBomb / ClubElo    │      (entity resolution)        │          │
 FBref / ESPN ──────────┘                                 │          ├─ 1X2 / O-U / BTTS
 Transfermarkt ───────────── squad market value ──────────┤          │
@@ -402,10 +402,18 @@ Listed because half-finished work is normal and hiding it helps nobody.
   write-up in [`docs/EUROPEAN_ELO_COVERAGE.md`](docs/EUROPEAN_ELO_COVERAGE.md).
 - **xG coverage** — 97% of matches since 2014/15, where Understat's data starts
   (Bundesliga 2024/25 is the notable hole, an upstream scraper bug rather than a
-  missing source). Understat stopped
-  publishing after 2025/26, so current-season xG now comes live from Sofascore's
-  per-shot data, aggregated to match level and feeding the same rolling xG-rate
-  form (`scripts/build_sofascore_xg_matches.py`; 100% of played 2026/27 matches).
+  missing source). Understat stopped publishing after 2025/26, and Sofascore,
+  which carried the first weeks of 2026/27, answers 403 since 2026-09-26. So
+  current-season xG is now **our own, read from ESPN's match commentary**: every
+  attempt is described in the Opta standard ("left footed shot from the left
+  side of the six yard box … with a cross"), and a logistic shot model on zone,
+  body part, situation and assist turns it into xG (penalties at 0.76). Trained on
+  2024/25 and applied to 2025/26, it correlates 0.83 with Understat per
+  team-match, and 0.86 with Sofascore on the live 2026/27 matches. In the weekly-
+  refit walk-forward it keeps all but +0.0003 RPS of Understat's value (not
+  significant), where having no fresh xG would cost +0.0026: about 89% recovered
+  (`scripts/build_espn_text_xg.py`, `scripts/espn_xg/`). Real xG wins wherever a
+  match has both, and text xG is put on the level of the real source it continues.
 - **SquadLab special cards** (award and memorable-match player variants) need
   season-split player data that isn't built yet.
 
@@ -470,7 +478,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  280 tests green on a clean checkout; 102 more
+tests/                  284 tests green on a clean checkout; 102 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
@@ -479,9 +487,10 @@ docs/                   README figures, one current note, archived history
 
 Research project, run in **paper mode** — no money has ever been staked on it.
 Everything comes from free public sources: football-data.co.uk (results and
-odds), Understat and StatsBomb Open Data (historical xG and events), Sofascore
-(current-season xG, from its shot data), ClubElo, FBref, and ESPN's public JSON
-(current-season fixtures and per-player match stats).
+odds), Understat and StatsBomb Open Data (historical xG and events), ESPN's
+public JSON (current-season fixtures, per-player match stats, and the match
+commentary our own xG is read from), Sofascore (the first weeks of 2026/27's xG,
+until it began refusing requests), ClubElo and FBref.
 
 No source is trusted alone. Every one of them has failed at some point — an API
 returning 502 for days, a season never published, a scraper stalling mid-fetch,
