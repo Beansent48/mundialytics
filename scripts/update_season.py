@@ -81,6 +81,9 @@ TEAM_MATCH = ROOT / "data/processed/understat_team_match_xg.csv"
 # Live current-season xG from Sofascore (Understat froze 2026-05-24). Same schema
 # as TEAM_MATCH; augment_foundation_with_xg concats both before the join.
 SOFA_TEAM_MATCH = ROOT / "data/processed/sofascore_team_match_xg.csv"
+# Text xG from ESPN's match commentary (scripts/build_espn_text_xg.py): Sofascore answers
+# 403 since 2026-09-26. Appended after the real-xG sources, so those win any overlap.
+TEXT_TEAM_MATCH = ROOT / "data/processed/espn_text_team_match_xg.csv"
 
 
 def season_codes(today: date) -> tuple[str, str]:
@@ -215,11 +218,12 @@ def augment_foundation_with_xg() -> None:
                "home_xg_op", "away_xg_op", "home_xg_sp", "away_xg_sp"]
     found = found.drop(columns=[c for c in xg_cols if c in found.columns])
     cols = ["date", "home_team_fd", "away_team_fd"] + xg_cols
-    # Understat carries the history; Sofascore carries the current season (Understat
-    # froze 2026-05-24). Concat both, Understat first so it wins any overlap.
+    # Understat carries the history; Sofascore and ESPN text xG carry the current season
+    # (Understat froze 2026-05-24). In that order, so real xG wins any overlap.
     sources = [pd.read_csv(TEAM_MATCH)[cols]]
-    if SOFA_TEAM_MATCH.exists():
-        sources.append(pd.read_csv(SOFA_TEAM_MATCH)[cols])
+    for extra in (SOFA_TEAM_MATCH, TEXT_TEAM_MATCH):
+        if extra.exists():
+            sources.append(pd.read_csv(extra)[cols])
     tm = pd.concat(sources, ignore_index=True)
     tm = tm.rename(columns={"home_team_fd": "home_team", "away_team_fd": "away_team"})
     tm["date"] = pd.to_datetime(tm["date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -277,6 +281,11 @@ def main() -> None:
     run_step("3b/8 Sofascore xG (current season)",
              [PY, "scripts/build_sofascore_xg_matches.py"],
              optional=True, timeout=600)
+    # Our own xG from ESPN's commentary text: covers whatever Sofascore does not (all of
+    # it while Sofascore refuses us). Optional for the same reason as 3b.
+    run_step("3c/8 ESPN text xG (current season)",
+             [PY, "scripts/build_espn_text_xg.py"],
+             optional=True, timeout=1800)
 
     prev_rows = len(pd.read_csv(FOUND, low_memory=False)) if FOUND.exists() else None
     backup_found = FOUND.with_suffix(".csv.prev")
