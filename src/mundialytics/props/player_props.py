@@ -83,6 +83,38 @@ def _pos_group(p: str) -> str:
     return "SUB"
 
 
+def _espn_pos_group(p: str) -> str | None:
+    """ESPN's lineup slot (G, CD-L, LB, DM, CM-R, AM, LM, CF-L, ...) -> position
+    group; None for SUB, which says nothing about where he plays."""
+    p = str(p).upper()
+    if p == "G":
+        return "GK"
+    if p.startswith("CD") or p in {"LB", "RB", "SW", "CB", "LWB", "RWB"}:
+        return "DEF"
+    if p.startswith("AM"):
+        return "ATT"
+    if p.startswith("CF") or p in {"F", "LF", "RF", "RCF", "LCF", "ST"}:
+        return "FW"
+    if p.startswith("CM") or p in {"DM", "LM", "RM", "M"}:
+        return "MID"
+    return None
+
+
+def likely_xi(players: pd.DataFrame, n: int = 11) -> pd.DataFrame:
+    """The n players most likely to start, from one team's predict output.
+
+    exp_min is minutes WHEN FEATURING, so it cannot say who features: ranked on
+    it alone, 42% of the published 2026/27 shortlist did not play (38% were not
+    even in the squad). Starts in the team's last five matches decide first,
+    exp_min breaks ties -- 58% -> 83% of shortlisted players playing, replayed
+    on 2021/22-2025/26 (scripts/experiment_player_fresh_form.py)."""
+    if players is None or players.empty:
+        return players
+    if "start_share" not in players.columns:
+        return players.nlargest(n, "exp_min")
+    return players.sort_values(["start_share", "exp_min"], ascending=False).head(n)
+
+
 def _p_ge(mu: np.ndarray, k: int, disp: float = 1.0) -> np.ndarray:
     mu = np.clip(np.asarray(mu, dtype=float), 1e-6, 10)
     if disp > 1.05:
@@ -110,7 +142,8 @@ class PlayerPropsModel:
     def fit(self, pm: pd.DataFrame, shots: pd.DataFrame | None = None,
             shots_path: "str | Path | None" = None,
             current_squads: "pd.DataFrame | str | Path | None" = None,
-            roster_max_age_days: float = ROSTER_MAX_AGE_DAYS) -> "PlayerPropsModel":
+            roster_max_age_days: float = ROSTER_MAX_AGE_DAYS,
+            current: "pd.DataFrame | str | Path | None" = None) -> "PlayerPropsModel":
         """`pm`: understat player-match rows (player_id, player, team, game_id, date,
         position, minutes + base stats). All history is training; state = as of
         last game. `shots`/`shots_path`: understat shot events — penalties carry
@@ -123,12 +156,21 @@ class PlayerPropsModel:
         who is in each roster, and nothing else. Rates, minutes and the whole
         probability recipe are untouched, so a backtest that omits it reproduces
         the validated model exactly. `roster_max_age_days` caps how old the
-        fallback roster may be; see _guard_stale_rosters."""
+        fallback roster may be; see _guard_stale_rosters.
+
+        `current`: ESPN player-match rows for the season Understat has not
+        published (data/external/advanced/espn/espn_player_match_current.csv).
+        See _append_current; without it the state freezes at Understat's last
+        match, which is what production did until v0.57.0."""
         pm = pm.copy()
         pm["date"] = pd.to_datetime(pm["date"], errors="coerce")
         pm = pm.dropna(subset=["date"])
         for c in ["minutes", "xg", "goals", "shots", "xa", "assists", "yellow_cards"]:
             pm[c] = pd.to_numeric(pm[c], errors="coerce").fillna(0.0)
+        self._n_current_rows = 0
+        if current is not None:
+            pm = self._append_current(pm, current)
+            self._n_current_rows = int(pm.attrs.get("n_current_rows", 0))
 
         # penalties per (game, player) -> npxg/npgoals + taker-share ingredients
         if shots is None and shots_path is not None and Path(shots_path).exists():
@@ -203,6 +245,17 @@ class PlayerPropsModel:
         pm2 = pm.merge(tg[["team", "game_id", "tgn"]], on=["team", "game_id"])
         recent = pm2[pm2["tgn"] > pm2["team"].map(last_tgn) - 10]
         self._rosters = recent.groupby("team")["player_id"].agg(lambda s: sorted(set(s))).to_dict()
+        # starts in each club's last five matches -> likely_xi
+        last5 = pm2[pm2["tgn"] > pm2["team"].map(last_tgn) - 5]
+        n5 = (last5.groupby("team")["tgn"].nunique()).to_dict()
+        st5 = last5[(last5["position"] != "Sub") & (last5["minutes"] > 0)]
+        share = st5.groupby(["player_id", "team"]).size().reset_index(name="n")
+        share["start_share"] = share["n"] / share["team"].map(n5)
+        # a player's current club is his most recent one
+        cur_team = pm.groupby("player_id")["team"].last()
+        share = share[share["team"] == share["player_id"].map(cur_team)]
+        self._players["start_share"] = share.set_index("player_id")["start_share"].reindex(
+            self._players.index).fillna(0.0)
         self._data_max_date = pm["date"].max()
         self._team_last_date = tg.groupby("team")["date"].max().to_dict()
         # foundation-name lookup for the Understat teams we know
@@ -216,6 +269,109 @@ class PlayerPropsModel:
         self._guard_stale_rosters(roster_max_age_days)
         self._apply_current_squads(current_squads)
         return self
+
+    @staticmethod
+    def _append_current(pm: pd.DataFrame, current) -> pd.DataFrame:
+        """ESPN rows for the current season, in Understat's shape, appended to pm.
+
+        Understat stopped on 2026-05-24, so without these every 2026/27 price
+        came from each player's state at the end of 2025/26 -- form, minutes and
+        the published "likely XI" alike (live: 38% of shortlisted players were
+        not even in the matchday squad). ESPN has every squad with goals, shots,
+        assists, cards and starter/sub, but no minutes and no xG, so:
+          minutes  a starter's / sub's own mean in that role before, else his
+                   position's (83 / 24 as a last resort); unused bench = 0
+          xG       shots x his xG per shot, shrunk to the league's with 20 shots
+          xA       his xA per 90 carries on (ESPN has no chance creation)
+        Replayed on 2021/22-2025/26 this recovered ~95% of what full data gives
+        over the frozen state, every prop 5/5 (shots 1.5 -0.019, anytime -0.0049)
+        and lifted the shortlist from 58% to 83% of players who played.
+        scripts/experiment_player_fresh_form.py. Players are matched by name;
+        anyone ESPN names that Understat never measured starts a new record."""
+        from mundialytics.identity.current_squads import NameIndex
+
+        cur = pd.read_csv(current) if not isinstance(current, pd.DataFrame) else current.copy()
+        need = {"event_id", "date", "team", "player", "position", "starter", "appearances"}
+        if cur.empty or not need <= set(cur.columns):
+            return pm
+        cur["date"] = pd.to_datetime(cur["date"], errors="coerce")
+        cur = cur[cur["date"] > pm["date"].max()].dropna(subset=["date", "player"])
+        if cur.empty:
+            return pm
+        for c in ["goals", "shots", "assists", "yellow_cards", "appearances"]:
+            cur[c] = pd.to_numeric(cur.get(c), errors="coerce").fillna(0.0)
+        started = cur["starter"].astype(str).str.lower().isin(["true", "1"])
+
+        # who is who: Understat's players by name, most recent first
+        last = pm.groupby("player_id").agg(player=("player", "last"), date=("date", "max"))
+        mode_pos = (pm[pm["position"] != "Sub"].groupby("player_id")["position"]
+                    .agg(lambda s: s.mode().iloc[0] if len(s.mode()) else "MC"))
+        pgroup = mode_pos.map(_pos_group)
+        idx = NameIndex()
+        for pid, r in last.iterrows():
+            idx.add(r["player"], pid, rank=r["date"].timestamp())
+        new_ids: dict[str, int] = {}
+        next_id = int(min(pm["player_id"].min(), 0)) - 1
+        pids = []
+        for who, pos in zip(cur["player"].astype(str), cur["position"].astype(str)):
+            pid, kind = idx.lookup_detail(who)
+            # a loose (short-key) match must not hand a keeper a striker's history
+            if pid is not None and kind != "full" and pos != "SUB":
+                if (pgroup.get(pid) == "GK") != (pos == "G"):
+                    pid = None
+            if pid is None:
+                if who not in new_ids:
+                    new_ids[who] = next_id
+                    next_id -= 1
+                pid = new_ids[who]
+            pids.append(pid)
+        cur["player_id"] = pids
+
+        # role minutes and xG per shot from each player's Understat history
+        hist = pm[pm["minutes"] > 0]
+        is_sub = hist["position"] == "Sub"
+        own_st = hist[~is_sub].groupby("player_id")["minutes"].mean()
+        own_sb = hist[is_sub].groupby("player_id")["minutes"].mean()
+        grp = pd.Series(cur["player_id"].map(pgroup).to_numpy(), index=cur.index)
+        grp = grp.fillna(cur["position"].map(_espn_pos_group)).fillna("MID")
+        # a new player who only came off the bench so far: his group is unknown
+        # from this row; take the one from any start he has made this season
+        first = (cur[cur["position"] != "SUB"].assign(g=cur["position"].map(_espn_pos_group))
+                 .groupby("player_id")["g"].agg(lambda s: s.mode().iloc[0] if len(s.mode()) else "MID"))
+        new = cur["player_id"] < 0
+        grp[new] = cur.loc[new, "player_id"].map(first).fillna(grp[new])
+        hist_g = hist["player_id"].map(pgroup)
+        pos_st = hist[~is_sub].groupby(hist_g[~is_sub])["minutes"].mean()
+        pos_sb = hist[is_sub].groupby(hist_g[is_sub])["minutes"].mean()
+        est_st = cur["player_id"].map(own_st).fillna(grp.map(pos_st)).fillna(83.0)
+        est_sb = cur["player_id"].map(own_sb).fillna(grp.map(pos_sb)).fillna(24.0)
+        mins = np.where(cur["appearances"] > 0, np.where(started, est_st, est_sb), 0.0)
+        glob_xps = float(hist["xg"].sum() / max(hist["shots"].sum(), 1.0))
+        n_sh = hist.groupby("player_id")["shots"].sum()
+        raw_xps = (hist.groupby("player_id")["xg"].sum() / n_sh.replace(0, np.nan)).clip(0.02, 0.5)
+        xps = ((raw_xps * n_sh + glob_xps * 20) / (n_sh + 20)).fillna(glob_xps)
+        xa90 = hist.groupby("player_id")["xa"].sum() / hist.groupby("player_id")["minutes"].sum() * 90.0
+        pos_xa90 = (hist.groupby(hist_g)["xa"].sum() / hist.groupby(hist_g)["minutes"].sum() * 90.0)
+
+        # teams under the name the Understat rows use, where the club is known
+        fd_to_us = {to_foundation_name(t): t for t in pm["team"].dropna().unique()}
+        code = {"GK": "GK", "DEF": "DC", "MID": "MC", "ATT": "AMC", "FW": "FW"}
+        rows = pd.DataFrame({
+            "player_id": cur["player_id"].to_numpy(),
+            "player": cur["player"].to_numpy(),
+            "team": [fd_to_us.get(t, t) for t in cur["team"].astype(str)],
+            "game_id": pd.to_numeric(cur["event_id"], errors="coerce").to_numpy(),
+            "date": cur["date"].to_numpy(),
+            "position": np.where(started, grp.map(code).fillna("MC"), "Sub"),
+            "minutes": mins,
+            "goals": cur["goals"].to_numpy(), "shots": cur["shots"].to_numpy(),
+            "assists": cur["assists"].to_numpy(), "yellow_cards": cur["yellow_cards"].to_numpy(),
+            "xg": (cur["shots"] * cur["player_id"].map(xps).fillna(glob_xps)).to_numpy(),
+            "xa": (cur["player_id"].map(xa90).fillna(grp.map(pos_xa90)).fillna(0.0) * mins / 90.0).to_numpy(),
+        })
+        out = pd.concat([pm, rows], ignore_index=True)
+        out.attrs["n_current_rows"] = len(rows)
+        return out
 
     def _guard_stale_rosters(self, max_age_days: float) -> None:
         """Drop rosters whose last game is too far behind the rest of the data.
@@ -382,6 +538,7 @@ class PlayerPropsModel:
         out = pd.DataFrame({
             "player": P["player"], "pgroup": P["pgroup"], "team": us_team,
             "exp_min": P["exp_min"].round(0).astype(int),
+            "start_share": P["start_share"] if "start_share" in P.columns else np.nan,
             "p_anytime_scorer": _p_ge(mu_goal, 1),
             "p_2plus_goals": _p_ge(mu_goal, 2),
             "p_shots_over_1_5": _p_ge(mu_shots, 2, SHOTS_DISP),

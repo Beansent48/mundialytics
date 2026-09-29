@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 
 from api import catalogue as cat  # noqa: E402
 from api.engine import club_engine, props_models  # noqa: E402
+from mundialytics.props.player_props import likely_xi  # noqa: E402
 
 app = FastAPI(
     title="Mundialytics API",
@@ -253,9 +254,10 @@ def _scorers(pp, home: str, away: str, pred, n: int = 3) -> dict | None:
         sub = players[players["side"] == side] if "side" in players else players.iloc[0:0]
         if sub.empty:
             continue
-        # the likely eleven first: exp_min is minutes-when-featuring, not minutes
+        # the likely eleven first (recent starts, then exp_min): exp_min is
+        # minutes-when-featuring, not minutes
         # spread across the squad, so most of a 26-man list clears any threshold
-        top = sub.nlargest(11, "exp_min").nlargest(n, "p_anytime_scorer")
+        top = likely_xi(sub, 11).nlargest(n, "p_anytime_scorer")
         out[side] = [
             {
                 "player": str(r.player),
