@@ -146,6 +146,13 @@ def main() -> None:
         espn = state_features(view, "min_e", {"xg": "xg_e", "goals": "goals", "shots": "shots",
                                               "xa": "xa_e", "assists": "assists",
                                               "yellow_cards": "yellow_cards"})
+        # ESPN_MIN: the same, but with the TRUE minutes (what parsing ESPN's
+        # substitution commentary would give) -- measures what real minutes add
+        view["xa_m"] = np.where(cur, view["player_id"].map(xa90).fillna(view["pgroup"].map(pri["xa"]))
+                                * view["minutes"] / 90.0, view["xa"])
+        espn_min = state_features(view, "minutes", {"xg": "xg_e", "goals": "goals", "shots": "shots",
+                                                    "xa": "xa_m", "assists": "assists",
+                                                    "yellow_cards": "yellow_cards"})
         # FROZEN: each player's state at his first row of the season
         first = view[cur].groupby("player_id").head(1)
         fz = ideal.loc[first.index].assign(player_id=first["player_id"].to_numpy()).set_index("player_id")
@@ -155,6 +162,7 @@ def main() -> None:
         pmc = pm.loc[rows_cur.index]
         arms = {"FROZEN": mus(pmc, frozen, pri, glob, pos_min),
                 "ESPN": mus(pmc, espn.loc[rows_cur.index], pri, glob, pos_min),
+                "ESPN_MIN": mus(pmc, espn_min.loc[rows_cur.index], pri, glob, pos_min),
                 "IDEAL": mus(pmc, ideal.loc[rows_cur.index], pri, glob, pos_min)}
         test = (pmc["minutes"] > 0) & pmc["team_lam"].notna()
         for name, (mu, k, d, col, thr) in props.items():
@@ -197,8 +205,10 @@ def main() -> None:
         n = g.groupby("season")["n"].first()
         pool = {a: float((piv[a] * n).sum() / n.sum()) for a in piv.columns}
         wins = int((piv["ESPN"] < piv["FROZEN"]).sum())
+        wins_m = int((piv["ESPN_MIN"] < piv["ESPN"]).sum())
         print(f"  {prop:9s} FROZEN {pool['FROZEN']:.5f} | ESPN {pool['ESPN'] - pool['FROZEN']:+.5f} "
-              f"({wins}/5) | IDEAL {pool['IDEAL'] - pool['FROZEN']:+.5f}")
+              f"({wins}/5) | ESPN_MIN {pool['ESPN_MIN'] - pool['FROZEN']:+.5f} "
+              f"(vs ESPN {pool['ESPN_MIN'] - pool['ESPN']:+.5f}, {wins_m}/5) | IDEAL {pool['IDEAL'] - pool['FROZEN']:+.5f}")
     sl = pd.DataFrame(rows_sl, columns=["season", "arm", "played", "started"])
     print("\nshortlist of 11: share who played / started")
     print(sl.groupby("arm")[["played", "started"]].mean().round(3).to_string())
