@@ -221,7 +221,11 @@ def match(competition: str, fixture: str) -> dict:
         raise HTTPException(404, f"Unknown fixture: {fixture}")
     row = rows[0]
 
-    key = ("match", competition, fixture, str(df["date"].max())[:10])
+    # the lineup pass lands about an hour before kick-off: its log's mtime is in
+    # the key so the page switches to the lineup price at once, not after the TTL
+    from mundialytics.serving.logged_prediction import LINEUP_LOG
+    lineup_v = int(LINEUP_LOG.stat().st_mtime) if LINEUP_LOG.exists() else 0
+    key = ("match", competition, fixture, str(df["date"].max())[:10], lineup_v)
     return _cached(key, lambda: _build_match(row, competition, meta, season, df))
 
 
@@ -670,6 +674,18 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
             if logged.full:
                 pred = as_prediction(logged, fallback=pred)
 
+    # In the last hour before kick-off the lineup pass (scripts/log_lineup_pass.py)
+    # re-prices the match with the confirmed XIs. Upcoming pages show that price;
+    # played ones stay graded against the morning log above.
+    lineup_pass = None
+    if not base["played"]:
+        from mundialytics.serving.logged_prediction import as_prediction, find_lineup_pass
+
+        found = find_lineup_pass(row.home_team, row.away_team, row.date)
+        if found is not None:
+            lp, lineup_pass = found
+            pred = as_prediction(lp, fallback=pred)
+
     # Team-stat distributions once: they feed both the expected-stat ranges below
     # and the team-props card, so they must be ready before the payload is built.
     tp, pp = props_models()
@@ -737,6 +753,7 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
         "scoreMatrix": [[round(float(v), 5) for v in r] for r in matrix.values],
         "expectedStats": _expected_stats(pred, fx),
         "source": source,
+        "lineupPass": lineup_pass,
     }
 
     base["scorers"] = _scorers(pp, row.home_team, row.away_team, pred)

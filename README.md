@@ -43,15 +43,23 @@ Head to head with the closing line:
 
 | | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
 |---|---|---|---|
-| This engine | 0.1999 | 0.9856 | 0.6793 |
+| This engine | 0.1999 | 0.9857 | 0.6794 |
 | Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
-| gap | +0.0053 | +0.0176 | +0.0083 |
+| gap | +0.0053 | +0.0177 | +0.0083 |
 
 It does **not** beat the closing line — about 2.7% behind, and the gap holds in
 every season and every league (worst Premier League +0.0064, best LaLiga
-+0.0040), which is what makes it a ceiling rather than noise. Bet365's
++0.0042), which is what makes it a ceiling rather than noise. Bet365's
 closing price carries injury news, confirmed lineups and the weight of informed
 money; this engine has public data and nothing else.
+
+This figure is deliberately conservative: the published walk-forward fits the
+engine once, before each season, so it cannot see what production does during
+one. Production refits daily, reads squad values weekly and re-prices each match
+once the lineups are out. Replayed that way on the same 10,080 matches — weekly
+refits, values as each week saw them, the lineup pass — the engine scores
+**0.1983**, 90% of the way to the closing line and 0.0037 behind it
+(`scripts/lineup_pass/backtest_absence.py`, `scripts/squad_value/`).
 
 Reproduce all of it (the benchmark scores the deployed walk-forward cache, so
 generate it first):
@@ -74,8 +82,10 @@ the time is another. It is:
 
 Home and away curves track the diagonal. Before squad values went in, the home
 curve sat below it and the away curve above it through the 30–60% band; both now
-sit on it. The one visible miss is the top away bin (~83% said, 71% seen), about
-50 matches and the same size it was before. Draws never get
+sit on it. The one visible miss is the top away bin (~83% said, 75% seen,
+about 60 matches). It is not statistically significant, Bet365 was less
+confident than us on those same matches, and every recalibration tried for it lost out of
+sample, so it is left alone. Draws never get
 predicted above ~35% — a known property of the sport, not a defect: draws are
 genuinely rarely the favourite. The figure scores all 10,403 walk-forward
 predictions, so its RPS reads 0.2004; the benchmark above uses the 10,080 of them
@@ -147,15 +157,28 @@ Transfermarkt ───────────── squad market value ──�
 - **Squad value** — the one team signal not derived from results, so it knows
   about summer signings, and about which promoted side has money, before
   either shows on the pitch. Each club's value is the sum of its 18 most
-  valuable players (Transfermarkt), read as of the date being predicted.
-  The final lambdas are tilted toward the richer squad, total goals unchanged.
-  On a weekly-refit walk-forward, leaving one season out at a time, 1X2 RPS
-  fell 0.2006 → 0.1999 in 5 of 6 seasons, with O/U unchanged. It was
-  validated on values rebuilt the way production sees them: June-frozen, and
-  unseen second-division players priced at 1 M€. The gain is largest early
-  in the season and in matches with a promoted side, where our gap to
-  Bet365 had been 50% larger. Title, top-4 and relegation forecasts from
-  matchday 5 improved too (`scripts/squad_value/README.md`).
+  valuable players, read as of the date being predicted. Every Big Five squad
+  is read from Transfermarkt once a week (about 100 pages, 3 s apart,
+  identified as this project; `robots.txt` allows them), and the history
+  comes from its public data dump. The final lambdas are tilted toward the
+  richer squad, total goals unchanged. On a weekly-refit walk-forward,
+  leaving one season out at a time, 1X2 RPS fell 0.2006 → 0.1995 in 5 of 6
+  seasons, with O/U unchanged. The gain is largest early in the season and
+  in matches with a promoted side, where our gap to Bet365 had been 50%
+  larger. Title, top-4 and relegation forecasts from matchday 5 improved too
+  (`scripts/squad_value/README.md`).
+- **Lineup pass** — the morning prediction is made before anyone knows who
+  plays. About an hour before kick-off, once both starting XIs are out on
+  ESPN, the match is priced again (a watcher the daily refresh starts; it is
+  awake only in the hour before each match). The new input is the share of each side's
+  usual starters (the 11 with most starts in the last 10 league matches)
+  missing from the XI, applied as another total-preserving tilt. Backtest on
+  top of the squad value: 0.1995 → 0.1989, better in **6 of 6** seasons, O/U
+  unchanged. The match page switches to this price in the last hour and names
+  the missing regulars. It is logged separately
+  (`data/processed/logs/lineup_pass_log.csv`); the morning log stays the track
+  record, and `scripts/evaluate_lineup_pass.py` grades one against the other
+  on the same matches.
 - **Calibration** — Platt scaling per market, validated on held-out seasons.
 - **Scopes** — club and national-team models are fitted and used separately.
   Strength parameters are not comparable across contexts, so mixing them would
@@ -191,6 +214,15 @@ Recorded because negative results are the expensive part of the project:
   and second-division form adds nothing. The gap to the market there is about
   telling promoted sides apart, not about their average, which is why squad
   value works where this failed (`scripts/squad_value/lofo.py`).
+- **Match context without the lineup.** Rest days, a Champions League match
+  just before or after, a new manager, and what is at stake in the table
+  (relegation fight, race for Europe, nothing left to play for, champion
+  already crowned). The market prices several of them, and we disagree with it
+  most in exactly those matches, but as model adjustments none held up out of
+  sample (at best 4 of 6 seasons, or a gain near zero). Crowned champions are
+  a large effect on only 74 matches — too few to validate. The lineup itself
+  carries what rotation does, which is why the lineup pass works where the
+  Champions League flags did not.
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
 - **Shrinking per-competition parameters.** `AttackDefenseModel` fits μ and home
@@ -220,17 +252,17 @@ Recorded because negative results are the expensive part of the project:
 - Goals are modelled as **independent** Poisson with the Dixon-Coles correction
   applied to the low-score cells only. That is a patch, not a correlation model;
   a true bivariate Poisson or a copula would be the next step.
-- **Team level.** The main model sees no lineups and no injuries. An oracle test
-  — handing the model perfect lineup knowledge — capped that loss at ~3%.
+- **No injury news before the lineups.** Until the XI is announced the model
+  knows nothing about who is out; the lineup pass only helps in the last hour.
 - **One bookmaker.** Bet365 alone. A multi-book consensus, or Pinnacle, would be
   a harder yardstick.
 - **Big 5 leagues only** for the trained model; no cross-league scale.
-- **Squad values are frozen at June 2026.** The public Transfermarkt dump
-  stopped updating then. Rosters are current (ESPN), but each player keeps
-  his June value. About 18% of roster players are not in the dump — mostly
-  second-division players at promoted clubs — and count at 1 M€. The
-  Bundesliga gets nothing from the shift (its best coefficients are zero in
-  every season); a per-league version was tried and did not hold up.
+- **Squad values depend on one site.** If Transfermarkt changes its pages or
+  refuses the requests, the refresh falls back to ESPN rosters with values from
+  the June 2026 data dump, which cover about 82% of players and age through the
+  season. The Bundesliga gets nothing from the squad-value shift (its best
+  coefficients are zero in every season); a per-league version was tried and
+  did not hold up.
 
 ## Status
 
@@ -438,7 +470,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  251 tests green on a clean checkout; 102 more
+tests/                  271 tests green on a clean checkout; 102 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
