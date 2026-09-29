@@ -182,13 +182,10 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-def fixtures_logged_ahead(now: pd.Timestamp, horizon_h: int) -> int | None:
-    """Big Five fixtures the morning logger wrote for the next `horizon_h` hours, from the
-    local log -- no network. None when the local files cannot answer (then ask ESPN).
-
-    The daily refresh logs every fixture of the coming days before this runs (and fails
-    loudly when it misses one), so an empty answer means no match today.
-    """
+def _kickoffs_logged_ahead(now: pd.Timestamp, horizon_h: int) -> list[pd.Timestamp] | None:
+    """Kick-offs of the Big Five fixtures the local log holds for the next `horizon_h`
+    hours; a row with a date but no kick-off time counts as the end of that Madrid day.
+    None when the local files cannot answer."""
     try:
         log = pd.read_csv(PRED_LOG, usecols=["fecha", "kickoff_utc", "home", "mercado"], low_memory=False)
         big5 = set(pd.read_csv(ROSTERS, usecols=["team"])["team"].str.lower())
@@ -200,7 +197,44 @@ def fixtures_logged_ahead(now: pd.Timestamp, horizon_h: int) -> int | None:
     by_kick = (kick >= now) & (kick <= end)
     days = {now.tz_convert("Europe/Madrid").strftime("%Y-%m-%d"), end.tz_convert("Europe/Madrid").strftime("%Y-%m-%d")}
     by_day = kick.isna() & x["fecha"].astype(str).isin(days)
-    return int((by_kick | by_day).sum())
+    day_end = [pd.Timestamp(d, tz="Europe/Madrid").tz_convert("UTC") + pd.Timedelta(days=1)
+               for d in x.loc[by_day, "fecha"].astype(str)]
+    return list(kick[by_kick]) + day_end
+
+
+def fixtures_logged_ahead(now: pd.Timestamp, horizon_h: int) -> int | None:
+    """Big Five fixtures the morning logger wrote for the next `horizon_h` hours, from the
+    local log -- no network. None when the local files cannot answer (then ask ESPN).
+
+    The daily refresh logs every fixture of the coming days before this runs (and fails
+    loudly when it misses one), so an empty answer means no match today.
+    """
+    kicks = _kickoffs_logged_ahead(now, horizon_h)
+    return None if kicks is None else len(kicks)
+
+
+def _fetch_schedule(start: pd.Timestamp, horizon_h: int) -> list[dict] | None:
+    """The watch window's kick-offs from ESPN, retried every POLL_MIN minutes while ESPN (or
+    DNS) is down. Gives up -- None -- once the last kick-off the local log knows about has
+    passed (or the whole window, when the local log cannot say): by then there is nothing
+    left to re-price. On 2026-09-29 the machine lost DNS for an hour; a single failed call
+    here used to end the watcher for the day."""
+    end = start + pd.Timedelta(hours=horizon_h)
+    kicks = _kickoffs_logged_ahead(start, horizon_h)
+    deadline = max(kicks) if kicks else end
+    while True:
+        now = pd.Timestamp.now(tz="UTC")
+        try:
+            # anchored to the start: a late fetch must not reach into tomorrow's watch
+            return upcoming(now, max(int((end - now).total_seconds() // 60), 0))
+        except Exception as exc:
+            if now >= deadline:
+                print(f"{now:%H:%M} UTC: schedule still unavailable ({type(exc).__name__}: {exc}) "
+                      f"and the last logged kick-off has passed; giving up", flush=True)
+                return None
+            print(f"{now:%H:%M} UTC: schedule fetch failed ({type(exc).__name__}: {exc}); "
+                  f"retrying in {POLL_MIN} min", flush=True)
+            time.sleep(POLL_MIN * 60)
 
 
 def watch(horizon_h: int = 20) -> int:
@@ -221,7 +255,9 @@ def watch(horizon_h: int = 20) -> int:
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     LOCK.write_text(str(os.getpid()))
     try:
-        schedule = upcoming(pd.Timestamp.now(tz="UTC"), horizon_h * 60)
+        schedule = _fetch_schedule(pd.Timestamp.now(tz="UTC"), horizon_h)
+        if schedule is None:
+            return 1
         print(f"watch: {len(schedule)} Big Five kick-off(s) in the next {horizon_h} h", flush=True)
         while True:
             now = pd.Timestamp.now(tz="UTC")
