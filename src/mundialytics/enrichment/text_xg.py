@@ -26,8 +26,11 @@ _OUTCOME = [
     (re.compile(r"^Attempt saved\."), "saved"),
     (re.compile(r"^Attempt missed\."), "missed"),
     (re.compile(r"^Attempt blocked\."), "blocked"),
-    (re.compile(r"^Penalty saved!"), "saved"),
-    (re.compile(r"^Penalty missed!"), "missed"),
+    # "Penalty saved." / "Penalty missed." with a full stop too: 12 of the 58
+    # 2026/27 attempts were written that way and fell out entirely (conversion
+    # read 96% instead of ~76%, and each lost 0.76 of xG)
+    (re.compile(r"^Penalty saved[!.]"), "saved"),
+    (re.compile(r"^Penalty missed[!.]"), "missed"),
 ]
 _WOODWORK = re.compile(r"\((?P<team>[^()]+)\) (?:right footed shot|left footed shot|header|shot).* hits the "
                        r"(?:left |right )?(?:post|bar|crossbar)")
@@ -243,3 +246,51 @@ def level(txg: pd.DataFrame, ref: pd.DataFrame) -> pd.Series:
            / j.groupby("competition")[["home_xg", "away_xg"]].sum().sum(1))
     overall = j[["home_xg_ref", "away_xg_ref"]].values.sum() / j[["home_xg", "away_xg"]].values.sum()
     return per.reindex(sorted(txg["competition"].unique())).fillna(overall)
+
+
+# ── who took it: penalty attempts per player (props/player_props.py) ──
+
+def shooter(text: str) -> str | None:
+    """The player taking the attempt a commentary line describes, or None.
+
+    Opta's lines name him right before his team in brackets, after the outcome
+    prefix: "Penalty missed! Still Brentford 3, Tottenham Hotspur 0. Igor Thiago
+    (Brentford) hits the left post..." -> "Igor Thiago"."""
+    if parse_shot(text) is None:
+        return None
+    t = text.strip()
+    body = t
+    if t.startswith("Goal!"):
+        m = re.match(r"^Goal! .*?\d+, .*?\d+\. ", t)
+        body = t[m.end():] if m else t
+    m = re.search(r"\(([^()]+)\)", body)
+    if not m:
+        return None
+    name = re.split(r"[.!] ", body[:m.start()])[-1].strip()
+    return name or None
+
+
+def penalties_from_commentary(path) -> pd.DataFrame:
+    """Every penalty attempt in one season file: event_id, date, team, player, scored.
+
+    ESPN's player file marks penalty goals only, never the misses, and the
+    player model needs attempts: who takes them and how often a team wins one.
+    Shootouts are not in league commentary."""
+    import json
+    from pathlib import Path
+
+    rows = []
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame(columns=["event_id", "date", "team", "player", "scored"])
+    for line in p.read_text(encoding="utf-8").splitlines():
+        if not line:
+            continue
+        g = json.loads(line)
+        for c in g.get("commentary", []):
+            s = parse_shot(c.get("text", ""))
+            if s is None or not s["penalty"]:
+                continue
+            rows.append({"event_id": str(g["event_id"]), "date": g["date"], "team": s["team"],
+                         "player": shooter(c["text"]), "scored": bool(s["goal"])})
+    return pd.DataFrame(rows, columns=["event_id", "date", "team", "player", "scored"])
