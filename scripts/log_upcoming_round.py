@@ -266,10 +266,11 @@ def _load_player_props():
     return pp
 
 
-def player_rows(pp, base: dict, team: str, lam: float) -> list[dict]:
-    """Per-player markets for one side of a fixture."""
+def player_rows(pp, base: dict, team: str, lam: float, ref_dev: float | None = None) -> list[dict]:
+    """Per-player markets for one side of a fixture (`ref_dev`: the referee's
+    card deviation when ESPN already names him -- moves the yellow card only)."""
     try:
-        out = pp.team_players_for_lambda(team, float(lam))
+        out = pp.team_players_for_lambda(team, float(lam), ref_dev=ref_dev)
     except Exception:
         return []
     if out is None or out.empty:
@@ -555,8 +556,9 @@ def _log(args) -> None:
         except Exception:
             continue
         if pp is not None:
-            rows += player_rows(pp, base, r.home, p.lambda_home)
-            rows += player_rows(pp, base, r.away, p.lambda_away)
+            rd = tp.referee_deviation("yellows", referee, r.home, r.away) if referee else None
+            rows += player_rows(pp, base, r.home, p.lambda_home, rd)
+            rows += player_rows(pp, base, r.away, p.lambda_away, rd)
         for mk, dd in fxp.items():
             if not isinstance(dd, dict):
                 continue
