@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.54.0 — Squad market value (2026-09-29)
+
+The question was whether something was wrong with promoted sides. They are
+over-rated, but correcting that makes the 1X2 worse. What the market knows and
+we did not is *which* promoted side has spent money. Squad value supplies it.
+
+### Added
+- **Squad market value as an engine input.** Each club's value is the sum of its
+  18 most valuable players (Transfermarkt), read as of the date being
+  predicted. The final lambdas are tilted toward the richer squad, with total
+  goals unchanged (`squad_value_shift`, β 0.105 / κ −0.215).
+  - Published benchmark: 1X2 RPS 0.2008 → **0.1999**, gap to Bet365 closing
+    +0.0062 → +0.0053, 83% → 85% of the way from base rates.
+  - Weekly-refit walk-forward, leaving one season out at a time: 0.2006 →
+    0.1999 in 5 of 6 seasons, O/U unchanged.
+  - Title, top-4 and relegation forecasts from matchday 5 improved in 6, 5 and
+    5 of 6 seasons.
+  - Home/away calibration through the 30–60% band now sits on the diagonal.
+- `src/mundialytics/features/squad_value.py` and `scripts/build_squad_values.py`.
+  They build a weekly history from the frozen Kaggle dump and a daily snapshot
+  from ESPN rosters, each player carrying his latest value; 82% of roster
+  players are matched. The daily refresh gained step 7g.
+- `fit(..., squad_value_asof=)`: every fit at a past cutoff reads squads as they
+  stood then. A historical fit without it is refused, and the competition
+  layer and backtest scripts pass their cutoff.
+- `scripts/squad_value/`: the weekly-refit harness and every experiment behind
+  this, negative ones included.
+
+### Found along the way
+- **The published backtest understates production.** It fits once per season;
+  production refits daily. Refitting weekly, the same engine scores 0.2006, not
+  0.2013.
+- **Handicapping promoted sides fails again**, now on the production-faithful
+  harness: +0.0003 RPS (worse). Second-division form adds nothing either.
+- **Transfermarkt's league column on valuations is the club's current league,**
+  not the league at valuation time. Visibility is rebuilt from match history.
+- **Limits:** values are frozen at June 2026 (the dump stopped updating), and
+  the Bundesliga gets nothing from the shift.
+
 ## v0.53.0 — The track record means what it says (2026-09-23)
 
 An outside review listed six gaps between the data, the predictions, the log and
