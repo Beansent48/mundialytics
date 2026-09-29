@@ -18,6 +18,7 @@ import pandas as pd
 
 from mundialytics.statistical_core.attack_defense_model import AttackDefenseModel
 from mundialytics.statistical_core.distributions import (
+    ScoreDistribution,
     outcome_probabilities,
     scoreline_distribution,
 )
@@ -46,6 +47,14 @@ from mundialytics.statistical_core.schemas import canonical_name
 # Override a single field with dict-unpacking, e.g. a different blend weight:
 #     PredictionEngine(**{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": w})
 # PredictionEngine copies xg_rate_kwargs internally, so sharing this dict is safe.
+#
+# coherent_markets (2026-09-23): the sharpened 1X2 used to sit next to a raw
+# scoreline matrix -- 84% home win on the page, 75% summing its own grid. The
+# matrix is now reweighted so each outcome region carries the published 1X2, and
+# every goal market is read from that. Scored on the six walk-forward seasons:
+# exact score log loss -0.0032 (5/6), O/U 3.5 5/6, BTTS 4/6, O/U 2.5 -0.0002,
+# O/U 1.5 unchanged, 1X2 identical by construction. See
+# scripts/experiment_market_coherence.py.
 DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     "blend_weight_gl": 0.30,
     "ad_rho": -0.07,
@@ -54,7 +63,67 @@ DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     "outcome_rho": -0.06,
     "goal_temper": 1.05,
     "xg_rate_kwargs": {"use_ewma": True},
+    "coherent_markets": True,
 }
+
+
+def markets_from_lambdas(lh: float, la: float, *, max_goals: int = 10, rho: float = 0.0,
+                         temper: float = 1.0, sharpen_gamma: float = 1.0,
+                         coherent: bool = False):
+    """(market probabilities, scoreline distribution) for one pair of lambdas.
+
+    `coherent` reweights the matrix so its outcome regions sum to the sharpened
+    1X2, and reads every goal market from that matrix, so the page never shows
+    a 1X2 its own scoreline grid contradicts.
+    """
+    # Probabilities from score matrix
+    probs = outcome_probabilities(lh, la, max_goals=max_goals, dixon_coles_rho=rho,
+                                  temper=temper)
+    # Post-hoc 1X2 sharpening (see PredictionEngine.__init__): trio only,
+    # renormalized. Other markets and the scoreline matrix stay raw.
+    if abs(sharpen_gamma - 1.0) > 1e-9:
+        trio = np.clip(np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]], dtype=float), 1e-9, 1.0)
+        trio = trio ** sharpen_gamma
+        trio = trio / trio.sum()
+        probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
+    dist = scoreline_distribution(lh, la, max_goals=max_goals, normalize=True,
+                                  dixon_coles_rho=rho, temper=temper)
+    if coherent and abs(sharpen_gamma - 1.0) > 1e-9:
+        m = dist.matrix.to_numpy(dtype=float).copy()
+        i, j = np.indices(m.shape)
+        for mask, target in ((i > j, probs["p_home_win"]), (i == j, probs["p_draw"]),
+                             (i < j, probs["p_away_win"])):
+            mass = m[mask].sum()
+            if mass > 0:
+                m[mask] *= target / mass
+        m /= m.sum()
+        dist = ScoreDistribution(lambda_home=dist.lambda_home, lambda_away=dist.lambda_away,
+                                 matrix=pd.DataFrame(m, index=dist.matrix.index,
+                                                     columns=dist.matrix.columns))
+        top = dist.top_scorelines(1)[0]
+        probs = {
+            **probs,
+            "p_btts": dist.p_btts,
+            "p_over_05": dist.total_goals_probability(0.5, "over"),
+            "p_over_15": dist.total_goals_probability(1.5, "over"),
+            "p_over_25": dist.total_goals_probability(2.5, "over"),
+            "p_over_35": dist.total_goals_probability(3.5, "over"),
+            "p_under_25": dist.total_goals_probability(2.5, "under"),
+            "most_likely_score": str(top["score"]),
+            "most_likely_score_probability": float(top["probability"]),
+        }
+    return probs, dist
+
+
+def deployed_markets_from_lambdas(lh: float, la: float):
+    """markets_from_lambdas with the deployed configuration's parameters."""
+    k = DEPLOYED_CLUB_ENGINE_KWARGS
+    return markets_from_lambdas(
+        lh, la, rho=k.get("outcome_rho", k.get("ad_rho", 0.0)),
+        temper=k.get("goal_temper", 1.0),
+        sharpen_gamma=float(np.clip(k.get("sharpen_gamma_1x2", 1.0), 0.5, 2.0)),
+        coherent=bool(k.get("coherent_markets", False)),
+    )
 
 
 # ── Match prediction dataclass ─────────────────────────────────────────────────
@@ -169,6 +238,7 @@ class PredictionEngine:
         rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
         xg_rate_kwargs: dict | None = None,     # passthrough to XGRateModel (e.g. {"use_ewma": True})
         goal_temper: float | None = None,  # marginal pmf tempering >1 (goals are sub-Poisson, Pearson ~0.91); None = off
+        coherent_markets: bool = False,  # read every goal market from a matrix that agrees with the sharpened 1X2
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -209,6 +279,7 @@ class PredictionEngine:
         self.lambda_scale_: float = 1.0
         self.xg_rate_kwargs = dict(xg_rate_kwargs or {})
         self.goal_temper = float(goal_temper) if goal_temper is not None else None
+        self.coherent_markets = bool(coherent_markets)
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -518,20 +589,7 @@ class PredictionEngine:
         lh = float(np.clip(lh, 0.05, 6.0))
         la = float(np.clip(la, 0.05, 6.0))
 
-        # Probabilities from score matrix
-        rho_m = self.outcome_rho if self.outcome_rho is not None else self.ad_rho
-        temper_m = self.goal_temper if self.goal_temper is not None else 1.0
-        probs = outcome_probabilities(lh, la, max_goals=self.max_goals, dixon_coles_rho=rho_m,
-                                      temper=temper_m)
-        # Post-hoc 1X2 sharpening (see __init__): trio only, renormalized. Other
-        # markets and the scoreline matrix stay raw.
-        if abs(self.sharpen_gamma_1x2 - 1.0) > 1e-9:
-            trio = np.clip(np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]], dtype=float), 1e-9, 1.0)
-            trio = trio ** self.sharpen_gamma_1x2
-            trio = trio / trio.sum()
-            probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
-        dist = scoreline_distribution(lh, la, max_goals=self.max_goals, normalize=True,
-                                      dixon_coles_rho=rho_m, temper=temper_m)
+        probs, dist = self.markets_from_lambdas(lh, la)
 
         # Event lambdas
         sh, sa = self._event_lambda("shots_for", h, a, competition)
@@ -555,6 +613,21 @@ class PredictionEngine:
             expected_fouls_home=fh, expected_fouls_away=fa,
             expected_yellows_home=yh, expected_yellows_away=ya,
             model_source=model_src,
+        )
+
+    def markets_from_lambdas(self, lh: float, la: float):
+        """Every goal market, and the scoreline matrix, from the two lambdas.
+
+        Split out of predict_match so a logged prediction (which stores the
+        lambdas) can be rebuilt exactly, without refitting anything.
+        """
+        return markets_from_lambdas(
+            lh, la, max_goals=self.max_goals,
+            rho=self.outcome_rho if self.outcome_rho is not None else self.ad_rho,
+            temper=self.goal_temper if self.goal_temper is not None else 1.0,
+            sharpen_gamma=self.sharpen_gamma_1x2,
+            # getattr: engines pickled before the flag existed load without it
+            coherent=getattr(self, "coherent_markets", False),
         )
 
     # ── Tournament helpers ────────────────────────────────────────────────────

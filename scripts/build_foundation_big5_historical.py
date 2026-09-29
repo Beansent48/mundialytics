@@ -56,6 +56,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from mundialytics.identity.normalization import canonical_team_name
+from mundialytics.utils import atomic_to_csv
 
 RAW_DIR = ROOT / "data/raw/football_data"
 OUT_PATH = ROOT / "data/processed/foundation_big5_multi_season.csv"
@@ -194,7 +195,7 @@ def main() -> None:
     ]
     combined = combined[col_order].sort_values("date").reset_index(drop=True)
 
-    combined.to_csv(out_path, index=False)
+    atomic_to_csv(combined, out_path)
     print(f"Wrote {len(combined)} matches -> {out_path}")
     print(f"Skipped {len(skipped)} files (missing required columns): {skipped[:10]}")
     print(f"Date range: {combined['date'].min()} - {combined['date'].max()}")

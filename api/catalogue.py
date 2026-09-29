@@ -40,14 +40,26 @@ def fixture_slug(home: str, away: str) -> str:
     return f"{slugify(home)}-vs-{slugify(away)}"
 
 
-@lru_cache(maxsize=32)
 def season_calendar(comp_id: str, season: str) -> pd.DataFrame:
     """The published calendar for a league-season: every fixture, played or not.
 
     The foundation holds only played matches, so a calendar derived from it can
     never contain a fixture before kick-off — the one thing this product is for.
     Returns an empty frame when the provider is unreachable; callers fall back.
+
+    Cached for half an hour, not for the life of the process: a result or a
+    rescheduled kick-off has to reach a running API without a restart.
     """
+    import time
+
+    return _season_calendar(comp_id, season, int(time.time() // CALENDAR_TTL_SECONDS))
+
+
+CALENDAR_TTL_SECONDS = 1800
+
+
+@lru_cache(maxsize=32)
+def _season_calendar(comp_id: str, season: str, _bucket: int) -> pd.DataFrame:
     try:
         from mundialytics.providers.espn_fixtures import fetch_season_fixtures
 

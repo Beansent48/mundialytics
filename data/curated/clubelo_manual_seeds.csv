@@ -1,0 +1,4 @@
+club,elo,country,rule,peer,note
+Slavia Praha,1556.40,CZE,strongest club of its country in the seed,Viktoria Plzen,"Champions 2026/27 participant. Absent from the 2026-07-23 snapshot and the 220 history files, and api.clubelo.com was 502 on 2026-09-23. Likely an underestimate: Slavia usually rates above Plzen."
+Torreense,1347.31,POR,weakest top-flight club of its country in the seed,AVS Futebol,"Europa League 2026/27 participant, promoted, never rated in our snapshot."
+Iberia 1999,1159.65,GEO,strongest club of its country in the seed,Torpedo Kutaisi,"Conference 2026/27 participant. Substring matching used to hand it Ironi Tiberias (ISR), a different club."

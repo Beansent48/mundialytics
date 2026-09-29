@@ -1,5 +1,66 @@
 # Changelog
 
+## v0.53.0 — The track record means what it says (2026-09-23)
+
+An outside review listed six gaps between the data, the predictions, the log and
+what the site shows. Each was checked by running the code before anything was
+changed. All six were real, and checking turned up more.
+
+### Fixed
+- **Played matches were graded on a re-run, not on what was said.** The match
+  page said "what our model predicted before the match" but re-ran today's
+  engine, which had already been fitted on that result. It now reads the
+  pre-kickoff log. On Valencia 2–3 Real Sociedad the log said Valencia 53.8% and
+  over 2.5 at 51.2%; the re-run showed 48.1% and 44.9%. Old rows keep only the
+  pick, so only the pick is graded. With nothing logged, nothing is graded.
+- **A failed step still reported success.** `update_season.py` discarded every
+  step's result: ESPN answered 403 on 2026-09-16, 17 and 18 and each run said
+  ok. Steps are now recorded, and a failed required step exits 2. Any failure
+  between rebuilding the foundation and checking it restores the backup, not
+  only a failed check.
+- **The running API never saw new data.** The fitted engine was cached for the
+  life of the process. It now reloads when the foundation changes, and the
+  season calendar expires after 30 minutes.
+- **The published RPS was a hand-typed 0.2025.** The deployed engine, scored by
+  the same script, was at 0.2008. The per-league gaps and the landing page's
+  match count were stale too. Everything now comes from one generated file.
+- **The 1X2 and its own scoreline grid disagreed.** The 1X2 is sharpened; the
+  matrix was not (84% home win on the page, 75% summing the grid). The matrix
+  is now reweighted to the published 1X2. Out of sample this made no market
+  worse: exact score improved in 5/6 seasons, HT/FT in 6/6, and O/U 2.5 log loss
+  went from 0.6795 to 0.6793 against Bet365.
+- **A club was priced with another club's rating.** Substring matching gave
+  Iberia 1999 (Georgia) the rating of Ironi Tiberias (Israel). Short names now
+  match inside longer ones only on whole words.
+- **The Champions and Europa League ran with 35 teams.** Slavia Praha and
+  Torreense have no ClubElo rating and were dropped with all their fixtures (8
+  of 144 each). They now have documented seeds.
+- **The logger lost matches.** It compared kick-offs against midnight, so a
+  match that evening was never logged on its own day. It returned before
+  logging Europe whenever the league window was empty. And from 2026-09-04 to
+  09-14 it found no calendar at all while reporting OK.
+
+### Added
+- **Provenance on every prediction:** kick-off (UTC), training cutoff, a model
+  fingerprint, both lambdas, the full 1X2 and the expected stats. Enough to
+  rebuild the whole prediction from the log.
+- **Coverage guarantees.** The logger fails if any fixture in its window has no
+  prediction or a league calendar is missing. `audit_prediction_coverage.py`
+  fails on any unexplained miss among last week's played matches. Known misses
+  live in `data/curated/coverage_known_gaps.csv`, each with its cause.
+- **Debutant prices.** A club new to the Big Five is priced from last season's
+  relegated clubs instead of being skipped. Walk-forward on 20 debutants: RPS
+  0.179, against 0.195 for the engine's silent fallback and 0.223 for base rates.
+- **Failure alerts.** `run_update.ps1` shows a Windows notification naming the
+  failed steps and the unpredicted matches.
+- `benchmark_vs_bet365.py` writes `web/data/benchmark_vs_bet365.json` with a
+  hash of what it scored. The walk-forward cache now stores the lambdas, so any
+  goal market can be re-scored without refitting.
+
+### Tests
+240 pass on a clean checkout (was 204), 102 skip without the local dataset.
+
+
 ## v0.52.0 — Europe gets players, and the draft gets dealt (2026-09-18)
 
 ### Fixed

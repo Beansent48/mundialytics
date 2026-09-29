@@ -112,7 +112,29 @@ def load_seed(root: str | Path) -> tuple[dict[str, float], str]:
     seed = dict(zip(df["Club"].astype(str), df["Elo"].astype(float)))
     for club, elo in _latest_from_histories(root).items():
         seed.setdefault(club, elo)
+    for club, elo in load_manual_seeds(root).items():
+        seed.setdefault(club, elo)
     return seed, latest.stem
+
+
+MANUAL_SEEDS = "data/curated/clubelo_manual_seeds.csv"
+
+
+def load_manual_seeds(root: str | Path) -> dict[str, float]:
+    """European participants ClubElo has never given us a rating for.
+
+    Without an entry the simulator dropped the club: the 2026/27 Champions ran
+    with 35 teams and eight of its 144 league-phase fixtures vanished because
+    Slavia Praha is in neither the snapshot nor the history files. Each value
+    comes from a stated rule on a named peer (see the CSV). It is only used
+    for a club that has no real rating, and the local roll-forward then moves
+    it with real results.
+    """
+    p = Path(root) / MANUAL_SEEDS
+    if not p.exists():
+        return {}
+    df = pd.read_csv(p).dropna(subset=["club", "elo"])
+    return dict(zip(df["club"].astype(str), df["elo"].astype(float)))
 
 
 def roll_forward(seed: dict[str, float], matches: pd.DataFrame,

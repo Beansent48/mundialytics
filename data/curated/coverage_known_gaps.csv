@@ -1,0 +1,6 @@
+date,home,away,reason
+2026-09-10,slavia prague,lens,"Slavia Praha had no ClubElo rating, so the logger skipped the tie; seeded 2026-09-23 (clubelo_manual_seeds.csv)."
+2026-09-13,elversberg,bayern munich,"Logger found no fixtures 2026-09-04..14: fixturedownload died and the step still reported OK. ESPN fallback added; a missing calendar now fails the step."
+2026-09-14,leeds,newcastle,"Monday-evening kick-off compared against midnight, so it looked already started on the day of the run. Fixed 2026-09-23 (kickoff_utc)."
+2026-09-14,inter,udinese,"Same midnight comparison as leeds vs newcastle."
+2026-09-17,lillestrom,torreense,"Torreense had no ClubElo rating, so the logger skipped the tie; seeded 2026-09-23."

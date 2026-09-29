@@ -56,7 +56,26 @@ export type MatchPrediction = {
   scorelines: { score: string; p: number }[];
   scoreMatrix: number[][];
   expectedStats: ExpectedStat[];
+  /**
+   * Played matches only: where these numbers come from. "logged" = rebuilt from
+   * the pre-kickoff log; "logged-partial" = the log holds only the 1X2 pick (and
+   * the O/U 2.5 call), the rest is recomputed; "recomputed" = nothing was logged,
+   * everything comes from the current engine, which has already seen the match.
+   */
+  source?: PredictionSource | null;
 };
+
+export type PredictionSource =
+  | { kind: "recomputed" }
+  | {
+      kind: "logged" | "logged-partial";
+      loggedAt: string;
+      modelFingerprint: string | null;
+      trainCutoff: string | null;
+      pick: "1" | "X" | "2";
+      pickProbability: number;
+      over25: number | null;
+    };
 
 /** Most-probable integer band [lo, hi] and the probability the count lands in it. */
 export type StatRange = { lo: number; hi: number; p: number };
@@ -456,6 +475,8 @@ async function request<T>(path: string, revalidate = 300): Promise<T> {
 }
 
 export const api = {
+  health: () =>
+    request<{ status: string; matches: number; dataThrough: string }>("/health", 3600),
   competitions: () => request<Competition[]>("/catalogue", 3600),
   fixturesDay: (day: string) => request<DayFixtures>(`/fixtures/day?day=${day}`, 300),
   fixturesCalendar: () => request<FixtureCalendar>("/fixtures/calendar", 900),

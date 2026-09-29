@@ -24,6 +24,10 @@ FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 # understate what the app actually serves. Regenerate with
 # scripts/generate_deployed_walkforward.py.
 PREDS = ROOT / "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv"
+# The figures the site and the README publish, versioned with the code. The API
+# reads this file; nothing publishes a hand-typed number any more (the site once
+# showed 0.2025 while this script, on the same predictions, said 0.2008).
+OUT_JSON = ROOT / "web/data/benchmark_vs_bet365.json"
 WANT = {"Date", "HomeTeam", "AwayTeam", "B365H", "B365D", "B365A",
         "B365CH", "B365CD", "B365CA", "B365>2.5", "B365<2.5", "B365C>2.5", "B365C<2.5"}
 
@@ -112,6 +116,21 @@ def main() -> None:
           f"({rates[0]:.1%}/{rates[1]:.1%}/{rates[2]:.1%})")
     print(f"  base rates -> closing line spans {span:.4f} RPS; "
           f"we cover {(r_base - r_ours) / span:.1%} of it")
+    result = {
+        "sample": int(len(ok)),
+        "window": f"{ok.season.min().replace('-', '/')[:5]}{ok.season.min()[7:]}"
+                  f"–{ok.season.max().replace('-', '/')[:5]}{ok.season.max()[7:]}",
+        "rows": [
+            {"key": "market", "rps": round(r_book, 4)},
+            {"key": "engine", "rps": round(r_ours, 4)},
+            {"key": "baseRates", "rps": round(r_base, 4)},
+            {"key": "uniform", "rps": round(r_unif, 4)},
+        ],
+        "logLoss": {"engine": round(ll_o, 4), "market": round(ll_b, 4)},
+        "coverage": round((r_base - r_ours) / span, 4),
+        "bySeason": [],
+        "byLeague": [],
+    }
     print("\n  per season (RPS ours | book | gap):")
     for s, g in ok.groupby("season"):
         gi = np.where(g.hg > g.ag, 0, np.where(g.hg == g.ag, 1, 2))
@@ -119,6 +138,8 @@ def main() -> None:
         gb_inv = 1 / g[["oh", "od", "oa"]].to_numpy()
         gb = gb_inv / gb_inv.sum(axis=1, keepdims=True)
         print(f"    {s}: {rps3(gi, go):.4f} | {rps3(gi, gb):.4f} | {rps3(gi, go)-rps3(gi, gb):+.4f}  (n={len(g)})")
+        result["bySeason"].append({"season": s, "engine": round(rps3(gi, go), 4),
+                                   "market": round(rps3(gi, gb), 4), "n": int(len(g))})
     print("\n  per league (RPS gap):")
     for c, g in ok.groupby("competition"):
         gi = np.where(g.hg > g.ag, 0, np.where(g.hg == g.ag, 1, 2))
@@ -126,6 +147,8 @@ def main() -> None:
         gb_inv = 1 / g[["oh", "od", "oa"]].to_numpy()
         gb = gb_inv / gb_inv.sum(axis=1, keepdims=True)
         print(f"    {c}: {rps3(gi, go)-rps3(gi, gb):+.4f}  (n={len(g)})")
+        result["byLeague"].append({"league": c, "gap": round(rps3(gi, go) - rps3(gi, gb), 4),
+                                   "n": int(len(g))})
 
     ou = ok.dropna(subset=["oo25", "ou25"]).copy()
     ou = ou[(ou.oo25 > 1.01) & (ou.ou25 > 1.01)]
@@ -137,6 +160,34 @@ def main() -> None:
         print(f"  LL    OURS {bll(y_o, ou.po25.to_numpy(float)):.4f} | BET365 {bll(y_o, book_o):.4f} | "
               f"gap {bll(y_o, ou.po25.to_numpy(float)) - bll(y_o, book_o):+.4f}")
         print(f"  mean |p_ours - p_book|: {np.abs(ou.po25.to_numpy(float) - book_o).mean():.4f}")
+        result["overUnder25"] = {"n": int(len(ou)),
+                                 "logLossEngine": round(bll(y_o, ou.po25.to_numpy(float)), 4),
+                                 "logLossMarket": round(bll(y_o, book_o), 4)}
+
+    write_result(result)
+
+
+def write_result(result: dict) -> None:
+    """Versioned artifact: the numbers plus what produced them."""
+    import hashlib
+    import json
+    import sys
+    from datetime import date
+
+    sys.path.insert(0, str(ROOT / "src"))
+    from mundialytics.serving.provenance import engine_code_fingerprint
+
+    result["byLeague"].sort(key=lambda r: r["gap"])
+    result["provenance"] = {
+        "generated": date.today().isoformat(),
+        "script": "scripts/benchmark_vs_bet365.py",
+        "predictions": str(PREDS.relative_to(ROOT)).replace("\\", "/"),
+        "predictionsSha256": hashlib.sha256(PREDS.read_bytes()).hexdigest()[:16],
+        "engineCode": engine_code_fingerprint(),
+    }
+    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    OUT_JSON.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"\nescrito {OUT_JSON.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
