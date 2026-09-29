@@ -223,8 +223,10 @@
     "recomputedTag": "recalculado",
     "rangeNoteRecomputed": "Rangos recalculados con el modelo actual, que ya ha visto este partido: se muestran como referencia, no se evalúan.",
     "recomputedScore": "Recalculado",
-    "lineupPass": "Actualizado con las alineaciones confirmadas",
-    "lineupMissing": "titulares habituales que no salen: {home} {homeList}; {away} {awayList}",
+    "lineupPass": "Actualizado con las convocatorias confirmadas",
+    "lineupMissing": "titulares habituales fuera de la convocatoria: {home} {homeList}; {away} {awayList}",
+    "morningPass": "Ajustado por bajas probables",
+    "morningMissing": "titulares habituales que no estuvieron en la última convocatoria (sin sanción): {home} {homeList}; {away} {awayList}",
     "lineupNone": "ninguno"
   },
   "results": {

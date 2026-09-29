@@ -19,7 +19,9 @@ export async function Verdict({ match }: { match: Match }) {
   // exact score, which is a near-constant low draw (~1-1) for every fixture and
   // reads as "the model has no opinion". See the API headline builder.
   const likely = match.prediction.headline.likelyScore;
-  const lineup = match.prediction.lineupPass;
+  // the latest re-price wins: the confirmed squads, else the matchday-morning absences
+  const lineup = match.prediction.lineupPass ?? match.prediction.morningPass;
+  const lineupKind = match.prediction.lineupPass ? "lineup" : "morning";
 
   const outcomes = [
     { key: "home", label: match.home, p: p.home, color: "var(--home)" },
@@ -64,9 +66,11 @@ export async function Verdict({ match }: { match: Match }) {
 
       {lineup ? (
         <p className="mt-3 text-[0.78rem] text-muted">
-          <span className="font-semibold text-text">{t("lineupPass")}</span>
+          <span className="font-semibold text-text">
+            {t(lineupKind === "lineup" ? "lineupPass" : "morningPass")}
+          </span>
           {" · "}
-          {t("lineupMissing", {
+          {t(lineupKind === "lineup" ? "lineupMissing" : "morningMissing", {
             home: match.home,
             homeList: lineup.missingHome.length ? lineup.missingHome.join(", ") : t("lineupNone"),
             away: match.away,

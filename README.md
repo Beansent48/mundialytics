@@ -56,10 +56,10 @@ money; this engine has public data and nothing else.
 This figure is deliberately conservative: the published walk-forward fits the
 engine once, before each season, so it cannot see what production does during
 one. Production refits daily, reads squad values weekly and re-prices each match
-once the lineups are out. Replayed that way on the same 10,080 matches — weekly
+once the squads are out. Replayed that way on the same 10,080 matches — weekly
 refits, values as each week saw them, the lineup pass — the engine scores
-**0.1983**, 90% of the way to the closing line and 0.0037 behind it
-(`scripts/lineup_pass/backtest_absence.py`, `scripts/squad_value/`).
+**0.1976**, 92% of the way to the closing line and 0.0030 behind it
+(`scripts/lineup_pass/eval_signals.py`, `scripts/squad_value/`).
 
 Reproduce all of it (the benchmark scores the deployed walk-forward cache, so
 generate it first):
@@ -167,18 +167,26 @@ Transfermarkt ───────────── squad market value ──�
   in matches with a promoted side, where our gap to Bet365 had been 50%
   larger. Title, top-4 and relegation forecasts from matchday 5 improved too
   (`scripts/squad_value/README.md`).
-- **Lineup pass** — the morning prediction is made before anyone knows who
-  plays. About an hour before kick-off, once both starting XIs are out on
-  ESPN, the match is priced again (a watcher the daily refresh starts; it is
-  awake only in the hour before each match). The new input is the share of each side's
-  usual starters (the 11 with most starts in the last 10 league matches)
-  missing from the XI, applied as another total-preserving tilt. Backtest on
-  top of the squad value: 0.1995 → 0.1989, better in **6 of 6** seasons, O/U
-  unchanged. The match page switches to this price in the last hour and names
-  the missing regulars. It is logged separately
-  (`data/processed/logs/lineup_pass_log.csv`); the morning log stays the track
-  record, and `scripts/evaluate_lineup_pass.py` grades one against the other
-  on the same matches.
+- **Lineup pass** — the first logged prediction is made before anyone knows
+  who plays. About an hour before kick-off, once both squads are out on ESPN,
+  the match is priced again (a watcher the daily refresh starts; it is awake
+  only in the hour before each match). The input is the market value share of
+  each side's usual starters (the 11 with most starts in the last 10 league
+  matches) who are **not even in the matchday squad**, applied as another
+  total-preserving tilt. Backtest on top of the squad value: −0.00118 RPS,
+  better in **6 of 6** seasons, O/U not worse. The first version counted
+  regulars not *starting* and was worth half as much (−0.00052): a regular on
+  the bench is rotation, which the market already expects, and on its own it
+  carries nothing (0 of 6). The match page switches to this price in the last
+  hour and names the missing regulars.
+- **Morning pass** — on matchday morning, a regular who was not in the squad
+  for the previous league match and was not serving a ban there is most likely
+  still injured. Pricing that in is worth −0.00026 (6 of 6), known days before
+  the lineups. Bans alone, rebuilt from each league's card rules, carry nothing
+  (3 of 6). Both passes are logged separately
+  (`data/processed/logs/lineup_pass_log.csv`, `morning_pass_log.csv`); the first
+  logged prediction stays the track record, and `scripts/evaluate_lineup_pass.py`
+  grades each against it on the same matches.
 - **Calibration** — Platt scaling per market, validated on held-out seasons.
 - **Scopes** — club and national-team models are fitted and used separately.
   Strength parameters are not comparable across contexts, so mixing them would
@@ -220,9 +228,13 @@ Recorded because negative results are the expensive part of the project:
   already crowned). The market prices several of them, and we disagree with it
   most in exactly those matches, but as model adjustments none held up out of
   sample (at best 4 of 6 seasons, or a gain near zero). Crowned champions are
-  a large effect on only 74 matches — too few to validate. The lineup itself
+  a large effect on only 74 matches — too few to validate. The squad itself
   carries what rotation does, which is why the lineup pass works where the
   Champions League flags did not.
+- **ClubElo on top of the engine.** Its pre-match rating, as a tilt with and
+  without handing over part of the model's own strength gap: −0.00004 at best,
+  2 of 6 seasons. The engine already holds what a results-based rating knows
+  (`scripts/elo_blend/`).
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
 - **Shrinking per-competition parameters.** `AttackDefenseModel` fits μ and home
@@ -252,8 +264,9 @@ Recorded because negative results are the expensive part of the project:
 - Goals are modelled as **independent** Poisson with the Dixon-Coles correction
   applied to the low-score cells only. That is a patch, not a correlation model;
   a true bivariate Poisson or a copula would be the next step.
-- **No injury news before the lineups.** Until the XI is announced the model
-  knows nothing about who is out; the lineup pass only helps in the last hour.
+- **Little injury news before the lineups.** Until the squads are announced the
+  model only knows who missed the previous match; a player injured in training
+  this week, or back from injury, is invisible until the lineup pass.
 - **One bookmaker.** Bet365 alone. A multi-book consensus, or Pinnacle, would be
   a harder yardstick.
 - **Big 5 leagues only** for the trained model; no cross-league scale.
@@ -478,7 +491,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  284 tests green on a clean checkout; 102 more
+tests/                  289 tests green on a clean checkout; 102 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
