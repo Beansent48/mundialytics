@@ -274,7 +274,8 @@ def player_rows(pp, base: dict, team: str, lam: float) -> list[dict]:
         return []
     if out is None or out.empty:
         return []
-    out = out.nlargest(PLAYERS_PER_TEAM, "exp_min")
+    from mundialytics.props.player_props import likely_xi
+    out = likely_xi(out, PLAYERS_PER_TEAM)
     rows = []
     for r in out.itertuples(index=False):
         for col, (mk, line) in PLAYER_MARKETS.items():

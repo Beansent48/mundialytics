@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.57.0 — Player markets on this season's data (2026-09-29)
+
+Understat, the player model's only source, stopped on 2026-05-24. Every 2026/27
+player price therefore came from each player's state at the end of last season:
+his form, his minutes, and the "likely XI" we publish. Live, 38% of the
+shortlisted players were not even in the matchday squad.
+
+### Added
+- **ESPN rows feed the player state** (`PlayerPropsModel.fit(current=...)`).
+  - Source: ESPN's 2026/27 player-match file (goals, shots, assists, cards,
+    starter/sub), in Understat's shape.
+  - Minutes are estimated from the role, xG = shots × the player's xG per
+    shot, and xA carries on. Players new to the big five get their own record.
+  - Replayed on 2021/22–2025/26, this recovers ~95% of what full data would
+    give, with every prop better in 5/5 folds (shots 1.5 −0.019, anytime
+    −0.0049, yellow −0.0024).
+  - Replayed week by week on 2026/27 (4,945 player-matches): anytime −0.0041,
+    shots 1.5 −0.0123.
+  - `scripts/experiment_player_fresh_form.py`.
+- **`likely_xi`: the shortlist ranks by starts in the team's last five
+  matches**, with expected minutes breaking ties.
+  - Used by the web, the morning log and `top_scorers_round.py`.
+  - Share of shortlisted players who played: 58% → 83% on history, and
+    64.6% → 79.8% on 2026/27.
+
+### Fixed
+- **Player markets settle under ESPN's spelling of a name**
+  ("Kylian Mbappe-Lottin" is ESPN's "Kylian Mbappé").
+  - Matching is limited to one team-match.
+  - 2026/27 settled player rows went from 1,431 to 1,520 per market.
+
+### Measured, not shipped
+- **Sharing the team's expectation among the confirmed XI** (the starting
+  striker is out, so the others pick up his share).
+  - Goals and assists were only −0.0002 once the XI was all that was
+    summed. Understat lists only the subs who came on, so a first pass
+    that summed the bench leaked who would enter and showed double.
+  - Shots were worse, 0/5.
+  - `scripts/experiment_player_team_share.py`.
+
 ## v0.56.0 — Event markets: season level, referees, lineup-priced players (2026-09-29)
 
 The live 2026/27 log showed the event markets drifting: shots under-predicted
