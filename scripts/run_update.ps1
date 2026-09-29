@@ -127,6 +127,23 @@ if ($code -eq 0 -or $code -eq 2) {
     }
 }
 
+# Start the day's lineup watcher (scripts/log_lineup_pass.py --watch). It sleeps
+# until 70 minutes before each Big Five kick-off, re-prices the match once both
+# XIs are out on ESPN, and exits after the last one -- at once on a day without
+# matches -- so nothing polls all day and no extra scheduled task is needed.
+# Detached: this script does not wait for it. A second start is a no-op (the
+# watcher holds a lock). Started whatever the refresh's exit code: after a
+# rolled-back run the engine still serves the previous fit.
+try {
+    $wlog = Join-Path $logDir "lineup_watch_$stamp.log"
+    Start-Process -FilePath $python `
+        -ArgumentList @((Join-Path $root 'scripts\log_lineup_pass.py'), '--watch') `
+        -WindowStyle Hidden -RedirectStandardOutput $wlog -RedirectStandardError "$wlog.stderr" | Out-Null
+    Write-Host "Lineup watcher started ($wlog)"
+} catch {
+    Write-Warning "lineup watcher not started: $($_.Exception.Message)"
+}
+
 # Say it out loud when something failed. A failed step used to be visible only
 # to someone who opened last_run.json; a lost matchday of predictions cannot be
 # recovered later, so it has to reach a person the same day. A Windows toast
@@ -171,6 +188,10 @@ if ($code -ne 0) {
 Get-ChildItem $logDir -Filter 'update_*.log*' |
     Sort-Object LastWriteTime -Descending |
     Select-Object -Skip 60 |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem $logDir -Filter 'lineup_watch_*.log*' |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -Skip 28 |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
 if ($code -ne 0) {

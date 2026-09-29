@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mundialytics-betting-engine"
-version = "0.54.0"
+version = "0.55.0"
 description = "Football match-prediction engine: calibrated 1X2, goal, half-time and prop markets, benchmarked against bookmaker closing odds."
 requires-python = ">=3.10"
 dependencies = [
@@ -23,5 +23,5 @@ where = ["src"]
 
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.0"]
-data = ["soccerdata>=1.8"]
+data = ["soccerdata>=1.8", "beautifulsoup4>=4.12", "lxml>=5.0"]
 dev = ["pytest>=7.4", "matplotlib>=3.8"]

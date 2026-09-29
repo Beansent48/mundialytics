@@ -19,6 +19,7 @@ export async function Verdict({ match }: { match: Match }) {
   // exact score, which is a near-constant low draw (~1-1) for every fixture and
   // reads as "the model has no opinion". See the API headline builder.
   const likely = match.prediction.headline.likelyScore;
+  const lineup = match.prediction.lineupPass;
 
   const outcomes = [
     { key: "home", label: match.home, p: p.home, color: "var(--home)" },
@@ -60,6 +61,19 @@ export async function Verdict({ match }: { match: Match }) {
           </span>
         ))}
       </div>
+
+      {lineup ? (
+        <p className="mt-3 text-[0.78rem] text-muted">
+          <span className="font-semibold text-text">{t("lineupPass")}</span>
+          {" · "}
+          {t("lineupMissing", {
+            home: match.home,
+            homeList: lineup.missingHome.length ? lineup.missingHome.join(", ") : t("lineupNone"),
+            away: match.away,
+            awayList: lineup.missingAway.length ? lineup.missingAway.join(", ") : t("lineupNone"),
+          })}
+        </p>
+      ) : null}
 
       <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-border bg-border sm:grid-cols-4">
         {[

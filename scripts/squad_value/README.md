@@ -1,4 +1,13 @@
-# Squad value (Transfermarkt) experiment — work in progress
+# Squad value (Transfermarkt) experiment
+
+> **Update (v0.55.0).** Production now reads every Big Five squad from
+> transfermarkt.com once a week (`src/mundialytics/providers/transfermarkt.py`).
+> The history is rebuilt with each snapshot's own valuations instead of June's
+> (`build_history(freeze_june=False)`). Fresh values measured −0.00109 against
+> −0.00079 June-frozen (5/6 both), and the constants were refitted on the fresh
+> history: β 0.1337, κ −0.2617. The first live read mapped 96/96 teams with
+> 98.8% of players valued. The June-frozen results below remain the record of
+> the first deployment.
 
 Experiment scripts from 2026-09-29. **The engine is untouched**: nothing here is wired into
 production. Run from the repo root. Intermediate results live in

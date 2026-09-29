@@ -222,7 +222,10 @@
     "sourceRecomputed": "We logged no prediction before this match. These numbers were recomputed by the current model, which has already seen this result, so they are not counted as hits.",
     "recomputedTag": "recomputed",
     "rangeNoteRecomputed": "Ranges recomputed by the current model, which has already seen this match: shown for reference, not graded.",
-    "recomputedScore": "Recomputed"
+    "recomputedScore": "Recomputed",
+    "lineupPass": "Updated with the confirmed lineups",
+    "lineupMissing": "usual starters left out: {home} {homeList}; {away} {awayList}",
+    "lineupNone": "none"
   },
   "results": {
     "eyebrow": "Proof",

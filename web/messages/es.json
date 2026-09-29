@@ -222,7 +222,10 @@
     "sourceRecomputed": "No registramos ninguna predicción antes de este partido. Estos números los ha recalculado el modelo actual, que ya incluye este resultado, así que no se cuentan como aciertos.",
     "recomputedTag": "recalculado",
     "rangeNoteRecomputed": "Rangos recalculados con el modelo actual, que ya ha visto este partido: se muestran como referencia, no se evalúan.",
-    "recomputedScore": "Recalculado"
+    "recomputedScore": "Recalculado",
+    "lineupPass": "Actualizado con las alineaciones confirmadas",
+    "lineupMissing": "titulares habituales que no salen: {home} {homeList}; {away} {awayList}",
+    "lineupNone": "ninguno"
   },
   "results": {
     "eyebrow": "La prueba",
