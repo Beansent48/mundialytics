@@ -2,20 +2,13 @@
 
 import { ChevronLeft, ChevronRight, Loader2, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import { FixtureRow } from "@/components/matchday/fixture-row";
-import { api, type Competition, type Fixture } from "@/lib/api";
+import { api, type Competition } from "@/lib/api";
 import { useFavorites } from "@/lib/favorites";
+import { setMatchdaySelection, useMatchdayQuery, useMatchdaySelection } from "@/lib/matchday-state";
 import { cn } from "@/lib/utils";
-
-type Round = {
-  competitionName: string;
-  season: string;
-  matchday: number;
-  rounds: number[];
-  fixtures: Fixture[];
-};
 
 /**
  * Browse any round of any competition.
@@ -33,42 +26,15 @@ export function CompetitionBrowser({
   const t = useTranslations("matchday");
   const { has, toggle, ready } = useFavorites();
 
-  const [slug, setSlug] = useState(competitions[0]?.slug ?? "");
-  const [round, setRound] = useState<number | null>(null);
-  // The last answer, keyed on the competition and round it answers. The
-  // previous round stays on screen while the next one loads.
-  const [result, setResult] = useState<{
-    key: string;
-    data: Round | null;
-    failed: boolean;
-  } | null>(null);
-  const key = `${slug}|${round ?? ""}`;
-
-  useEffect(() => {
-    if (!slug) return;
-    let cancelled = false;
-    const requested = `${slug}|${round ?? ""}`;
-    api
-      .round(slug, undefined, round ?? undefined)
-      .then((r) => {
-        if (cancelled) return;
-        // Filed under the round it turned out to be, so letting the API pick
-        // the upcoming round does not flash a second loading state.
-        setResult({ key: `${slug}|${r.matchday}`, data: r, failed: false });
-        setRound(r.matchday);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setResult((prev) => ({ key: requested, data: prev?.data ?? null, failed: true }));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, round]);
-
-  const loading = result?.key !== key;
-  const failed = !loading && (result?.failed ?? false);
-  const data = result?.data ?? null;
+  const selection = useMatchdaySelection();
+  const slug = competitions.some((c) => c.slug === selection.competition)
+    ? selection.competition : competitions[0]?.slug ?? "";
+  const round = selection.round;
+  const load = useCallback(() => api.round(slug, undefined, round ?? undefined), [slug, round]);
+  const result = useMatchdayQuery(`round:${slug}:${round ?? "next"}`, load);
+  const { loading } = result;
+  const failed = result.failed && !result.data;
+  const data = result.data ?? null;
 
   // Followed competitions first, order otherwise untouched.
   const ordered = ready
@@ -89,8 +55,7 @@ export function CompetitionBrowser({
             key={c.slug}
             type="button"
             onClick={() => {
-              setSlug(c.slug);
-              setRound(null); // let the API pick the upcoming round again
+              setMatchdaySelection({ competition: c.slug, round: null });
             }}
             className={cn(
               "flex items-center gap-1.5 rounded-[10px] border px-3 py-1.5 text-[0.83rem] font-medium",
@@ -114,7 +79,7 @@ export function CompetitionBrowser({
             type="button"
             aria-label={t("previousRound")}
             disabled={idx <= 0}
-            onClick={() => setRound(rounds[idx - 1])}
+            onClick={() => setMatchdaySelection({ competition: slug, round: rounds[idx - 1] })}
             className="flex size-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:border-border-strong hover:text-text disabled:opacity-40"
           >
             <ChevronLeft className="size-4" />
@@ -128,7 +93,7 @@ export function CompetitionBrowser({
             type="button"
             aria-label={t("nextRound")}
             disabled={idx < 0 || idx >= rounds.length - 1}
-            onClick={() => setRound(rounds[idx + 1])}
+            onClick={() => setMatchdaySelection({ competition: slug, round: rounds[idx + 1] })}
             className="flex size-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:border-border-strong hover:text-text disabled:opacity-40"
           >
             <ChevronRight className="size-4" />
