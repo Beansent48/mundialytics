@@ -146,6 +146,85 @@ def test_watcher_sleeps_to_the_window_polls_and_exits(tmp_path, monkeypatch):
     assert not (tmp_path / "watch.lock").exists()
 
 
+def test_watcher_retries_the_schedule_while_espn_is_down(tmp_path, monkeypatch):
+    """ESPN (or DNS) is down when the watcher starts: it retries the schedule every
+    POLL_MIN minutes instead of exiting for the day, and still logs the match
+    (2026-09-29: getaddrinfo failed for an hour)."""
+    import log_lineup_pass as L
+
+    clock = {"now": pd.Timestamp("2026-10-10T06:30:00Z")}
+    kickoff = pd.Timestamp("2026-10-10T14:00:00Z")
+    logged: set = set()
+    fetches: list = []
+
+    monkeypatch.setattr(L, "LOCK", tmp_path / "watch.lock")
+    monkeypatch.setattr(L, "fixtures_logged_ahead", lambda now, h: 1)
+    monkeypatch.setattr(L, "_kickoffs_logged_ahead", lambda now, h: [kickoff])
+    monkeypatch.setattr(L.pd.Timestamp, "now", classmethod(lambda cls, tz=None: clock["now"]))
+    monkeypatch.setattr(L, "logged_ids", lambda: set(logged))
+    monkeypatch.setattr(L.time, "sleep", lambda s: clock.update(now=clock["now"] + pd.Timedelta(seconds=s)))
+
+    def flaky_upcoming(now, minutes):
+        fetches.append(now)
+        if len(fetches) <= 3:
+            raise OSError("[Errno 11001] getaddrinfo failed")
+        return [{"event_id": "1", "code": "eng.1", "competition": "Premier League", "kickoff": kickoff}]
+
+    def fake_pass(lookahead):
+        if clock["now"] >= kickoff - pd.Timedelta(minutes=55):
+            logged.add("1")
+        return 0
+
+    monkeypatch.setattr(L, "upcoming", flaky_upcoming)
+    monkeypatch.setattr(L, "run_pass", fake_pass)
+    assert L.watch() == 0
+    assert len(fetches) == 4
+    assert all(b - a == pd.Timedelta(minutes=L.POLL_MIN) for a, b in zip(fetches, fetches[1:]))
+    assert "1" in logged
+    assert not (tmp_path / "watch.lock").exists()
+
+
+def test_watcher_gives_up_on_the_schedule_after_the_last_kickoff(tmp_path, monkeypatch):
+    """If ESPN stays down past the last kick-off the local log knows about, the watcher
+    stops retrying (nothing left to re-price) and releases the lock."""
+    import log_lineup_pass as L
+
+    clock = {"now": pd.Timestamp("2026-10-10T06:30:00Z")}
+    kickoff = pd.Timestamp("2026-10-10T14:00:00Z")
+
+    monkeypatch.setattr(L, "LOCK", tmp_path / "watch.lock")
+    monkeypatch.setattr(L, "fixtures_logged_ahead", lambda now, h: 1)
+    monkeypatch.setattr(L, "_kickoffs_logged_ahead", lambda now, h: [kickoff])
+    monkeypatch.setattr(L.pd.Timestamp, "now", classmethod(lambda cls, tz=None: clock["now"]))
+    monkeypatch.setattr(L.time, "sleep", lambda s: clock.update(now=clock["now"] + pd.Timedelta(seconds=s)))
+
+    def down(now, minutes):
+        raise OSError("[Errno 11001] getaddrinfo failed")
+
+    monkeypatch.setattr(L, "upcoming", down)
+    monkeypatch.setattr(L, "run_pass", lambda lookahead: pytest.fail("no pass without a schedule"))
+    assert L.watch() == 1
+    assert kickoff <= clock["now"] < kickoff + pd.Timedelta(minutes=L.POLL_MIN)
+    assert not (tmp_path / "watch.lock").exists()
+
+
+def test_last_logged_kickoff_bounds_the_retries(tmp_path, monkeypatch):
+    """The retry deadline comes from the local log: timed rows by their kick-off, a row
+    with only a date by the end of that Madrid day."""
+    import log_lineup_pass as L
+
+    pd.DataFrame([{"fecha": "2026-10-10", "kickoff_utc": "2026-10-10T14:00Z", "home": "sunderland", "mercado": "1X2"},
+                  {"fecha": "2026-10-10", "kickoff_utc": "", "home": "brighton", "mercado": "1X2"},
+                  {"fecha": "2026-10-10", "kickoff_utc": "2026-10-10T19:00Z", "home": "braga", "mercado": "1X2"}]
+                 ).to_csv(tmp_path / "log.csv", index=False)
+    pd.DataFrame({"team": ["sunderland", "brighton"]}).to_csv(tmp_path / "rosters.csv", index=False)
+    monkeypatch.setattr(L, "PRED_LOG", tmp_path / "log.csv")
+    monkeypatch.setattr(L, "ROSTERS", tmp_path / "rosters.csv")
+    kicks = L._kickoffs_logged_ahead(pd.Timestamp("2026-10-10T06:00Z"), 20)
+    assert sorted(kicks) == [pd.Timestamp("2026-10-10T14:00Z"), pd.Timestamp("2026-10-10T22:00Z")]
+    assert L.fixtures_logged_ahead(pd.Timestamp("2026-10-10T06:00Z"), 20) == 2
+
+
 def test_no_fixture_logged_means_no_network(tmp_path, monkeypatch):
     """On a day the morning log holds no Big Five fixture the watcher exits without
     asking ESPN anything."""
