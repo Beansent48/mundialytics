@@ -402,6 +402,13 @@ def main() -> None:
     run_step("7c/8 local ClubElo roll-forward",
              [PY, "scripts/build_local_clubelo.py"])
 
+    # Referee per match from ESPN, all five leagues: the team props' card/foul
+    # models learn each referee's tendency from it (REF_DEV_* in
+    # props/team_props.py). Incremental, one summary per new match. Optional:
+    # without it the model keeps the referees it already knows.
+    run_step("7h/8 ESPN referees (tarjetas/faltas por arbitro)",
+             [PY, "scripts/fetch_espn_referees.py"], optional=True, timeout=900)
+
     if not args.skip_logging:
         # Log the upcoming round BEFORE it is played. This is what makes the
         # track record real: predictions must be written pre-kickoff, by an

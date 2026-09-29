@@ -56,6 +56,16 @@ STATS = ["xg", "goals", "shots", "xa", "assists", "yellow_cards", "npxg", "npgoa
 # hurts cards (noisy small-sample) and is neutral for assists -> career-only there
 RECENT_W = {"xg": 0.5, "goals": 0.5, "shots": 0.5, "xa": 0.0, "assists": 0.0, "yellow_cards": 0.0,
             "npxg": 0.5, "npgoals": 0.5}
+# Pricing once the XI is out (predict_lineup). E[min | plays] averages a
+# player's starts and cameos; with the published lineup each player is priced on
+# the minutes of the role he has tonight — as a starter or from the bench — and
+# mu = scale * rate * (min/90)^exponent, because a per-90 career rate that mixes
+# both roles overshoots starters and undershoots subs when multiplied by raw
+# minutes. Exponent and scale were picked on pre-2021 seasons only; on the
+# 2021/22-2025/26 folds every prop beat the morning price 5/5 (anytime -0.0047,
+# shots 1.5 -0.025, assist -0.0031, yellow -0.0040 log-loss) and top-1 scorer
+# picks went 37.6% -> 39.7%. scripts/experiment_player_lineup_minutes.py
+LINEUP_MIN_FIT = {"goal": (0.7, 0.895), "shots": (0.8, 0.934), "ass": (0.7, 0.900), "yc": (0.6, 0.927)}
 
 
 def _pos_group(p: str) -> str:
@@ -170,6 +180,20 @@ class PlayerPropsModel:
         mp = pm[pm["minutes"] > 0].groupby("player_id")["minutes"]
         agg["avg_minp10"] = mp.apply(lambda s: s.tail(10).mean())
         agg["nplayed10"] = mp.apply(lambda s: min(len(s), 10))
+        # role minutes for predict_lineup: over the player's last 10 squad rows,
+        # minutes in the games he started / came on in (harness semantics)
+        is_sub = pm["position"].astype(str) == "Sub"
+        last10 = pm.assign(
+            min_start=pm["minutes"].where(~is_sub & (pm["minutes"] > 0)),
+            min_sub=pm["minutes"].where(is_sub & (pm["minutes"] > 0)),
+        ).groupby("player_id").tail(10).groupby("player_id")
+        agg["avg_min_start10"] = last10["min_start"].mean()
+        agg["n_start10"] = last10["min_start"].count()
+        agg["avg_min_sub10"] = last10["min_sub"].mean()
+        agg["n_sub10"] = last10["min_sub"].count()
+        self._pos_min_start = played[played["position"] != "Sub"].groupby("pgroup")["minutes"].mean().to_dict()
+        self._pos_min_sub = played[played["position"] == "Sub"].groupby("pgroup")["minutes"].mean().to_dict()
+        self._name_idx = None
         self._players = agg
 
         # roster: players seen in each team's last 10 games
@@ -301,7 +325,12 @@ class PlayerPropsModel:
         P = self._players.loc[[i for i in ids if i in self._players.index]].copy()
         if P.empty:
             return P
+        return self._price(P, us_team, atk_factor)
 
+    def _price(self, P: pd.DataFrame, us_team: str, atk_factor: float,
+               started: pd.Series | None = None) -> pd.DataFrame:
+        """Prop probabilities for the players in P. `started` (bool per row) switches
+        minutes to the confirmed role — see LINEUP_MIN_FIT; None is the morning price."""
         for c in STATS:
             prior = P["pgroup"].map(self._pri[c]).fillna(self._glob[c])
             raw = np.where(P["cmin"] > 0, P[f"c_{c}"] / P["cmin"].clip(lower=1e-9) * 90.0, prior)
@@ -322,17 +351,33 @@ class PlayerPropsModel:
         P["exp_min"] = (cred_m * P["avg_minp10"].fillna(prior_min) + (1 - cred_m) * prior_min).clip(20, 95)
         emins = P["exp_min"] / 90.0
         af = float(np.clip(atk_factor, 0.4, 2.5)) ** 0.7
+        # per-mu minutes multiplier: the morning recipe, or the confirmed role's
+        if started is None:
+            m_goal = m_shots = m_ass = emins
+            m_yc = emins ** 0.7
+        else:
+            st = started.reindex(P.index).fillna(False).astype(bool)
+            role_min = np.where(
+                st,
+                self._role_minutes(P, "start", getattr(self, "_pos_min_start", {}), 83.0),
+                self._role_minutes(P, "sub", getattr(self, "_pos_min_sub", {}), 24.0))
+            P["exp_min"] = role_min
+            em = pd.Series(np.clip(role_min, 5, 95) / 90.0, index=P.index)
+            (g_g, a_g), (g_s, a_s), (g_a, a_a), (g_y, a_y) = (
+                LINEUP_MIN_FIT[k] for k in ("goal", "shots", "ass", "yc"))
+            m_goal, m_shots, m_ass = a_g * em ** g_g, a_s * em ** g_s, a_a * em ** g_a
+            m_yc = a_y * em ** g_y
 
         # goal mu = non-pen component + pen-taker component (5/5 folds; falls
         # back to the xG mu exactly when pen data was absent at fit)
         t_pen = P["t_pen60"].fillna(0.0)
         taker_share = (t_pen / (t_pen + 4.0)) * (P["p_pen60"].fillna(0.0) / t_pen.clip(lower=1e-9))
         pen_rate = getattr(self, "_team_pen_rate", {}).get(us_team, 0.22)
-        mu_pen = taker_share * pen_rate * PEN_CONV * emins * af
-        mu_goal = (0.7 * P["r_npxg"] + 0.3 * P["r_npgoals"]) * emins * af + mu_pen
-        mu_shots = P["r_shots"] * emins * af
-        mu_ass = (0.7 * P["r_xa"] + 0.3 * P["r_assists"]) * emins * af
-        mu_yc = P["r_yellow_cards"] * emins ** 0.7
+        mu_pen = taker_share * pen_rate * PEN_CONV * m_goal * af
+        mu_goal = (0.7 * P["r_npxg"] + 0.3 * P["r_npgoals"]) * m_goal * af + mu_pen
+        mu_shots = P["r_shots"] * m_shots * af
+        mu_ass = (0.7 * P["r_xa"] + 0.3 * P["r_assists"]) * m_ass * af
+        mu_yc = P["r_yellow_cards"] * m_yc
 
         out = pd.DataFrame({
             "player": P["player"], "pgroup": P["pgroup"], "team": us_team,
@@ -346,6 +391,50 @@ class PlayerPropsModel:
             "mu_goals": mu_goal.round(3), "mu_shots": mu_shots.round(2),
         }, index=P.index)
         return out.sort_values("p_anytime_scorer", ascending=False).round(4)
+
+    @staticmethod
+    def _role_minutes(P: pd.DataFrame, role: str, pos_prior: dict, default: float) -> np.ndarray:
+        """Last-10 minutes in this role, shrunk n/(n+3) to the position's role mean."""
+        prior = P["pgroup"].map(pos_prior).fillna(default)
+        n = P.get(f"n_{role}10", pd.Series(0.0, index=P.index)).fillna(0.0)
+        avg = P.get(f"avg_min_{role}10", pd.Series(np.nan, index=P.index)).fillna(prior)
+        cred = n / (n + 3.0)
+        return (cred * avg + (1 - cred) * prior).to_numpy(dtype=float)
+
+    def predict_lineup(self, team: str, starters: list[str], bench: list[str] = (),
+                       atk_factor: float = 1.0) -> tuple[pd.DataFrame, list[str]]:
+        """Prop probabilities for a CONFIRMED matchday squad (ESPN names), each
+        player priced on the minutes of his role tonight (LINEUP_MIN_FIT).
+
+        Returns (props with a `started` column, names that matched no player
+        with big-five history). Players are matched by name over everyone the
+        model has measured, not the club roster, so a new signing still counts."""
+        if self._players is None:
+            return pd.DataFrame(), list(starters) + list(bench)
+        from mundialytics.identity.current_squads import NameIndex
+
+        if getattr(self, "_name_idx", None) is None:
+            idx = NameIndex()
+            for pid, row in self._players.iterrows():
+                last = row.get("last_date")
+                idx.add(row["player"], pid, rank=pd.Timestamp(last).timestamp() if pd.notna(last) else 0.0)
+            self._name_idx = idx
+        ids, started, missing = [], [], []
+        for names, role in ((starters, True), (bench, False)):
+            for who in names:
+                pid = self._name_idx.lookup(who) if who else None
+                if pid is None or pid in ids:
+                    missing.append(str(who))
+                    continue
+                ids.append(pid)
+                started.append(role)
+        if not ids:
+            return pd.DataFrame(), missing
+        P = self._players.loc[ids].copy()
+        us_team = self._resolve_team(team) or team
+        out = self._price(P, us_team, atk_factor, started=pd.Series(started, index=P.index))
+        out["started"] = pd.Series(started, index=P.index).reindex(out.index)
+        return out, missing
 
     LEAGUE_MEAN_LAMBDA = 1.40  # engine's league-average side lambda (goals scale)
 
