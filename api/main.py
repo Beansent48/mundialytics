@@ -221,11 +221,11 @@ def match(competition: str, fixture: str) -> dict:
         raise HTTPException(404, f"Unknown fixture: {fixture}")
     row = rows[0]
 
-    # the lineup pass lands about an hour before kick-off: its log's mtime is in
-    # the key so the page switches to the lineup price at once, not after the TTL
-    from mundialytics.serving.logged_prediction import LINEUP_LOG
-    lineup_v = int(LINEUP_LOG.stat().st_mtime) if LINEUP_LOG.exists() else 0
-    key = ("match", competition, fixture, str(df["date"].max())[:10], lineup_v)
+    # the morning and lineup passes land on matchday: their logs' mtimes are in the
+    # key so the page switches to the new price at once, not after the TTL
+    from mundialytics.serving.logged_prediction import LINEUP_LOG, MORNING_LOG
+    pass_v = tuple(int(f.stat().st_mtime) if f.exists() else 0 for f in (LINEUP_LOG, MORNING_LOG))
+    key = ("match", competition, fixture, str(df["date"].max())[:10], pass_v)
     return _cached(key, lambda: _build_match(row, competition, meta, season, df))
 
 
@@ -674,17 +674,25 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
             if logged.full:
                 pred = as_prediction(logged, fallback=pred)
 
-    # In the last hour before kick-off the lineup pass (scripts/log_lineup_pass.py)
-    # re-prices the match with the confirmed XIs. Upcoming pages show that price;
-    # played ones stay graded against the morning log above.
-    lineup_pass = None
+    # On matchday morning the morning pass (scripts/log_morning_pass.py) re-prices a
+    # team's next match with the regulars likely still injured; in the last hour the
+    # lineup pass (scripts/log_lineup_pass.py) re-prices it with the confirmed squads.
+    # Upcoming pages show the latest of the two; played ones stay graded against the
+    # first logged prediction above.
+    lineup_pass = morning_pass = None
     if not base["played"]:
-        from mundialytics.serving.logged_prediction import as_prediction, find_lineup_pass
+        from mundialytics.serving.logged_prediction import (
+            as_prediction, find_lineup_pass, find_morning_pass)
 
         found = find_lineup_pass(row.home_team, row.away_team, row.date)
         if found is not None:
             lp, lineup_pass = found
             pred = as_prediction(lp, fallback=pred)
+        else:
+            found = find_morning_pass(row.home_team, row.away_team, row.date)
+            if found is not None:
+                mp, morning_pass = found
+                pred = as_prediction(mp, fallback=pred)
 
     # Team-stat distributions once: they feed both the expected-stat ranges below
     # and the team-props card, so they must be ready before the payload is built.
@@ -754,6 +762,7 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
         "expectedStats": _expected_stats(pred, fx),
         "source": source,
         "lineupPass": lineup_pass,
+        "morningPass": morning_pass,
     }
 
     base["scorers"] = _scorers(pp, row.home_team, row.away_team, pred)
