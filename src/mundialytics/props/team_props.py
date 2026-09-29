@@ -61,6 +61,118 @@ STAKES_MARKETS = {"yellows", "fouls"}   # walk-forward standings features
 # (+0.0003) was offset by a side-lines loss (-0.0005); fouls was a wash
 ADM_W = {"corners": 0.3, "yellows": 0.3}
 ADM_CAPS = {"corners": 20.0, "yellows": 12.0, "fouls": 35.0, "shots": 40.0, "sot": 20.0}
+# League-SEASON level (2026-09-29, scripts/experiment_league_level.py). The recipe
+# had no league term: team rollings carry a league-wide shift only damped, and
+# 2026/27 moved (shots +12%, yellows -7% in all five leagues).
+#  LEVEL_K  feature lg_lvl = this league-season's side mean on earlier dates,
+#           shrunk to the previous season with K matches. Fouls only: -0.0013
+#           5/5 folds (and -0.0022 on 2026/27); a wash for every other market.
+#  RES_K    lambdas x r, r = actual/predicted total over this league-season so
+#           far, shrunk to 1 with K matches. Yellows only: -0.0005 totals and
+#           sides, 4/5 folds (-0.0023 on 2026/27). It fixed the 2026/27 shots
+#           bias too but cost 2/5 folds in normal seasons, so shots stay out.
+LEVEL_K = {"fouls": 70}
+RES_K = {"yellows": 120}
+# Referee for the four leagues where football-data has no Referee column
+# (2026-09-29, scripts/experiment_referee_all_leagues.py; ESPN referees from
+# 2021/22 via scripts/fetch_espn_referees.py). ref_dev = the referee's mean
+# deviation of the match total from his league's previous-season mean over his
+# EARLIER matches, shrunk n/(n+20) to 0; 0 = unknown referee = league-typical,
+# which is also what every pre-2021 row carries. Stacked on the league-season
+# terms above, 3/3 folds on every line: yellows -0.0017..-0.0028 totals,
+# -0.0013/-0.0015 sides; fouls -0.0014..-0.0056. The EPL keeps its football-data
+# referee model (ref_rate, longer history); the ESPN deviation was mixed there,
+# so it is zero on EPL rows and never served for an EPL fixture.
+REF_DEV_MARKETS = {"yellows", "fouls"}
+REF_DEV_SHRINK = 20.0
+REF_DEV_SKIP = {"Premier League"}
+
+
+def _ref_key(name) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
+    return " ".join(s.lower().replace(".", " ").split())
+
+
+def load_espn_referees(root: str | Path) -> pd.DataFrame | None:
+    """data/processed/espn_referees.csv (scripts/fetch_espn_referees.py), named rows only."""
+    p = Path(root) / "data/processed/espn_referees.csv"
+    if not p.exists():
+        return None
+    try:
+        r = pd.read_csv(p, dtype={"event_id": str})
+    except Exception:
+        return None
+    r = r[r["referee"].fillna("").astype(str).str.len() > 0].copy()
+    r["date"] = pd.to_datetime(r["date"], errors="coerce")
+    r = r.dropna(subset=["date"])
+    return r if len(r) else None
+
+
+def attach_espn_referees(m: pd.DataFrame, refs: pd.DataFrame) -> pd.Series:
+    """Referee per foundation match_id: join on (competition, date, canonical home),
+    then canonical away, then home at +-1 day (ESPN dates are UTC)."""
+    from mundialytics.identity.normalization import canonical_team_name
+
+    r = refs.assign(h=refs["home_team"].astype(str).map(canonical_team_name),
+                    a=refs["away_team"].astype(str).map(canonical_team_name))
+    f = m[["match_id", "competition", "date", "home_team", "away_team"]].reset_index(drop=True)
+    f = f.assign(h=f["home_team"].astype(str).map(canonical_team_name),
+                 a=f["away_team"].astype(str).map(canonical_team_name))
+    out = pd.Series(np.nan, index=f.index, dtype=object)
+    for side, shift in (("h", 0), ("a", 0), ("h", -1), ("h", 1)):
+        miss = out.isna()
+        if not miss.any():
+            break
+        rr = r.assign(date=r["date"] + pd.Timedelta(days=shift)).drop_duplicates(["competition", "date", side])
+        j = f.loc[miss, ["competition", "date", side]].merge(
+            rr[["competition", "date", side, "referee"]], on=["competition", "date", side], how="left")
+        out.loc[miss] = j["referee"].to_numpy()
+    return pd.Series(out.to_numpy(), index=f["match_id"].to_numpy())
+
+
+def _referee_deviation(m: pd.DataFrame, hc: str, ac: str) -> tuple[pd.Series, dict]:
+    """Per match_id: the referee's shrunk mean deviation over EARLIER dates (0 when
+    unknown or in REF_DEV_SKIP); plus the latest value per referee key."""
+    m = m.sort_values("date")
+    tot = (m[hc] + m[ac]).astype(float)
+    smean = tot.groupby([m["competition"], m["season"]]).mean()
+    prev = {}
+    for (c, s_) in smean.index:
+        ps = [x for (cc, x) in smean.index if cc == c and x < s_]
+        prev[(c, s_)] = smean[(c, max(ps))] if ps else smean[(c, s_)]
+    dev = tot - np.array([prev[(c, s_)] for c, s_ in zip(m["competition"], m["season"])])
+    known = m.assign(dev=dev)
+    known = known[known["referee"].notna() & ~known["competition"].isin(REF_DEV_SKIP)]
+    out = pd.Series(0.0, index=m["match_id"].to_numpy())
+    latest = {}
+    for ref, g in known.groupby("referee"):
+        by_day = g.groupby("date")["dev"].agg(["sum", "size"])
+        cs, cn = by_day["sum"].cumsum(), by_day["size"].cumsum()
+        val = cs.shift(1, fill_value=0.0) / (cn.shift(1, fill_value=0) + REF_DEV_SHRINK)
+        out.loc[g["match_id"].to_numpy()] = g["date"].map(val).to_numpy()
+        latest[_ref_key(ref)] = float(cs.iloc[-1] / (cn.iloc[-1] + REF_DEV_SHRINK))
+    return out, latest
+
+
+def _league_levels(m: pd.DataFrame, hc: str, ac: str, k: int) -> tuple[pd.Series, dict]:
+    """Per match_id: the league-season side level from EARLIER dates, shrunk to the
+    previous season's mean with k matches; plus the latest level per competition
+    (all matches in, for the next fixture)."""
+    m = m.sort_values("date")
+    tot = (m[hc] + m[ac]).astype(float)
+    smean = tot.groupby([m["competition"], m["season"]]).mean()
+    per_match, latest = [], {}
+    for (comp, season), g in m.assign(tot=tot).groupby(["competition", "season"], sort=False):
+        prevs = [s for (c, s) in smean.index if c == comp and s < season]
+        prev = float(smean[(comp, max(prevs))]) if prevs else float(g["tot"].mean())
+        by_day = g.groupby("date")["tot"].agg(["sum", "size"])
+        cs, cn = by_day["sum"].cumsum(), by_day["size"].cumsum()
+        lvl = (cs.shift(1, fill_value=0.0) + k * prev) / (cn.shift(1, fill_value=0) + k) / 2.0
+        per_match.append(pd.Series(g["date"].map(lvl).to_numpy(), index=g["match_id"].to_numpy()))
+        if comp not in latest or season >= latest[comp][0]:
+            latest[comp] = (season, float((cs.iloc[-1] + k * prev) / (cn.iloc[-1] + k) / 2.0))
+    return pd.concat(per_match), {c: v for c, (_, v) in latest.items()}
 
 
 def _prob_over(total_lam: float | np.ndarray, line: float, disp: float) -> np.ndarray:
@@ -184,6 +296,9 @@ class TeamPropsModel:
     _use_lam: bool = field(default=False, init=False, repr=False)
     _adm: dict = field(default_factory=dict, init=False, repr=False)
     _team_pos: dict = field(default_factory=dict, init=False, repr=False)
+    _lg_level: dict = field(default_factory=dict, init=False, repr=False)
+    _res_ratio: dict = field(default_factory=dict, init=False, repr=False)
+    _ref_dev: dict = field(default_factory=dict, init=False, repr=False)
 
     @staticmethod
     def _add_positions(full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -252,6 +367,9 @@ class TeamPropsModel:
                 if len(rj) > 3000:
                     self._red_lam = rj.groupby("competition")["reds"].mean().to_dict()
                     self._red_glob = float(rj["reds"].mean())
+        espn_refs = load_espn_referees(root) if root is not None else None
+        if espn_refs is not None and "competition" in df.columns:
+            df["referee"] = df["match_id"].map(attach_espn_referees(df, espn_refs))
         if referee_data is not None:
             latest = referee_data.sort_values("date").groupby("ref").tail(1)
             self._ref_rates = {r.ref: (float(r.ref_yc), float(r.ref_foul))
@@ -264,7 +382,16 @@ class TeamPropsModel:
             m = m.dropna(subset=[hc, ac, "home_goals", "away_goals"])
             if len(m) < 3000:
                 continue
-            lr = self._long_rows(m, hc, ac, hl=EWM_HL.get(market, 5))
+            extra = {}
+            if market in LEVEL_K and "competition" in m.columns:
+                lvl, self._lg_level[market] = _league_levels(m, hc, ac, LEVEL_K[market])
+                m["lg_lvl"] = m["match_id"].map(lvl)
+                extra = {"lg_lvl": "lg_lvl"}
+            if market in REF_DEV_MARKETS and "referee" in m.columns and m["referee"].notna().any():
+                rd, self._ref_dev[market] = _referee_deviation(m, hc, ac)
+                m["ref_dev"] = m["match_id"].map(rd).fillna(0.0)
+                extra = {**extra, "ref_dev": "ref_dev"}
+            lr = self._long_rows(m, hc, ac, extra=extra, hl=EWM_HL.get(market, 5))
             feats = self._feature_names(market)
             tr = lr.dropna(subset=feats + ["ev_for"])
             reg = PoissonRegressor(alpha=0.1, max_iter=1000).fit(tr[feats], tr["ev_for"].clip(lower=0))
@@ -291,6 +418,8 @@ class TeamPropsModel:
                     last = m.sort_values("date").groupby("home_team")["competition"].last()
                     self._team_comp = {str(t).lower(): c for t, c in last.items()}
             self._team_feats[market] = self._latest_team_state(lr, hl=EWM_HL.get(market, 5))
+            if market in RES_K and "competition" in m.columns:
+                self._res_ratio[market] = self._current_season_ratio(market, m, lr, feats, hc, ac)
             if self.calibrate:
                 # NO_PLATT only gates TOTAL lines (yellows totals already calibrated);
                 # side-line Platt validated positive for every side market incl. yellows.
@@ -306,7 +435,7 @@ class TeamPropsModel:
                                 on=["date", "home_team", "away_team"], how="left")
                 epl = epl.drop_duplicates(subset=["match_id"]).dropna(subset=[REF_MARKETS[market]])
                 if len(epl) > 2000:
-                    lr_e = self._long_rows(epl, hc, ac, extra={"ref_rate": REF_MARKETS[market]},
+                    lr_e = self._long_rows(epl, hc, ac, extra={**extra, "ref_rate": REF_MARKETS[market]},
                                            hl=EWM_HL.get(market, 5))
                     fr = feats + ["ref_rate"]
                     tre = lr_e.dropna(subset=fr + ["ev_for"])
@@ -316,6 +445,52 @@ class TeamPropsModel:
                     self._epl_teams |= set(epl["home_team"].astype(str).str.lower())
                     self._epl_teams |= set(epl["away_team"].astype(str).str.lower())
         return self
+
+    def _current_season_ratio(self, market: str, m: pd.DataFrame, lr: pd.DataFrame,
+                              feats: list[str], hc: str, ac: str) -> dict:
+        """Per competition: actual / predicted match total over its latest season so
+        far, shrunk to 1 with RES_K matches. Predictions are the served recipe (rate
+        model + ADM blend); in-sample for those rows, a few hundred of ~40k."""
+        k = RES_K[market]
+        out = {}
+        last = m.groupby("competition")["season"].max()
+        cur = m[m["season"] == m["competition"].map(last)]
+        te = lr[lr.match_id.isin(set(cur.match_id))].copy()
+        if "delta_lam" in feats:
+            # the engine-lambda caches stop at the last finished season; use the
+            # goals-delta proxy, exactly what predict_fixture does without lambdas
+            te["delta_lam"] = te["delta_lam"].fillna(te["delta"])
+            te["abs_delta_lam"] = te["delta_lam"].abs()
+        te = te.dropna(subset=feats)
+        if te.empty:
+            return out
+        te["pred"] = np.clip(self._models[market].predict(te[feats]), 0.1, 25)
+        pv = te.pivot_table(index="match_id", columns="is_home", values="pred").dropna()
+        if pv.empty or 0 not in pv.columns or 1 not in pv.columns:
+            return out
+        ci = cur.set_index("match_id").loc[pv.index]
+        lh, la = pv[1].to_numpy(), pv[0].to_numpy()
+        if market in self._adm:
+            wb = ADM_W[market]
+            a_l = np.array([self._adm[market].expected_goals(h, a, 0, c)[:2]
+                            for h, a, c in zip(ci["home_team"], ci["away_team"], ci["competition"])])
+            lh, la = wb * a_l[:, 0] + (1 - wb) * lh, wb * a_l[:, 1] + (1 - wb) * la
+        d = pd.DataFrame({"comp": ci["competition"].to_numpy(), "pred": lh + la,
+                          "act": (ci[hc] + ci[ac]).astype(float).to_numpy()})
+        for comp, g in d.groupby("comp"):
+            mu = float(g["pred"].mean())
+            out[comp] = float((g["act"].sum() + k * mu) / (g["pred"].sum() + k * mu))
+        return out
+
+    def referee_deviation(self, market: str, referee: str | None,
+                          home_team: str, away_team: str) -> float | None:
+        """The ESPN-referee feature for this fixture: None (-> 0, league-typical)
+        without a referee, for an unknown one, or for an EPL fixture."""
+        if not referee or self.is_epl_fixture(home_team, away_team):
+            return None
+        if self._team_comp.get(home_team.lower()) in REF_DEV_SKIP:
+            return None
+        return getattr(self, "_ref_dev", {}).get(market, {}).get(_ref_key(referee))
 
     def is_epl_fixture(self, home_team: str, away_team: str) -> bool:
         return home_team.lower() in self._epl_teams and away_team.lower() in self._epl_teams
@@ -437,6 +612,10 @@ class TeamPropsModel:
             base += ["delta_lam", "abs_delta_lam"]
         if market in STAKES_MARKETS:
             base += ["pos_diff_abs", "releg_battle", "round_frac"]
+        if market in LEVEL_K and getattr(self, "_lg_level", {}).get(market):
+            base += ["lg_lvl"]
+        if market in REF_DEV_MARKETS and getattr(self, "_ref_dev", {}).get(market):
+            base += ["ref_dev"]
         return base
 
     @staticmethod
@@ -460,7 +639,8 @@ class TeamPropsModel:
     # ── prediction ─────────────────────────────────────────────────────────────
     def _side_lambda(self, market: str, team: str, opp: str, is_home: int,
                      ref_rate: float | None = None,
-                     lam_t: float | None = None, lam_o: float | None = None) -> float | None:
+                     lam_t: float | None = None, lam_o: float | None = None,
+                     ref_dev: float | None = None) -> float | None:
         mf = self._team_feats.get(market, {})
         st_t = mf.get(team) or mf.get(team.lower())      # foundation team names are lowercase
         st_o = mf.get(opp) or mf.get(opp.lower())
@@ -480,6 +660,12 @@ class TeamPropsModel:
             round_frac = min(played_t / 38.0, 1.0)
             releg = float((pos_t >= 15 or pos_o >= 15) and round_frac > 0.6)
             row = row + [abs(pos_t - pos_o), releg, round_frac]
+        if market in LEVEL_K and getattr(self, "_lg_level", {}).get(market):
+            lv = self._lg_level[market]
+            comp = self._team_comp.get(team.lower())
+            row = row + [lv.get(comp, float(np.mean(list(lv.values()))))]
+        if market in REF_DEV_MARKETS and getattr(self, "_ref_dev", {}).get(market):
+            row = row + [ref_dev if ref_dev is not None else 0.0]
         cols = self._feature_names(market)
         model = self._models[market]
         if ref_rate is not None and market in self._models_ref:
@@ -517,8 +703,9 @@ class TeamPropsModel:
             rr = None
             if ref_vals is not None and market in REF_MARKETS:
                 rr = ref_vals[0] if market == "yellows" else ref_vals[1]
-            lh = self._side_lambda(market, home_team, away_team, 1, rr, lam_home, lam_away)
-            la = self._side_lambda(market, away_team, home_team, 0, rr, lam_away, lam_home)
+            rd = self.referee_deviation(market, referee, home_team, away_team)
+            lh = self._side_lambda(market, home_team, away_team, 1, rr, lam_home, lam_away, rd)
+            la = self._side_lambda(market, away_team, home_team, 0, rr, lam_away, lam_home, rd)
             if lh is None or la is None:
                 continue
             # MLE strengths prior blend (round-5, joint-validated incl. side lines)
@@ -528,6 +715,10 @@ class TeamPropsModel:
                 ah, aa, _ = self._adm[market].expected_goals(home_team, away_team, 0, comp_a)
                 lh = wb * ah + (1 - wb) * lh
                 la = wb * aa + (1 - wb) * la
+            # league-season residual correction (yellows, RES_K)
+            if market in getattr(self, "_res_ratio", {}):
+                r = self._res_ratio[market].get(self._team_comp.get(home_team.lower()), 1.0)
+                lh, la = lh * r, la * r
             disp = self._disp[market]
             if market in self._disp_lg:   # per-league dispersion (fouls, validated 5/5)
                 comp = self._team_comp.get(home_team.lower())
