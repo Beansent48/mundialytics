@@ -53,7 +53,8 @@ def top_scorers(pp, team: str, lam: float, n: int = 3,
     out = pp.team_players_for_lambda(team, float(lam))
     if out is None or out.empty:
         return pd.DataFrame()
-    xi = out.nlargest(pool, "exp_min")
+    from mundialytics.props.player_props import likely_xi
+    xi = likely_xi(out, pool)
     return xi.nlargest(n, "p_anytime_scorer")[
         ["player", "exp_min", "p_anytime_scorer", "p_assist", "p_shots_over_1_5"]]
 

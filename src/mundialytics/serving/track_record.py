@@ -179,6 +179,39 @@ def _fbref_player_actuals() -> pd.DataFrame:
     return d.dropna(subset=["fecha", "equipo", "player"])[keep]
 
 
+def _player_finder(plk: dict):
+    """(fecha, team, name) -> that player's row: the exact name first, then a
+    tolerant match among the players of THAT team in THAT match only.
+
+    The log names players the way the model knows them (Understat), while the
+    current season settles from ESPN: "Kylian Mbappe-Lottin" is ESPN's "Kylian
+    Mbappé", "Pape Alassane Gueye" is "Pape Gueye". Exact keys alone left those
+    unsettled -- 112 player-matches of 2026/27 by 2026-09-29. Confining the
+    search to one team-match's players is what keeps a short-key match safe."""
+    from mundialytics.identity.current_squads import NameIndex
+
+    by_match: dict = {}
+    for (fecha, team, _), row in plk.items():
+        by_match.setdefault((fecha, team), []).append(row)
+    indexes: dict = {}
+
+    def find(fecha, team, name):
+        row = plk.get((fecha, team, name))
+        if row is not None:
+            return row
+        rows = by_match.get((fecha, team))
+        if not rows:
+            return None
+        if (fecha, team) not in indexes:
+            idx = NameIndex()
+            for x in rows:
+                idx.add(x.player, x)
+            indexes[(fecha, team)] = idx
+        return indexes[(fecha, team)].lookup(name)
+
+    return find
+
+
 def evaluate_log(df_clubs: pd.DataFrame,
                  labels: dict[str, str] | None = None) -> pd.DataFrame:
     """Join the served-predictions log with real results -> hit per prediction.
@@ -212,6 +245,7 @@ def evaluate_log(df_clubs: pd.DataFrame,
     if len(pl):
         for r in pl.itertuples(index=False):
             plk[(r.fecha, str(r.equipo), str(r.player))] = r
+    find_player = _player_finder(plk)
 
     m = m.dropna(subset=["home_goals"])
     out = []
@@ -233,8 +267,8 @@ def evaluate_log(df_clubs: pd.DataFrame,
             hit = float(over == (r.seleccion == "OVER"))
         elif mk.startswith("jug_"):
             # `ambito` carries the player for these markets
-            act = (plk.get((r.fecha, str(r.home), str(r.ambito)))
-                   or plk.get((r.fecha, str(r.away), str(r.ambito))))
+            act = (find_player(r.fecha, str(r.home), str(r.ambito))
+                   or find_player(r.fecha, str(r.away), str(r.ambito)))
             if act is None:
                 continue          # player data for this match not published yet
             if mk == "jug_goleador":
