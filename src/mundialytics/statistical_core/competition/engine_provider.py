@@ -81,7 +81,9 @@ def train_engine_before_cutoff(
     # 1X2 sharpening and outcome_rho in the shared config leave it untouched.
     engine = PredictionEngine(
         **{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": blend_weight_gl})
-    engine.fit(train)
+    # squad values as they stood at the cutoff (a backfilled 2021 forecast must not
+    # see 2026 squads); None-safe because fit only reads them when the shift is on
+    engine.fit(train, squad_value_asof=cutoff)
     return engine
 
 
