@@ -5,7 +5,7 @@
   per_league    one (beta, kappa) per league, each fitted on its own league's train seasons
   shrunk        per-league params shrunk halfway to the global fit
 
-usage: python scripts/squad_value/tm_test_league.py FILE.csv
+usage: python scripts/squad_value/tm_eval_league.py FILE.csv
 """
 import sys
 

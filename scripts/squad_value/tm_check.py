@@ -7,7 +7,7 @@ from scipy.optimize import minimize
 SP = "data/external/transfermarkt/work/"
 sys.path.insert(0, SP)
 sys.argv = ["x"]
-src = open(SP + "lofo.py").read().split("def rps(P):")[0]
+src = open("scripts/squad_value/lofo.py").read().split("def rps(P):")[0]
 exec(src)  # d, trio, Y, LH, LA, P0, O0, over
 
 over = (d.hg + d.ag > 2.5).values

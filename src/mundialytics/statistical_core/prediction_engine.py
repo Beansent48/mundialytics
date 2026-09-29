@@ -239,6 +239,7 @@ class PredictionEngine:
         xg_rate_kwargs: dict | None = None,     # passthrough to XGRateModel (e.g. {"use_ewma": True})
         goal_temper: float | None = None,  # marginal pmf tempering >1 (goals are sub-Poisson, Pearson ~0.91); None = off
         coherent_markets: bool = False,  # read every goal market from a matrix that agrees with the sharpened 1X2
+        squad_value_shift: dict | None = None,  # {"beta", "kappa"[, "path"]}: tilt lambdas by squad market value; None = off
     ):
         self.goal_model_type = goal_model_type
         self.event_model_type = event_model_type
@@ -280,6 +281,16 @@ class PredictionEngine:
         self.xg_rate_kwargs = dict(xg_rate_kwargs or {})
         self.goal_temper = float(goal_temper) if goal_temper is not None else None
         self.coherent_markets = bool(coherent_markets)
+        # Squad market value (Transfermarkt): the one team signal that is not derived
+        # from results, so it knows about summer signings and about which promoted
+        # side has money before either shows on the pitch. The final lambdas are
+        # tilted by s = beta*log(v_home/v_away) + kappa*log(lh/la), lh*e^(s/2), la*e^(-s/2),
+        # so total goals are untouched. kappa < 0 hands part of the model's own
+        # strength gap over to the value gap. Weekly-refit LOSO over 2020/21-2025/26,
+        # production-faithful values (June-frozen, unseen D2 players at 1 M EUR):
+        # 1X2 RPS -0.0008, 5/6 seasons, O/U unchanged. See scripts/squad_value/README.md.
+        self.squad_value_shift = dict(squad_value_shift) if squad_value_shift else None
+        self.squad_values_: dict[str, float] = {}
 
         # Three-way lambda blend: GoalLambdaModel + goals-AttackDefense + xG-AttackDefense.
         # goals-AD absorbs the remaining mass. blend_weight_ad_xg=0 (default) reproduces
@@ -306,6 +317,7 @@ class PredictionEngine:
         matches: pd.DataFrame,
         team_rows: pd.DataFrame | None = None,
         elo_history: pd.DataFrame | None = None,
+        squad_value_asof: Any = None,
     ) -> "PredictionEngine":
         """Fit all internal models.
 
@@ -314,7 +326,11 @@ class PredictionEngine:
         matches : match-level DataFrame (home_team, away_team, home_goals, away_goals, date, competition)
         team_rows : optional pre-built per-team rows with rolling stats
         elo_history : optional pre-computed ELO history DataFrame
+        squad_value_asof : date the squad values are read as of (only with squad_value_shift).
+            None = the latest snapshot, which is right for serving upcoming matches and wrong
+            for any fit at a past cutoff -- those must pass the cutoff.
         """
+        self._load_squad_values(matches, squad_value_asof)
         # AttackDefenseModel (per-league MLE, goals target)
         self.ad_model_ = AttackDefenseModel(
             dixon_coles_rho=self.ad_rho,
@@ -386,6 +402,40 @@ class PredictionEngine:
             self._learn_blend_weight(matches, elo_history)
 
         return self
+
+    def _load_squad_values(self, matches: pd.DataFrame, asof: Any) -> None:
+        self.squad_values_ = {}
+        if not self.squad_value_shift:
+            return
+        from mundialytics.features.squad_value import load_squad_values, squad_values_asof
+
+        if asof is None and "date" in matches.columns:
+            last = pd.to_datetime(matches["date"], errors="coerce").max()
+            # A fit whose data ends over a year ago is a backtest: reading today's
+            # squads there would leak the future into it.
+            if pd.notna(last) and last < pd.Timestamp.now() - pd.Timedelta(days=365):
+                raise ValueError("squad_value_shift on a historical fit: pass squad_value_asof "
+                                 f"(training data ends {last:%Y-%m-%d})")
+        self.squad_values_ = squad_values_asof(load_squad_values(self.squad_value_shift.get("path")), asof)
+
+    def set_squad_values(self, values: dict[str, float]) -> None:
+        """Replace the squad values the shift reads ({team: squad value in EUR})."""
+        self.squad_values_ = {canonical_name(k): float(v) for k, v in values.items() if v and v > 0}
+
+    def _squad_value_tilt(self, home: str, away: str, lh: float, la: float) -> tuple[float, float, bool]:
+        """(lh, la, applied): the squad-value shift, or the lambdas untouched when it is
+        off or either side has no value."""
+        # getattr: engines pickled before the shift existed have neither attribute
+        shift = getattr(self, "squad_value_shift", None)
+        if not shift:
+            return lh, la, False
+        values = getattr(self, "squad_values_", {})
+        vh, va = values.get(home), values.get(away)
+        if not vh or not va:
+            return lh, la, False
+        s = (float(shift.get("beta", 0.0)) * np.log(vh / va)
+             + float(shift.get("kappa", 0.0)) * np.log(lh / la))
+        return lh * float(np.exp(s / 2)), la * float(np.exp(-s / 2)), True
 
     def _learn_blend_weight(
         self,
@@ -588,6 +638,9 @@ class PredictionEngine:
             model_src = f"blend_gl{self.blend_gl:.0%}_ad{self.blend_ad:.0%}_adxg{self.blend_ad_xg:.0%}"
         lh = float(np.clip(lh, 0.05, 6.0))
         la = float(np.clip(la, 0.05, 6.0))
+        lh, la, tilted = self._squad_value_tilt(h, a, lh, la)
+        if tilted:
+            model_src += "_sv"
 
         probs, dist = self.markets_from_lambdas(lh, la)
 
