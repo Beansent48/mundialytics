@@ -223,8 +223,10 @@
     "recomputedTag": "recomputed",
     "rangeNoteRecomputed": "Ranges recomputed by the current model, which has already seen this match: shown for reference, not graded.",
     "recomputedScore": "Recomputed",
-    "lineupPass": "Updated with the confirmed lineups",
-    "lineupMissing": "usual starters left out: {home} {homeList}; {away} {awayList}",
+    "lineupPass": "Updated with the confirmed squads",
+    "lineupMissing": "usual starters left out of the squad: {home} {homeList}; {away} {awayList}",
+    "morningPass": "Adjusted for likely absences",
+    "morningMissing": "usual starters missing from the last squad (not suspended): {home} {homeList}; {away} {awayList}",
     "lineupNone": "none"
   },
   "results": {

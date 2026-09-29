@@ -1,10 +1,12 @@
 """The pre-kickoff lineup pass (scripts/log_lineup_pass.py) and its pieces.
 
-The signal is the share of a team's usual starters missing from the confirmed XI. In
-the backtest it improved 1X2 RPS in 6 of 6 seasons on top of the squad value, with O/U
-unchanged (scripts/lineup_pass/backtest_absence.py). These tests pin what makes it safe
-to serve: the regulars rule matches the backtest, the tilt keeps total goals, nothing
-moves without a confirmed XI, and the page reads back what was logged.
+The signal is the market-value share of a team's usual starters who are not even in the
+confirmed matchday squad. In the backtest it improved 1X2 RPS by 0.00118 in 6 of 6
+seasons on top of the squad value, O/U not worse (scripts/lineup_pass/eval_signals.py).
+The morning pass reads who missed the previous squad without a ban (-0.00026, 6/6).
+These tests pin what makes them safe to serve: the regulars rule matches the backtest,
+the tilt keeps total goals, the bench is not an absence, bans follow each league's rule,
+nothing moves without a confirmed squad, and the page reads back what was logged.
 
 Run:  .venv/Scripts/python.exe -m pytest tests/test_lineup_pass.py -q
 """
@@ -17,7 +19,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "scripts")]
 
-from mundialytics.features.lineup_absence import absent_share, regular_xi  # noqa: E402
+from mundialytics.features.lineup_absence import (  # noqa: E402
+    absent_share, league_bans, match_values, regular_xi, still_out, unavailable_share)
 from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
     DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
 
@@ -73,8 +76,65 @@ def test_no_lineup_no_change():
     assert PredictionEngine()._lineup_tilt(1.5, 1.1, (0.5, 0.0)) == (1.5, 1.1, False)
 
 
-def test_deployed_lineup_constant():
-    assert DEPLOYED_CLUB_ENGINE_KWARGS["lineup_shift"] == {"theta": -0.3647}
+def test_deployed_lineup_constants():
+    assert DEPLOYED_CLUB_ENGINE_KWARGS["lineup_shift"] == {"theta": -0.592}
+    assert DEPLOYED_CLUB_ENGINE_KWARGS["morning_shift"] == {"theta": -0.3928}
+
+
+def test_unavailable_share_ignores_the_bench_and_weights_by_value():
+    regs = [f"p{i}" for i in range(11)]
+    squad = regs[:9] + ["sub1", "sub2"]                      # p9, p10 not named at all
+    assert unavailable_share(regs, squad) == pytest.approx(2 / 11)
+    assert unavailable_share(regs, regs + ["sub1"]) == 0.0   # benched regulars are not absent
+    vals = {p: 1e6 for p in regs} | {"p9": 50e6}
+    assert unavailable_share(regs, squad, vals) == pytest.approx(51e6 / 60e6)
+    # a regular without a value counts at the median of the valued ones
+    assert unavailable_share(regs, squad, {"p0": 4e6, "p1": 2e6, "p2": 2e6}) == pytest.approx(4e6 / 24e6)
+
+
+def _cards(rows):
+    return pd.DataFrame(rows, columns=["date", "player", "yellow_cards", "red_cards"])
+
+
+def test_bans_follow_the_league_rules():
+    days = pd.date_range("2026-08-15", periods=7, freq="7D")
+    # five yellows in five matches -> banned for match 6 in LaLiga, not in Ligue 1's rule
+    rows = [(d, "a", 1, 0) for d in days[:5]] + [(days[5], "b", 0, 1), (days[6], "a", 0, 0)]
+    b = league_bans(_cards(rows), "LaLiga")
+    assert len(b) == len(days) + 1
+    assert b[5] == {"a"} and b[6] == {"b"}                   # the red sits out the next one
+    fr = league_bans(_cards(rows), "Ligue 1")                 # 3 in 10 matches -> ban after the 3rd
+    assert "a" in fr[3]
+
+
+def test_still_out_skips_bans_and_needs_history():
+    days = pd.date_range("2026-08-15", periods=6, freq="7D")
+    rows = []
+    for k, d in enumerate(days):
+        for i in range(11):
+            if k == 5 and i in (0, 1):
+                continue                                      # p0, p1 missing from the last squad
+            rows.append({"date": d, "player": f"p{i}", "starter": True, "yellow_cards": 0,
+                         "red_cards": 1 if (k == 4 and i == 1) else 0})   # p1 was sent off before it
+        rows.append({"date": d, "player": "sub", "starter": False, "yellow_cards": 0, "red_cards": 0})
+    h = pd.DataFrame(rows)
+    share, names = still_out(h, days[-1] + pd.Timedelta(days=7), "Premier League")
+    assert names == ["p0"] and share == pytest.approx(1 / 11)   # p1 only served a ban
+    assert still_out(h[h["date"] < days[3]], days[3], "Premier League") is None
+
+
+def test_values_match_espn_names_to_transfermarkt():
+    squad = pd.DataFrame({"player": ["Gabriel Magalhães", "Bukayo Saka", "Rodri", "William Saliba"],
+                          "value_eur": [60e6, 140e6, 110e6, 80e6]})
+    got = match_values(["Bukayo Saka", "B. Saliba", "Rodri", "Gabriel", "Nobody Here"], squad)
+    assert got["Bukayo Saka"] == 140e6 and got["Rodri"] == 110e6
+    assert "Nobody Here" not in got
+
+
+def test_morning_tilt_only_without_a_lineup():
+    eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
+    assert eng._lineup_tilt(1.5, 1.1, (0.2, 0.0), "morning_shift")[2]
+    assert PredictionEngine()._lineup_tilt(1.5, 1.1, (0.2, 0.0), "morning_shift") == (1.5, 1.1, False)
 
 
 def _summary(n_home: int, n_away: int) -> dict:
@@ -90,6 +150,7 @@ def test_xis_confirmed_only_with_eleven_starters_each():
     canon = str.lower
     xis = confirmed_xis(_summary(11, 11), canon)
     assert xis["home"]["team"] == "arsenal" and len(xis["away"]["starters"]) == 11
+    assert len(xis["home"]["squad"]) == 18                        # the bench is part of the squad
     assert confirmed_xis(_summary(11, 0), canon) is None       # away XI not out yet
     assert confirmed_xis({"rosters": []}, canon) is None
 

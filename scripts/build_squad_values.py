@@ -36,6 +36,9 @@ KAGGLE = "https://www.kaggle.com/api/v1/datasets/download/davidcariboo/player-sc
 NEEDED = ["games.csv", "player_valuations.csv", "players.csv", "transfers.csv"]
 LIVE_MAX_AGE_DAYS = 7
 TM_CACHE = sv.TM_DIR / "live_cache"
+# player-level values of the latest live read: the lineup pass weights the regulars
+# missing from a squad by them (scripts/log_lineup_pass.py)
+PLAYER_VALUES_PATH = ROOT / "data/processed/squad_player_values.csv"
 
 
 def download() -> None:
@@ -53,6 +56,10 @@ def live_snapshot(club_map: pd.DataFrame, current: pd.DataFrame) -> pd.DataFrame
 
     tm = fetch_live_squads(TM_CACHE)
     teams, unmapped = sv.build_live(tm, club_map, current)
+    ids = sv.map_live_clubs(tm, club_map, current)
+    players = (tm.assign(team=tm["club_id"].map(ids), snap=pd.Timestamp.now().normalize())
+                 .dropna(subset=["team"])[["snap", "team", "player", "value_eur"]])
+    players.to_csv(PLAYER_VALUES_PATH, index=False)
     missing = sorted(set(current["team"]) - set(teams["team"]))
     print(f"live: {len(teams)} teams, {tm['value_eur'].notna().mean():.1%} of {len(tm)} players valued"
           + (f"; unmapped Transfermarkt clubs: {unmapped}" if unmapped else "")

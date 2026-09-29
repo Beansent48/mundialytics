@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-"""Grade the pre-kickoff lineup pass against the morning prediction, same matches.
+"""Grade the matchday re-prices against the first logged prediction, same matches.
 
-For every played match with a lineup-pass row (data/processed/logs/lineup_pass_log.csv)
-and a full morning row (predictions_log.csv, 1X2 with p_home/p_draw/p_away), print both
-1X2 RPS and the difference. The backtest expects the lineup pass to be better by about
-0.0005 on average, so it takes a few hundred matches to see through the noise.
+For every played match with a pass row and a full first-logged row (predictions_log.csv,
+1X2 with p_home/p_draw/p_away), print both 1X2 RPS and the difference. Two passes:
+  lineup  (data/processed/logs/lineup_pass_log.csv, ~1h before kick-off): the backtest
+          expects about -0.0012 per match on average;
+  morning (data/processed/logs/morning_pass_log.csv, matchday morning): about -0.0003.
+Both are small against match-to-match noise: it takes a few hundred matches to see them.
 
-    python scripts/evaluate_lineup_pass.py
+    python scripts/evaluate_lineup_pass.py [--morning]
 """
 
 import sys
@@ -22,6 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.serving.logged_prediction import find_logged  # noqa: E402
 
 LINEUP = ROOT / "data/processed/logs/lineup_pass_log.csv"
+MORNING = ROOT / "data/processed/logs/morning_pass_log.csv"
 RESULTS = ROOT / "data/external/advanced/espn/espn_matches_current.csv"
 PLAYER_LOG = ROOT / "data/processed/logs/lineup_pass_players_log.csv"
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
@@ -34,10 +37,11 @@ def rps(p: np.ndarray, outcome: int) -> float:
 
 
 def main() -> int:
-    if not LINEUP.exists():
-        print("no lineup passes logged yet")
+    path, what = (MORNING, "morning") if "--morning" in sys.argv else (LINEUP, "lineup")
+    if not path.exists():
+        print(f"no {what} passes logged yet")
         return 0
-    lp = pd.read_csv(LINEUP, dtype={"event_id": str})
+    lp = pd.read_csv(path, dtype={"event_id": str})
     res = pd.read_csv(RESULTS, dtype={"event_id": str})
     x = lp.merge(res[["event_id", "home_goals", "away_goals"]], on="event_id", how="inner")
     rows = []
@@ -52,15 +56,16 @@ def main() -> int:
                      "absent": f"{r.absent_home:.2f}/{r.absent_away:.2f}" if pd.notna(r.absent_home) else "n/a",
                      "rps_morning": rps(m, o), "rps_lineup": rps(l_, o)})
     if not rows:
-        print(f"{len(lp)} lineup passes logged, none played yet with a full morning row")
+        print(f"{len(lp)} {what} passes logged, none played yet with a full first-logged row")
         return 0
     d = pd.DataFrame(rows)
     d["delta"] = d.rps_lineup - d.rps_morning
     print(d.round(4).to_string(index=False))
     se = d.delta.std(ddof=1) / np.sqrt(len(d)) if len(d) > 1 else float("nan")
-    print(f"\n{len(d)} matches: RPS morning {d.rps_morning.mean():.4f} -> lineup pass {d.rps_lineup.mean():.4f} "
-          f"(delta {d.delta.mean():+.4f} ± {se:.4f}); lineup pass better in {(d.delta < 0).mean():.0%}")
-    grade_players()
+    print(f"\n{len(d)} matches: RPS first logged {d.rps_morning.mean():.4f} -> {what} pass {d.rps_lineup.mean():.4f} "
+          f"(delta {d.delta.mean():+.4f} ± {se:.4f}); {what} pass better in {(d.delta < 0).mean():.0%}")
+    if what == "lineup":     # the player markets are only re-priced on the confirmed squads
+        grade_players()
     return 0
 
 
