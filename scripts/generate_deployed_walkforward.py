@@ -37,7 +37,9 @@ def main() -> None:
         if len(test) == 0 or len(train) < 500:
             continue
         t0 = time.time()
-        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(train)
+        # squads as they stood before the season, never today's
+        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(
+            train, squad_value_asof=test["date"].min())
         for _, r in test.iterrows():
             p = eng.predict_match(str(r.home_team), str(r.away_team),
                                   competition=str(r.competition), neutral=bool(r.get("neutral", 0)))

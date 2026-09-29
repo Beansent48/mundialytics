@@ -41,7 +41,10 @@ PROPS_FP = _code_fingerprint(
 def _cached_fit(tag: str, df: pd.DataFrame, build):
     import joblib
 
-    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{ENGINE_FP}"
+    # the squad values are read at fit time, so a new snapshot must refit
+    sv = ROOT / "data/processed/squad_values.csv"
+    sv_v = int(sv.stat().st_mtime) if sv.exists() else 0
+    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{ENGINE_FP}_{sv_v}"
     cache_f = CACHE_DIR / f"engine_{key}.joblib"
     if cache_f.exists():
         try:

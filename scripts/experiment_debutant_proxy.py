@@ -59,7 +59,8 @@ def main() -> None:
             continue
         train = df[df["date"] < test["date"].min()]
         t0 = time.time()
-        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(train)
+        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(
+            train, squad_value_asof=test["date"].min())
         known = set(train["home_team"]) | set(train["away_team"])
         y = np.where(train.home_goals > train.away_goals, 0,
                      np.where(train.home_goals == train.away_goals, 1, 2))

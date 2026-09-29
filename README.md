@@ -33,23 +33,23 @@ Where the engine sits, in ranked probability score (lower is better):
 |---|---|
 | Uniform 1/3 — no information at all | 0.2356 |
 | League base rates — home advantage only | 0.2308 |
-| **This engine** | **0.2008** |
+| **This engine** | **0.1999** |
 | Bet365 closing odds | 0.1946 |
 
 Between knowing nothing and the best-informed price on the market there is
-0.0362 of RPS. **The engine covers 83% of it.**
+0.0362 of RPS. **The engine covers 85% of it.**
 
 Head to head with the closing line:
 
 | | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
 |---|---|---|---|
-| This engine | 0.2008 | 0.9881 | 0.6793 |
+| This engine | 0.1999 | 0.9856 | 0.6793 |
 | Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
-| gap | +0.0062 | +0.0201 | +0.0082 |
+| gap | +0.0053 | +0.0176 | +0.0083 |
 
-It does **not** beat the closing line — about 3% behind, and the gap holds in
-every season and every league (worst Premier League +0.0083, best Bundesliga and
-LaLiga +0.0039), which is what makes it a ceiling rather than noise. Bet365's
+It does **not** beat the closing line — about 2.7% behind, and the gap holds in
+every season and every league (worst Premier League +0.0064, best LaLiga
++0.0040), which is what makes it a ceiling rather than noise. Bet365's
 closing price carries injury news, confirmed lineups and the weight of informed
 money; this engine has public data and nothing else.
 
@@ -72,10 +72,13 @@ the time is another. It is:
 
 ![1X2 reliability diagram](docs/img/calibration_1x2.png)
 
-Home and away curves track the diagonal across the whole range. Draws never get
+Home and away curves track the diagonal. Before squad values went in, the home
+curve sat below it and the away curve above it through the 30–60% band; both now
+sit on it. The one visible miss is the top away bin (~83% said, 71% seen), about
+50 matches and the same size it was before. Draws never get
 predicted above ~35% — a known property of the sport, not a defect: draws are
 genuinely rarely the favourite. The figure scores all 10,403 walk-forward
-predictions, so its RPS reads 0.2013; the benchmark above uses the 10,080 of them
+predictions, so its RPS reads 0.2004; the benchmark above uses the 10,080 of them
 that have Bet365 odds attached. Regenerate with
 `python scripts/plot_calibration.py`.
 
@@ -120,6 +123,7 @@ football-data.co.uk ──┐
 Understat / Sofascore  ├─→ canonical match schema ─→ features ─→ models ─→ markets
 StatsBomb / ClubElo    │      (entity resolution)        │          │
 FBref / ESPN ──────────┘                                 │          ├─ 1X2 / O-U / BTTS
+Transfermarkt ───────────── squad market value ──────────┤          │
                              internal Elo ───────────────┤          ├─ half-time markets
                              walk-forward form ──────────┤          ├─ team props
                              xG-rate predictor ──────────┘          └─ player props
@@ -140,6 +144,18 @@ FBref / ESPN ──────────┘                                 �
 - **xG** — a dedicated model predicts each side's expected-goal *rate* rather
   than using raw historical xG as a feature; the raw feature turned out to be
   largely redundant with the strength estimates.
+- **Squad value** — the one team signal not derived from results, so it knows
+  about summer signings, and about which promoted side has money, before
+  either shows on the pitch. Each club's value is the sum of its 18 most
+  valuable players (Transfermarkt), read as of the date being predicted.
+  The final lambdas are tilted toward the richer squad, total goals unchanged.
+  On a weekly-refit walk-forward, leaving one season out at a time, 1X2 RPS
+  fell 0.2006 → 0.1999 in 5 of 6 seasons, with O/U unchanged. It was
+  validated on values rebuilt the way production sees them: June-frozen, and
+  unseen second-division players priced at 1 M€. The gain is largest early
+  in the season and in matches with a promoted side, where our gap to
+  Bet365 had been 50% larger. Title, top-4 and relegation forecasts from
+  matchday 5 improved too (`scripts/squad_value/README.md`).
 - **Calibration** — Platt scaling per market, validated on held-out seasons.
 - **Scopes** — club and national-team models are fitted and used separately.
   Strength parameters are not comparable across contexts, so mixing them would
@@ -169,6 +185,12 @@ Recorded because negative results are the expensive part of the project:
   prices. Bet365 was ahead everywhere. Conclusion: stop.
 - **xG as a direct feature.** Redundant with the maximum-likelihood strength
   estimates. Only the derived xG-*rate* predictor added signal.
+- **Handicapping promoted sides.** They really are over-rated: about 7% fewer
+  goals scored and 7% more conceded than the model expects, all season. But
+  lowering their lambdas makes the 1X2 *worse* (+0.0003 RPS, 3 of 6 seasons),
+  and second-division form adds nothing. The gap to the market there is about
+  telling promoted sides apart, not about their average, which is why squad
+  value works where this failed (`scripts/squad_value/lofo.py`).
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
 - **Shrinking per-competition parameters.** `AttackDefenseModel` fits μ and home
@@ -184,7 +206,7 @@ Recorded because negative results are the expensive part of the project:
 
 ## Conclusions
 
-- **The club engine works.** Calibrated 1X2 probabilities, 83% of the way from
+- **The club engine works.** Calibrated 1X2 probabilities, 85% of the way from
   an uninformed baseline to the closing line, validated out-of-sample in time.
   That is the part with an external yardstick behind it.
 - **As a betting edge, it does not.** That question was asked properly and the
@@ -203,6 +225,12 @@ Recorded because negative results are the expensive part of the project:
 - **One bookmaker.** Bet365 alone. A multi-book consensus, or Pinnacle, would be
   a harder yardstick.
 - **Big 5 leagues only** for the trained model; no cross-league scale.
+- **Squad values are frozen at June 2026.** The public Transfermarkt dump
+  stopped updating then. Rosters are current (ESPN), but each player keeps
+  his June value. About 18% of roster players are not in the dump — mostly
+  second-division players at promoted clubs — and count at 1 M€. The
+  Bundesliga gets nothing from the shift (its best coefficients are zero in
+  every season); a per-league version was tried and did not hold up.
 
 ## Status
 
@@ -410,7 +438,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  240 tests green on a clean checkout; 102 more
+tests/                  251 tests green on a clean checkout; 102 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
