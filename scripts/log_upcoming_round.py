@@ -89,10 +89,43 @@ def fetch_fixtures_espn(year: int) -> pd.DataFrame:
             "jornada": fx["matchday"], "home": fx["home_team"],
             "away": fx["away_team"], "played": fx["completed"].astype(bool),
             "kickoff": fx["kickoff_utc"],
+            "event_id": fx["match_id"].astype(str).str.replace("espn_", "", regex=False),
         })
         print(f"  {comp}: {len(out)} partidos ({int(out.played.sum())} jugados)")
         rows.append(out)
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+
+REFEREE_HORIZON_DAYS = 4
+
+
+def espn_referee(r) -> str | None:
+    """The referee ESPN lists for an upcoming fixture, or None.
+
+    Leagues name referees a few days out and ESPN's summary carries them in
+    gameInfo.officials, so only fixtures inside REFEREE_HORIZON_DAYS are asked.
+    Whether ESPN fills it BEFORE kick-off was not yet observable on 2026-09-29
+    (international break); without a name the team props price a league-typical
+    referee, exactly as before. See props/team_props.py (REF_DEV_*)."""
+    eid = getattr(r, "event_id", None)
+    kick = getattr(r, "kickoff", None)
+    if not eid or pd.isna(eid) or kick is None or pd.isna(kick):
+        return None
+    if pd.Timestamp(kick) - pd.Timestamp.now(tz="UTC") > timedelta(days=REFEREE_HORIZON_DAYS):
+        return None
+    try:
+        from mundialytics.providers.espn_fixtures import ESPN_LEAGUE_CODES, espn_json
+        code = ESPN_LEAGUE_CODES.get(r.competition)
+        if not code:
+            return None
+        s = espn_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{code}/summary?event={eid}",
+                      timeout=20, tries=2)
+    except Exception:
+        return None
+    for o in (s.get("gameInfo", {}) or {}).get("officials", []) or []:
+        if str((o.get("position") or {}).get("name", "")).lower() == "referee" or o.get("order") == 1:
+            return str(o.get("fullName") or o.get("displayName") or "").strip() or None
+    return None
 
 
 def _iso(ts) -> str:
@@ -462,6 +495,7 @@ def _log(args) -> None:
     season_teams = {c: set(g.home) | set(g.away) for c, g in fx.groupby("competition")}
 
     rows, skipped = [], []
+    n_referees = 0
     for r in up.itertuples(index=False):
         try:
             p, stand_in = predict_match_or_proxy(
@@ -513,7 +547,9 @@ def _log(args) -> None:
         if tp is None:
             continue
         try:
-            fxp = tp.predict_fixture(r.home, r.away,
+            referee = espn_referee(r)
+            n_referees += referee is not None
+            fxp = tp.predict_fixture(r.home, r.away, referee=referee,
                                      lam_home=p.lambda_home, lam_away=p.lambda_away)
         except Exception:
             continue
@@ -532,6 +568,8 @@ def _log(args) -> None:
                     rows.append({**base, "mercado": mk, "ambito": amb, "linea": ln,
                                  "prob": round(float(pr), 4),
                                  "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+    if tp is not None:
+        print(f"  arbitro de ESPN en {n_referees}/{len(up)} partidos (tarjetas/faltas con arbitro)")
 
     if not args.skip_europe:
         print("\ncompeticiones europeas:")
