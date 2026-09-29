@@ -125,7 +125,9 @@ def _props_models(_version: float):
     # the current season's player rows move the player state (see
     # PlayerPropsModel._append_current); ESPN can land before the foundation does
     espn_cur = ROOT / "data/external/advanced/espn/espn_player_match_current.csv"
-    espn_tag = f"{espn_cur.stat().st_size}" if espn_cur.exists() else "none"
+    comm = sorted((ROOT / "data/external/advanced/espn/commentary").glob("*.jsonl"))
+    espn_tag = (f"{espn_cur.stat().st_size}" if espn_cur.exists() else "none") + (
+        f"c{comm[-1].stat().st_size}" if comm else "")
     key = (f"{len(df)}_{str(df['date'].max())[:10]}_{PROPS_FP}"
            f"_{squads_fingerprint(squads)}_{espn_tag}")
     cache_f = CACHE_DIR / f"props_models_{key}.joblib"
@@ -149,6 +151,14 @@ def _props_models(_version: float):
             .drop_duplicates("game_id")
         )
         pm = pd.read_csv(pmp).merge(tmx, on="game_id", how="left")
+        # this season's penalty attempts, from the commentary text xG downloads
+        pens = None
+        if espn_cur.exists():
+            from mundialytics.enrichment.text_xg import penalties_from_commentary
+            seasons = pd.read_csv(espn_cur, usecols=["season"])["season"].dropna()
+            if len(seasons):
+                pens = penalties_from_commentary(
+                    ROOT / f"data/external/advanced/espn/commentary/{seasons.max()}.jsonl")
         # `current_squads` decides only WHO is in each roster. Without it the
         # squad is "whoever featured in this club's last ten Understat games",
         # which for a promoted club reaches back to its last top-flight season.
@@ -157,6 +167,7 @@ def _props_models(_version: float):
             shots_path=ROOT / "data/external/advanced/understat/understat_shots.csv",
             current_squads=squads,
             current=espn_cur if espn_cur.exists() else None,
+            current_penalties=pens,
         )
     except Exception:
         pp = None
