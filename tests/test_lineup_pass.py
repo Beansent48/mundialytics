@@ -112,3 +112,34 @@ def test_page_reads_the_logged_lineup_pass(tmp_path, monkeypatch):
     assert pred.trio == {"home": 0.41, "draw": 0.27, "away": 0.32} and pred.lambdas == (1.3, 1.2)
     assert details["missingHome"] == ["Saka", "Rice", "Odegaard"] and details["missingAway"] == []
     assert lp.find_lineup_pass("Arsenal", "Chelsea", "2026-11-10") is None   # another fixture
+
+
+def test_watcher_sleeps_to_the_window_polls_and_exits(tmp_path, monkeypatch):
+    """A simulated match day: nothing is fetched early, the pass runs only inside the
+    70-minute window, and the watcher exits once the match is logged."""
+    import log_lineup_pass as L
+
+    clock = {"now": pd.Timestamp("2026-10-10T10:00:00Z")}
+    kickoff = pd.Timestamp("2026-10-10T14:00:00Z")
+    logged: set = set()
+    passes: list = []
+
+    monkeypatch.setattr(L, "LOCK", tmp_path / "watch.lock")
+    monkeypatch.setattr(L.pd.Timestamp, "now", classmethod(lambda cls, tz=None: clock["now"]))
+    monkeypatch.setattr(L, "upcoming", lambda now, minutes: [{"event_id": "1", "code": "eng.1",
+                                                               "competition": "Premier League", "kickoff": kickoff}])
+    monkeypatch.setattr(L, "logged_ids", lambda: set(logged))
+    monkeypatch.setattr(L.time, "sleep", lambda s: clock.update(now=clock["now"] + pd.Timedelta(seconds=s)))
+
+    def fake_pass(lookahead):
+        passes.append(clock["now"])
+        if clock["now"] >= kickoff - pd.Timedelta(minutes=55):   # XIs out ~55 min before
+            logged.add("1")
+        return 0
+
+    monkeypatch.setattr(L, "run_pass", fake_pass)
+    assert L.watch() == 0
+    assert passes[0] == kickoff - pd.Timedelta(minutes=L.WAKE_BEFORE_MIN)
+    assert all(b - a == pd.Timedelta(minutes=L.POLL_MIN) for a, b in zip(passes, passes[1:]))
+    assert "1" in logged and len(passes) == 4
+    assert not (tmp_path / "watch.lock").exists()

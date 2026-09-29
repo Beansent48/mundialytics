@@ -169,7 +169,8 @@ Transfermarkt ───────────── squad market value ──�
   (`scripts/squad_value/README.md`).
 - **Lineup pass** — the morning prediction is made before anyone knows who
   plays. About an hour before kick-off, once both starting XIs are out on
-  ESPN, the match is priced again. The new input is the share of each side's
+  ESPN, the match is priced again (a watcher the daily refresh starts; it is
+  awake only in the hour before each match). The new input is the share of each side's
   usual starters (the 11 with most starts in the last 10 league matches)
   missing from the XI, applied as another total-preserving tilt. Backtest on
   top of the squad value: 0.1995 → 0.1989, better in **6 of 6** seasons, O/U
