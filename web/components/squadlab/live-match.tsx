@@ -1,6 +1,6 @@
 "use client";
 
-import { FastForward, Square, Star } from "lucide-react";
+import { ArrowDownUp, Cross, FastForward, Square, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,10 +8,16 @@ import type { SquadFixture, SquadMatchEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const FULL_TIME = 90;
+const EXTRA_TIME = 120;
 /** A tick of the clock. 90 of them is roughly five seconds of match. */
 const TICK_MS = 55;
 /** How long the clock holds *on* a goal, so the celebration has room to play. */
 const GOAL_PAUSE_MS = 1200;
+/** A shorter hold for the other big moments: a red card, a missed penalty. */
+const MOMENT_PAUSE_MS = 650;
+
+const isGoal = (e: SquadMatchEvent) => e.type === "goal";
+const isMoment = (e: SquadMatchEvent) => e.type === "red" || e.type === "penMiss";
 
 export function LiveMatch({
   fixture,
@@ -37,38 +43,36 @@ export function LiveMatch({
   // Memoised because the clock's effect depends on it: a fresh `[]` every
   // render would tear down the pending timeout before it ever fired.
   const events = useMemo(() => fixture.events ?? [], [fixture.events]);
-  const minute = running ? Math.min(tick, FULL_TIME) : FULL_TIME;
-  const done = minute >= FULL_TIME;
+  // A knockout that went the distance runs its clock to 120.
+  const end = fixture.extraTime ? EXTRA_TIME : FULL_TIME;
+  const minute = running ? Math.min(tick, end) : end;
+  const done = minute >= end;
 
   // The clock. A timeout rather than an interval because one minute is not like
   // the others: the hold belongs to the minute a goal went in, so the bar runs
   // at a steady rate and then stops dead on the goal while the flash plays.
   useEffect(() => {
-    if (!running || tick >= FULL_TIME) return;
-    const scored = events.some((e) => e.type === "goal" && e.minute === tick);
-    const id = setTimeout(() => setTick(tick + 1), scored ? GOAL_PAUSE_MS : TICK_MS);
+    if (!running || tick >= end) return;
+    const now = events.filter((e) => e.minute === tick);
+    const wait = now.some(isGoal) ? GOAL_PAUSE_MS : now.some(isMoment) ? MOMENT_PAUSE_MS : TICK_MS;
+    const id = setTimeout(() => setTick(tick + 1), wait);
     return () => clearTimeout(id);
-  }, [running, tick, events]);
+  }, [running, tick, events, end]);
 
   useEffect(() => {
-    if (running && tick >= FULL_TIME) onFinish();
-  }, [running, tick, onFinish]);
+    if (running && tick >= end) onFinish();
+  }, [running, tick, end, onFinish]);
 
   const shown = events.filter((e) => e.minute <= minute);
-  const goals = shown.filter((e) => e.type === "goal");
-  const homeGoals = done
-    ? fixture.homeGoals
-    : goals.filter((e) => e.side === "home").length;
-  const awayGoals = done
-    ? fixture.awayGoals
-    : goals.filter((e) => e.side === "away").length;
+  const goals = shown.filter(isGoal);
+  const homeGoals = done ? fixture.homeGoals : goals.filter((e) => e.side === "home").length;
+  const awayGoals = done ? fixture.awayGoals : goals.filter((e) => e.side === "away").length;
 
   const justScored =
-    running && !done
-      ? events.find((e) => e.type === "goal" && e.minute === minute)
-      : undefined;
+    running && !done ? events.find((e) => isGoal(e) && e.minute === minute) : undefined;
 
   const homeIsSquad = fixture.home === teamName;
+  const absences = fixture.absences ?? [];
 
   return (
     <div className="overflow-hidden rounded-[18px] border border-border bg-surface">
@@ -79,12 +83,12 @@ export function LiveMatch({
         {done ? (
           <span className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-dim">
             <Square className="size-2.5" fill="currentColor" strokeWidth={0} />
-            {t("fullTime")}
+            {fixture.shootout ? t("afterPens") : fixture.extraTime ? t("afterExtraTime") : t("fullTime")}
           </span>
         ) : (
           <span className="flex items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-negative">
             <span className="animate-live-dot size-1.5 rounded-full bg-negative" />
-            {t("live")}
+            {minute > FULL_TIME ? t("extraTime") : t("live")}
           </span>
         )}
       </div>
@@ -125,6 +129,25 @@ export function LiveMatch({
           </span>
         </div>
 
+        {done && fixture.shootout ? (
+          <p className="mt-2 text-center text-[0.8rem] text-muted">
+            {t("shootoutLine", { home: fixture.shootout.home, away: fixture.shootout.away })}
+          </p>
+        ) : null}
+
+        {absences.length ? (
+          <p className="mt-3 text-center text-[0.74rem] text-dim">
+            {t("absences")}:{" "}
+            {absences
+              .map((a) =>
+                a.reason === "lesion"
+                  ? t("absenceInjury", { player: a.player, detail: a.detail })
+                  : t("absenceBan", { player: a.player }),
+              )
+              .join(" · ")}
+          </p>
+        ) : null}
+
         <div className="mt-4 flex items-center gap-3">
           <span className="w-9 shrink-0 text-[0.72rem] font-semibold tabular-nums text-muted">
             {minute}&rsquo;
@@ -132,7 +155,7 @@ export function LiveMatch({
           <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-3">
             <span
               className="block h-full rounded-full bg-brand transition-[width] duration-100 ease-linear"
-              style={{ width: `${(minute / FULL_TIME) * 100}%` }}
+              style={{ width: `${(minute / end) * 100}%` }}
             />
           </span>
           {!done ? (
@@ -154,7 +177,7 @@ export function LiveMatch({
               .reverse()
               .map((e, i) => (
                 <EventRow
-                  key={`${e.minute}-${e.player}-${i}`}
+                  key={`${e.minuteLabel ?? e.minute}-${e.type}-${e.player}-${i}`}
                   event={e}
                   onLeft={e.side === "home"}
                 />
@@ -163,38 +186,130 @@ export function LiveMatch({
         ) : null}
       </div>
 
+      {done && fixture.shootout ? <Shootout fixture={fixture} /> : null}
       {done ? <FullTime fixture={fixture} /> : null}
     </div>
   );
 }
 
+function EventIcon({ event }: { event: SquadMatchEvent }) {
+  switch (event.type) {
+    case "goal":
+      return <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-text" />;
+    case "penMiss":
+      return (
+        <span
+          aria-hidden
+          className="size-2.5 shrink-0 rounded-full border-2 border-negative bg-transparent"
+        />
+      );
+    case "red":
+      return event.detail === "2y" ? (
+        <span aria-hidden className="relative size-2.5 shrink-0">
+          <span className="absolute inset-0 -translate-x-0.5 rounded-[2px] bg-card-yellow" />
+          <span className="absolute inset-0 translate-x-0.5 rounded-[2px] bg-negative" />
+        </span>
+      ) : (
+        <span aria-hidden className="size-2.5 shrink-0 rounded-[2px] bg-negative" />
+      );
+    case "sub":
+      return <ArrowDownUp aria-hidden className="size-3 shrink-0 text-brand" />;
+    case "injury":
+      return <Cross aria-hidden className="size-3 shrink-0 text-negative" />;
+    default:
+      return <span aria-hidden className="size-2.5 shrink-0 rounded-[2px] bg-card-yellow" />;
+  }
+}
+
 function EventRow({ event, onLeft }: { event: SquadMatchEvent; onLeft: boolean }) {
   const t = useTranslations("squadlab");
+
+  let text: React.ReactNode = <span className="font-medium">{event.player}</span>;
+  let note: string | null = null;
+  if (event.type === "goal") {
+    note =
+      event.detail === "pen"
+        ? t("penGoal")
+        : event.detail === "og"
+          ? t("ownGoal")
+          : event.assist
+            ? t("assistBy", { player: event.assist })
+            : null;
+  } else if (event.type === "penMiss") {
+    note =
+      event.detail === "saved" && event.assist
+        ? t("penSavedBy", { player: event.assist })
+        : t("penMissed");
+  } else if (event.type === "red") {
+    note = event.detail === "2y" ? t("secondYellow") : t("redCard");
+  } else if (event.type === "injury") {
+    note = t("injured");
+  } else if (event.type === "sub") {
+    text = (
+      <>
+        <span className="font-medium text-positive">{event.playerIn}</span>
+        <span className="mx-1 text-dim">↔</span>
+        <span className="text-muted">{event.player}</span>
+      </>
+    );
+  }
+
   return (
     <div
       className={cn(
         "animate-event flex items-center gap-2 text-[0.82rem]",
         onLeft ? "" : "flex-row-reverse text-right",
+        event.type === "sub" || event.type === "injury" ? "text-[0.76rem]" : "",
       )}
     >
-      <span className="w-8 shrink-0 text-[0.68rem] tabular-nums text-dim">
-        {event.minute}&rsquo;
+      <span className="w-9 shrink-0 text-[0.68rem] tabular-nums text-dim">
+        {event.minuteLabel ?? event.minute}&rsquo;
       </span>
-      <span
-        aria-hidden
-        className={cn(
-          "size-2.5 shrink-0 rounded-[2px]",
-          event.type === "goal" ? "rounded-full bg-text" : "bg-card-yellow",
-        )}
-      />
+      <EventIcon event={event} />
       <span className="truncate">
-        <span className="font-medium">{event.player}</span>
-        {event.assist ? (
-          <span className="ml-1.5 text-[0.72rem] text-dim">
-            {t("assistBy", { player: event.assist })}
-          </span>
-        ) : null}
+        {text}
+        {note ? <span className="ml-1.5 text-[0.72rem] text-dim">{note}</span> : null}
       </span>
+    </div>
+  );
+}
+
+/* ── The shoot-out, kick by kick ───────────────────────────────────────────── */
+
+function Shootout({ fixture }: { fixture: SquadFixture }) {
+  const t = useTranslations("squadlab");
+  const so = fixture.shootout;
+  if (!so) return null;
+  const side = (s: "home" | "away") => so.kicks.filter((k) => k.side === s);
+  return (
+    <div className="border-t border-border px-5 py-5">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-muted">
+        {t("shootout")}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-4">
+        {(["home", "away"] as const).map((s) => (
+          <div key={s} className={cn("flex flex-col gap-1", s === "away" ? "text-right" : "")}>
+            {side(s).map((k, i) => (
+              <span
+                key={`${k.player}-${i}`}
+                className={cn(
+                  "flex items-center gap-2 text-[0.8rem]",
+                  s === "away" ? "flex-row-reverse" : "",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-2.5 shrink-0 rounded-full",
+                    k.scored ? "bg-positive" : "border-2 border-negative",
+                  )}
+                />
+                <span className={k.scored ? "" : "text-dim line-through"}>{k.player}</span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -252,7 +367,15 @@ function FullTime({ fixture }: { fixture: SquadFixture }) {
                     : "border-border bg-bg-elevated",
                 )}
               >
-                <span className="flex-1 truncate text-[0.83rem]">{r.player}</span>
+                <span className="flex-1 truncate text-[0.83rem]">
+                  {r.player}
+                  {r.minutes != null && r.minutes < 90 ? (
+                    <span className="ml-1.5 text-[0.66rem] text-dim">
+                      {r.started === false ? "↑" : ""}
+                      {r.minutes}&rsquo;
+                    </span>
+                  ) : null}
+                </span>
                 {r.goals ? (
                   <span className="text-[0.68rem] text-dim">
                     {"⚽".repeat(Math.min(r.goals, 3))}
@@ -263,9 +386,12 @@ function FullTime({ fixture }: { fixture: SquadFixture }) {
                     {t("assistShort", { n: r.assists })}
                   </span>
                 ) : null}
-                {r.cards ? (
+                {r.red ? (
+                  <span aria-hidden className="size-2.5 rounded-[2px] bg-negative" />
+                ) : r.cards ? (
                   <span aria-hidden className="size-2.5 rounded-[2px] bg-card-yellow" />
                 ) : null}
+                {r.injured ? <Cross aria-hidden className="size-3 text-negative" /> : null}
                 <span
                   className={cn(
                     "rounded-[6px] px-1.5 py-0.5 text-[0.78rem] font-semibold tabular-nums",

@@ -390,8 +390,13 @@ Listed because half-finished work is normal and hiding it helps nobody.
   bracket, resolved match by match on the same engine. Each slot is dealt by
   rolling card kind and then tier (primes ~10%, icons ~2%, three re-rolls), and
   the other 35 clubs field their real current squads, so the tournament's top
-  scorers are real players rather than only your own. Simulator, calendar and the
-  historical all-time catalogue all work. The
+  scorers are real players rather than only your own. Your matches are played
+  **minute by minute**, by rules measured on ~3,100 matches of ESPN commentary:
+  the goal clock, the game-state and red-card effects (down to ten, a side
+  scores 49% of its rate), real substitution patterns, penalties and their
+  takers, and injuries that last as long as 2026/27's did. A seven-man bench
+  covers bans (UEFA's accumulation rules) and injuries. The all-time Champions
+  League rates every side by its real ClubElo at the end of that season. The
   card axes are mapped per position-quantile (attack/defence/creation live on
   different scales), and the squad's rating maps onto team strength through a
   calibration that is precise on attack (R² = 0.68) and modest on defence
