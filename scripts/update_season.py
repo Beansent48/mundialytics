@@ -434,6 +434,10 @@ def main() -> None:
         # before kick-off (catches days the logger never ran at all).
         run_step("7b2/8 prediction coverage audit (last 7 days)",
                  [PY, "scripts/audit_prediction_coverage.py", "--days", "7"])
+        # And whether any market is drifting: the 2026/27 shots bias sat in the
+        # log for three weeks before anyone looked. Informational, never blocks.
+        run_step("7b4/8 market drift report",
+                 [PY, "scripts/report_market_drift.py"], optional=True, timeout=600)
         # Matchday morning: re-price each team's next match with the regulars who
         # missed its previous squad without a ban (likely still injured). Its own
         # log; the track record above is untouched. Optional: an ESPN outage only
