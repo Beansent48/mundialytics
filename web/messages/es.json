@@ -364,12 +364,14 @@
   "squadlab": {
     "eyebrow": "Monta un equipo",
     "title": "SquadLab",
-    "lead": "Ficha once jugadores y juega la Champions League real. Tu equipo ocupa la plaza de un club del sorteo, al azar cada vez — el mismo motor que valora los partidos de verdad.",
+    "lead": "Ficha once jugadores y siete suplentes y juega la Champions League real, minuto a minuto. Tu equipo ocupa la plaza de un club del sorteo, al azar cada vez.",
     "mode": {
       "draft": "Draft",
       "draftLead": "Fichas de sobres: cinco candidatos por puesto y cada jugador que eliges sale del pool — sin duplicados.",
       "sandbox": "Sandbox",
-      "sandboxLead": "Los once que quieras, sin restricciones, de cualquier liga."
+      "sandboxLead": "Los once que quieras, sin restricciones, de cualquier liga.",
+      "historic": "Champions histórica",
+      "historicLead": "36 equipos de cualquier época en el formato actual, cada uno con su Elo real al final de esa temporada."
     },
     "positions": {
       "Goalkeeper": "Portería",
@@ -482,6 +484,59 @@
     "percentileNote": "Percentiles frente a su posición. El rol pondera cada estadística (%).",
     "primeSeason": "La temporada del prime",
     "careerHighlight": "En su carrera",
-    "noHighlight": "Carta especial — sin datos actuales."
+    "noHighlight": "Carta especial — sin datos actuales.",
+    "bench": "Banquillo",
+    "benchLead": "Siete suplentes: entran en los cambios y cubren sanciones y lesiones.",
+    "toLineup": "Ver alineación",
+    "lineupTitle": "Tu once para la Champions",
+    "lineupLead": "Toca un titular y luego un suplente para cambiarlos. Si cambias de línea (un defensa por un delantero), la formación se ajusta sola siempre que exista.",
+    "formation": "Formación {f}",
+    "invalidSwap": "Ese cambio deja una formación que no existe (o dos porteros).",
+    "backToDraft": "Volver al draft",
+    "afterExtraTime": "Final tras la prórroga",
+    "afterPens": "Final · penaltis",
+    "extraTime": "Prórroga",
+    "shootout": "Tanda de penaltis",
+    "shootoutLine": "Penaltis: {home}–{away}",
+    "absences": "Bajas",
+    "absenceBan": "{player} (sancionado)",
+    "absenceInjury": "{player} (lesionado, {detail})",
+    "penGoal": "(penalti)",
+    "ownGoal": "(en propia)",
+    "penSavedBy": "penalti parado por {player}",
+    "penMissed": "penalti fallado",
+    "secondYellow": "doble amarilla",
+    "redCard": "roja directa",
+    "injured": "se lesiona",
+    "squadTotals": "Tus jugadores en la Champions",
+    "colPlayer": "Jugador",
+    "colMinutes": "Min",
+    "colGoals": "G",
+    "colAssists": "A",
+    "colCards": "TA",
+    "colRating": "Nota",
+    "injuriesShort": "{n, plural, one {# lesión} other {# lesiones}}",
+    "historic": {
+      "title": "Champions histórica",
+      "lead": "Cada equipo entra con el Elo real de su club el 1 de junio del año en que acabó esa temporada (ClubElo): cuánto estaba por encima de la Europa de su época. Es la única comparación entre épocas que se puede medir; nadie midió los duelos de Gullit.",
+      "pool": {
+        "campeones": "Campeones de Europa",
+        "campeonesLead": "Los 36 campeones de Europa más fuertes desde 1956, cada uno en el año que ganó.",
+        "variado": "Sorteo variado",
+        "variadoLead": "Un equipo por club, en una de sus diez mejores temporadas, al azar.",
+        "cualquiera": "Cualquier época",
+        "cualquieraLead": "36 temporadas al azar entre las 400 mejores de la historia."
+      },
+      "play": "Jugar la Champions histórica",
+      "again": "Otro sorteo",
+      "champion": "Campeón de Europa",
+      "beat": "venció a {team} en la final",
+      "odds": "partía con un {p} de probabilidad",
+      "path": "Las eliminatorias",
+      "favourites": "¿Quién era favorito?",
+      "favouritesNote": "Probabilidad de ganar el mismo cuadro, en 600 simulaciones.",
+      "wasChampion": "Campeón de Europa ese año",
+      "start": "Ir a la Champions histórica"
+    }
   }
 }

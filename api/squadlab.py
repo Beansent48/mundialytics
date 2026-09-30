@@ -34,6 +34,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
 SLOTS = {"Goalkeeper": 1, "Defender": 4, "Midfielder": 3, "Forward": 3}
+# The reserves the live match brings on, and who covers a ban or an injury: a
+# keeper and two of each outfield line, seven like a real matchday bench.
+BENCH_SLOTS = {"Goalkeeper": 1, "Defender": 2, "Midfielder": 2, "Forward": 2}
+# The shapes the eleven may be rearranged into before kick-off (GK-DEF-MID-FWD).
+FORMATIONS = ["4-3-3", "4-4-2", "3-4-3", "3-5-2", "5-3-2", "5-2-3", "4-5-1"]
 
 MICRO_STATS = ROOT / "data/processed/player_micro_stats.csv"
 CARD_HIGHLIGHTS = ROOT / "data/curated/card_highlights.csv"
@@ -308,6 +313,8 @@ def champions_pool(limit_per_position: int = 40) -> dict:
         by_pos[pos] = sorted(picked, key=lambda x: -x["overall"])[:limit_per_position]
     return {
         "slots": SLOTS,
+        "benchSlots": BENCH_SLOTS,
+        "formations": FORMATIONS,
         "positions": POSITIONS,
         "players": by_pos,
         # metadata for the card popup: the role formulas and readable labels
@@ -383,25 +390,25 @@ def deal_slot(seed: int, position: str, index: int = 0, reroll: int = 0,
 
 @lru_cache(maxsize=1)
 def _champions_resources():
-    """The real CL field (elo + drawn fixtures) and the squad-rating -> Elo line.
+    """The real CL field, the squad-rating -> Elo line and the squad-shape fit.
 
     Cached: the draw is read off disk (a game wants a stable field), and the
-    fitted line does not change between requests. The RANDOM slot the squad
+    fitted lines do not change between requests. The RANDOM slot the squad
     takes is drawn per playthrough inside ChampionsRun, not here.
     """
     from mundialytics.statistical_core.squadlab.cards import load_cards
     from mundialytics.statistical_core.squadlab.champions import (
-        load_field, squad_elo_scale,
+        fit_squad_shape, load_field, squad_elo_scale,
     )
 
     field = load_field()
+    cards = load_cards()
     elo_df = pd.read_csv(ROOT / "data/processed/clubelo_local.csv").dropna(
         subset=["club", "elo"])
     scale = squad_elo_scale(
-        None, load_cards(),
-        dict(zip(elo_df["club"].astype(str), elo_df["elo"].astype(float))),
+        None, cards, dict(zip(elo_df["club"].astype(str), elo_df["elo"].astype(float))),
     )
-    return field, scale
+    return field, scale, fit_squad_shape(cards), cards
 
 
 def _stable_sample(df: pd.DataFrame, seed: str, n: int) -> pd.DataFrame:
@@ -465,31 +472,49 @@ def _display(name: str) -> str:
         return base + mark
 
 
-def play_champions(squad_names: list[str], seed: int | None = None) -> dict:
-    """Play the whole Champions League once with the chosen eleven.
+def play_champions(squad_names: list[str], seed: int | None = None,
+                   bench_names: list[str] | None = None) -> dict:
+    """Play the whole Champions League once with the chosen eleven and bench.
 
     The squad takes a RANDOM club's slot in the real draw (a fresh rng per call,
-    so the path changes every time). Its Elo is read off the fitted line; the
-    league phase and the bracket then run on the European Elo layer.
+    so the path changes every time). Its Elo is read off the fitted line from
+    whoever actually starts each match; the squad's own matches are played
+    minute by minute by the live engine, the rest on the European Elo layer.
     """
     import numpy as np
 
     from mundialytics.statistical_core.squadlab.champions import ChampionsRun
 
-    model = strength_model()
-    squad = resolve_squad(model, squad_names)
-    if len(squad) < 11:
+    field, scale, shape, cards = _champions_resources()
+    xi = resolve_cards(squad_names)
+    if len(xi) < 11:
         raise ValueError("The squad needs eleven players the model knows")
-
-    field, scale = _champions_resources()
-    squad_elo = scale.elo_for([getattr(p, "overall", 0.0) for p in squad])
+    if sum(c.position == "Goalkeeper" for c in xi) != 1:
+        raise ValueError("The eleven needs exactly one goalkeeper")
+    bench = [c for c in resolve_cards(bench_names or [])
+             if c.card_id not in {x.card_id for x in xi}]
+    squad_elo = scale.elo_for([c.overall for c in xi])
 
     if seed is None:
         seed = random.randrange(2 ** 32)
     rng = np.random.default_rng(int(seed))
-    run = ChampionsRun(SQUAD_TEAM_NAME, squad, squad_elo, field, rng=rng)
+    run = ChampionsRun(SQUAD_TEAM_NAME, xi, squad_elo, field, rng=rng, bench=bench,
+                       scale=scale, shape=shape, cards_df=cards)
     res = run.play()
     return _shape_champions(res, run.replaced, int(seed))
+
+
+def resolve_cards(names: list[str]):
+    """Card ids -> Card objects, in the order given (unknown ids dropped)."""
+    from mundialytics.statistical_core.squadlab.cards import cards_from_frame, load_cards
+
+    df = load_cards()
+    if df.empty:
+        return []
+    wanted = [str(n) for n in names]
+    sub_df = df[df["card_id"].astype(str).isin(wanted)]
+    by_id = {c.card_id: c for c in cards_from_frame(sub_df)}
+    return [by_id[n] for n in wanted if n in by_id]
 
 
 def resolve_squad(model, names: list[str]):
@@ -569,7 +594,23 @@ def _shape_champions(res, replaced: str, seed: int) -> dict:
         "matches": matches,
         "bracket": _champ_bracket(res.rounds),
         "scorers": scorers,
+        "squadTotals": _squad_totals(res.squad_totals),
     }
+
+
+def _squad_totals(totals: dict) -> list[dict]:
+    """Your players over the whole competition, most used first."""
+    rows = []
+    for name, t in (totals or {}).items():
+        apps = int(t.get("apps", 0))
+        rows.append({
+            "player": _display(str(name)), "apps": apps, "minutes": int(t.get("minutes", 0)),
+            "goals": int(t.get("goals", 0)), "assists": int(t.get("assists", 0)),
+            "yellows": int(t.get("yellows", 0)), "reds": int(t.get("reds", 0)),
+            "injuries": int(t.get("injuries", 0)),
+            "rating": round(float(t.get("rating_sum", 0.0)) / apps, 2) if apps else None,
+        })
+    return sorted(rows, key=lambda r: (-r["minutes"], -r["goals"]))
 
 
 def _label(team: str) -> str:
@@ -586,6 +627,12 @@ def _stage_label(stage: str, matchday: int) -> str:
 
 def _champ_fixture(m) -> dict:
     """One of the squad's own matches, in the client's fixture shape."""
+    log = getattr(m, "log", None)
+    shoot = None
+    if log is not None and log.shootout:
+        shoot = {"home": int(log.shootout[0]), "away": int(log.shootout[1]),
+                 "kicks": [{"side": k["side"], "player": _display(k["player"]),
+                            "scored": bool(k["scored"])} for k in log.shootout_kicks]}
     return {
         "stage": m.stage,
         "stageLabel": _stage_label(m.stage, m.matchday),
@@ -597,58 +644,57 @@ def _champ_fixture(m) -> dict:
         "events": _champ_timeline(m),
         "stats": _champ_stats(m),
         "ratings": _champ_ratings(m),
+        "extraTime": bool(log.extra_time) if log is not None else False,
+        "shootout": shoot,
+        "lineup": [_display(p) for p in (getattr(m, "lineup", None) or [])],
+        "absences": [{"player": _display(a.player), "reason": a.reason, "detail": a.detail}
+                     for a in (getattr(m, "absences", None) or [])],
+        "date": m.date.strftime("%Y-%m-%d") if getattr(m, "date", None) is not None else None,
     }
 
 
+# live-engine event kind -> the client's event type (+ a detail it can print)
+_EVENT_TYPE = {
+    "goal": ("goal", None), "pen_goal": ("goal", "pen"), "own_goal": ("goal", "og"),
+    "pen_saved": ("penMiss", "saved"), "pen_missed": ("penMiss", "missed"),
+    "yellow": ("card", None), "second_yellow": ("red", "2y"), "red": ("red", None),
+    "sub": ("sub", None), "injury": ("injury", None),
+}
+
+
+def _minute_number(label: str) -> int:
+    """'45+2' -> 45, '90+4' -> 90, '105' -> 105: where the live clock stops."""
+    return int(str(label).split("+")[0])
+
+
 def _champ_timeline(m) -> list[dict]:
-    """Goals and bookings in the order they happened.
+    """Every event of the match, in order, both sides named.
 
-    The squad's goals are named (scorer, assister); the opponent's are not —
-    only the squad's roster is attributed, exactly as the domestic season did.
-    Conditional on the score, the minute is drawn on a separate seeded stream so
-    it never disturbs the simulator's own RNG.
+    The live engine played it minute by minute, so the minute IS the minute:
+    nothing here is drawn after the fact any more.
     """
-    rng = random.Random(
-        f"{m.stage}|{m.matchday}|{m.home}|{m.away}|{m.home_goals}-{m.away_goals}"
-    )
-    squad_home = bool(m.squad_is_home)
-    squad_side = "home" if squad_home else "away"
-    opp_side = "away" if squad_home else "home"
-    squad_goals = int(m.home_goals if squad_home else m.away_goals)
-    opp_goals = int(m.away_goals if squad_home else m.home_goals)
-    opp_team = m.away if squad_home else m.home
-
-    out: list[dict] = []
-    for entry in m.goal_events or []:
-        pair = entry if isinstance(entry, (tuple, list)) else (entry, None)
-        assist = pair[1] if len(pair) > 1 else None
+    log = getattr(m, "log", None)
+    if log is None:
+        return []
+    out = []
+    for e in log.events:
+        typ, detail = _EVENT_TYPE.get(e.kind, (e.kind, None))
         out.append({
-            "type": "goal",
-            "side": squad_side,
-            "player": _display(str(pair[0])),
-            "assist": _display(str(assist)) if assist else None,
-            "minute": rng.randint(1, 90),
+            "type": typ,
+            "detail": detail,
+            "side": e.side,
+            "player": _display(str(e.player)),
+            # a saved penalty names the keeper who saved it in `assist`
+            "assist": _display(str(e.assist)) if e.assist else None,
+            "playerIn": _display(str(e.player_in)) if e.player_in else None,
+            "minute": _minute_number(e.minute),
+            "minuteLabel": e.minute,
         })
-    # any squad goal the attribution did not name still has to show, or the
-    # running score would stop short of the real result
-    for _ in range(max(squad_goals - len(m.goal_events or []), 0)):
-        out.append({"type": "goal", "side": squad_side,
-                    "player": _label(m.home if squad_home else m.away),
-                    "assist": None, "minute": rng.randint(1, 90)})
-    # the opponent's goals are unnamed: attribution only covers the squad
-    for _ in range(opp_goals):
-        out.append({"type": "goal", "side": opp_side, "player": _label(opp_team),
-                    "assist": None, "minute": rng.randint(1, 90)})
-    for player in m.card_players or []:
-        out.append({"type": "card", "side": squad_side,
-                    "player": _display(str(player)), "assist": None,
-                    "minute": rng.randint(1, 90)})
-    out.sort(key=lambda e: e["minute"])
     return out
 
 
-# The event-lambda figures the Champions match draws, in reading order. No
-# fouls: the European event calibration does not carry them.
+# The figures the live match produced, in reading order. No fouls: the
+# European event calibration does not carry them.
 _CHAMP_STAT_KEYS = [
     ("xg", "xg"), ("shots", "shots"), ("sot", "sot"),
     ("corners", "corners"), ("cards", "yellows"),
@@ -665,16 +711,20 @@ def _champ_stats(m) -> list[dict]:
 
 
 def _champ_ratings(m) -> list[dict]:
-    """The eleven's own player ratings for this match, best first."""
+    """Your players' marks for this match — everyone who played — best first."""
     rows = [
         {
-            "player": _display(str(getattr(e, "player", ""))),
-            "rating": round(float(getattr(e, "rating", 0) or 0), 1),
-            "goals": int(getattr(e, "goals", 0) or 0),
-            "assists": int(getattr(e, "assists", 0) or 0),
-            "cards": int(getattr(e, "yellow_cards", 0) or 0),
+            "player": _display(str(line.name)),
+            "rating": round(float(line.rating), 1),
+            "goals": int(line.goals),
+            "assists": int(line.assists),
+            "cards": int(line.yellows),
+            "red": bool(line.red),
+            "minutes": int(line.minutes),
+            "started": bool(line.started),
+            "injured": bool(line.injured),
         }
-        for e in (m.ratings or {}).values()
+        for line in (m.ratings or {}).values()
     ]
     return sorted(rows, key=lambda r: -r["rating"])
 
@@ -699,3 +749,46 @@ def _champ_bracket(rounds: dict) -> dict:
             for t in rounds.get(key, [])
         ]
     return out
+
+
+# ── la Champions histórica ─────────────────────────────────────────────────────
+def play_historic(pool: str = "campeones", seed: int = 7) -> dict:
+    """Sides from any era in the modern format, rated by their real ClubElo.
+
+    See squadlab/historic.py for why the rating is the club's own Elo at the
+    end of that season and not the player bridge the first version used.
+    """
+    from mundialytics.statistical_core.squadlab.historic import play
+
+    res = play(pool, int(seed))
+    odds = res.odds.set_index("team")
+    champion_p = float(odds.loc[res.champion, "p_champion"]) if res.champion in odds.index else None
+    return {
+        "pool": pool,
+        "seed": int(seed),
+        "champion": res.champion,
+        "runnerUp": res.runner_up,
+        "championOdds": round(champion_p, 4) if champion_p is not None else None,
+        "entrants": [
+            {"team": r.label, "elo": round(float(r.elo)), "year": int(r.year),
+             "europeanChampion": bool(r.champion)}
+            for r in res.entrants.itertuples()
+        ],
+        "leaguePhase": [
+            {"rank": int(r.pos), "team": str(r.team), "points": int(r.pts), "elo": int(r.elo)}
+            for r in res.table.itertuples()
+        ],
+        "bracket": {
+            key: [{"round": key, "roundLabel": ROUND_LABELS[key], "teamA": t["team_a"],
+                   "teamB": t["team_b"], "leg1": t.get("leg1", ""), "leg2": t.get("leg2", ""),
+                   "agg": t.get("agg", ""), "winner": t["winner"], "note": t.get("note", ""),
+                   "isSquad": False}
+                  for t in res.rounds.get(key, [])]
+            for key in ("playoff", "r16", "qf", "sf", "final")
+        },
+        "favourites": [
+            {"team": str(team), "elo": int(r["elo"]), "pChampion": round(float(r["p_champion"]), 4),
+             "pFinal": round(float(r["p_final"]), 4)}
+            for team, r in odds.sort_values("p_champion", ascending=False).head(10).iterrows()
+        ],
+    }

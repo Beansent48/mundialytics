@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  ArrowLeftRight,
+  ChevronLeft,
   ChevronRight,
   Dices,
   Loader2,
@@ -13,6 +15,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { HistoricChampionsView } from "@/components/squadlab/historic-champions";
 import { LiveMatch } from "@/components/squadlab/live-match";
 import { EmptyCard, PlayerCard } from "@/components/squadlab/player-card";
 import { ShareCard } from "@/components/squadlab/share-card";
@@ -26,23 +29,45 @@ import {
 } from "@/lib/api";
 import { cn, ordinal } from "@/lib/utils";
 
-type Mode = "draft" | "sandbox";
-type Phase = "setup" | "building" | "season";
-type Slot = { position: string; index: number; key: string };
+type Mode = "draft" | "sandbox" | "historic";
+type Phase = "setup" | "building" | "lineup" | "season" | "historic";
+/** `bench` slots are the seven reserves; `dealIndex` seeds the server's deal
+ *  (0-10 the eleven, 11-17 the bench) so no two slots are dealt alike. */
+type Slot = { position: string; index: number; key: string; bench: boolean; dealIndex: number };
+type Lineup = { xi: SquadPlayer[]; bench: SquadPlayer[] };
 
 /** Attack at the top, keeper at the bottom — the way a formation is written. */
 const PITCH_ROWS = ["Forward", "Midfielder", "Defender", "Goalkeeper"] as const;
 // Knockout rounds in the order a squad plays them.
 const ROUND_ORDER = ["playoff", "r16", "qf", "sf", "final"] as const;
 
-function buildSlots(slots: Record<string, number>): Slot[] {
+function buildSlots(
+  slots: Record<string, number>,
+  benchSlots: Record<string, number> = {},
+): Slot[] {
   const out: Slot[] = [];
+  let n = 0;
   for (const position of PITCH_ROWS) {
     for (let i = 0; i < (slots[position] ?? 0); i++) {
-      out.push({ position, index: i, key: `${position}_${i}` });
+      out.push({ position, index: i, key: `${position}_${i}`, bench: false, dealIndex: n });
+      n += 1;
+    }
+  }
+  // the bench, keeper first, as a matchday sheet lists it
+  let b = 0;
+  for (const position of [...PITCH_ROWS].reverse()) {
+    for (let i = 0; i < (benchSlots[position] ?? 0); i++) {
+      out.push({ position, index: i, key: `B_${position}_${i}`, bench: true, dealIndex: 11 + b });
+      b += 1;
     }
   }
   return out;
+}
+
+/** "4-3-3" for an eleven, keeper left out, the way a formation is written. */
+function formationOf(xi: SquadPlayer[]): string {
+  const n = (p: string) => xi.filter((x) => x.position === p).length;
+  return `${n("Defender")}-${n("Midfielder")}-${n("Forward")}`;
 }
 
 /** A fresh draft every time. The cards themselves are dealt by the server,
@@ -71,6 +96,7 @@ export function SquadLab() {
   const [seed, setSeed] = useState(0);
   const [dealt, setDealt] = useState<Record<string, SquadPlayer[]>>({});
 
+  const [lineup, setLineup] = useState<Lineup | null>(null);
   const [season, setSeason] = useState<SquadSeason | null>(null);
   const [playing, setPlaying] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
@@ -87,6 +113,10 @@ export function SquadLab() {
   }, [dirty]);
 
   async function start() {
+    if (mode === "historic") {
+      setPhase("historic");
+      return;
+    }
     setPhase("building");
     setPool(null);
     setPoolError(false);
@@ -104,7 +134,10 @@ export function SquadLab() {
     }
   }
 
-  const slots = useMemo(() => (pool ? buildSlots(pool.slots) : []), [pool]);
+  const slots = useMemo(
+    () => (pool ? buildSlots(pool.slots, pool.benchSlots) : []),
+    [pool],
+  );
   const taken = useMemo(
     () => new Set(Object.values(picks).map((p) => p.player)),
     [picks],
@@ -142,7 +175,7 @@ export function SquadLab() {
 
     let cancelled = false;
     api
-      .dealSlot(seed, slot.position, slot.index, rerolls[openSlot] ?? 0,
+      .dealSlot(seed, slot.position, slot.dealIndex, rerolls[openSlot] ?? 0,
                 Object.values(picks).map((p) => p.player))
       .then((d) => {
         if (!cancelled) setDealt((prev) => ({ ...prev, [dealKey]: d.candidates }));
@@ -168,13 +201,26 @@ export function SquadLab() {
     setOpenSlot(next && next.key !== slotKey ? next.key : null);
   }
 
-  async function playChampions() {
+  /** From a finished draft to the team sheet, where the eleven can be changed. */
+  function toLineup() {
     if (!complete) return;
+    setLineup({
+      xi: slots.filter((s) => !s.bench).map((s) => picks[s.key]),
+      bench: slots.filter((s) => s.bench).map((s) => picks[s.key]),
+    });
+    setPhase("lineup");
+  }
+
+  async function playChampions() {
+    if (!lineup) return;
     setPlaying(true);
     setSeasonError(null);
     try {
-      const squad = slots.map((s) => picks[s.key].player);
-      const result = await api.playChampions(squad, mode);
+      const result = await api.playChampions(
+        lineup.xi.map((p) => p.player),
+        mode,
+        lineup.bench.map((p) => p.player),
+      );
       setSeason(result);
       setRevealed(0);
       setPhase("season");
@@ -188,17 +234,22 @@ export function SquadLab() {
   function reset() {
     setPhase("setup");
     setPicks({});
+    setLineup(null);
     setSeason(null);
     setRerolls({});
     setDealt({});
     setOpenSlot(null);
   }
 
+  if (phase === "historic") {
+    return <HistoricChampionsView onReset={reset} />;
+  }
+
   if (phase === "season" && season) {
     return (
       <SeasonView
         season={season}
-        squad={slots.map((s) => picks[s.key]).filter(Boolean)}
+        squad={lineup?.xi ?? []}
         revealed={revealed}
         setRevealed={setRevealed}
         onReset={reset}
@@ -214,7 +265,7 @@ export function SquadLab() {
             {t("stepMode")}
           </p>
           <div className="mt-3 flex flex-col gap-2">
-            {(["draft", "sandbox"] as const).map((m) => (
+            {(["draft", "sandbox", "historic"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -246,7 +297,7 @@ export function SquadLab() {
           className="mt-8 inline-flex h-13 items-center gap-2 rounded-[12px] bg-brand px-8 py-3.5 text-[1rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover"
         >
           <Play className="size-4" />
-          {t("start")}
+          {mode === "historic" ? t("historic.start") : t("start")}
         </button>
       </div>
     );
@@ -254,8 +305,23 @@ export function SquadLab() {
 
   // Engine time with the team sheet to read, instead of a spinner over an
   // empty pitch.
-  if (playing) {
-    return <TeamSheet squad={slots.map((s) => picks[s.key])} />;
+  if (playing && lineup) {
+    return <TeamSheet squad={lineup.xi} />;
+  }
+
+  if (phase === "lineup" && lineup && pool) {
+    return (
+      <LineupEditor
+        lineup={lineup}
+        setLineup={setLineup}
+        formations={pool.formations ?? ["4-3-3"]}
+        roleWeights={pool.roleWeights}
+        substatLabels={pool.substatLabels}
+        onBack={() => setPhase("building")}
+        onPlay={playChampions}
+        error={seasonError}
+      />
+    );
   }
 
   /* ── Building the eleven ─────────────────────────────────────────────── */
@@ -302,7 +368,7 @@ export function SquadLab() {
           <div className="mv-pitch mt-8 px-4 py-6 sm:px-8 sm:py-9">
             <div className="relative flex flex-col gap-5">
               {PITCH_ROWS.map((position, rowIndex) => {
-                const row = slots.filter((s) => s.position === position);
+                const row = slots.filter((s) => s.position === position && !s.bench);
                 if (!row.length) return null;
                 return (
                   <div
@@ -344,10 +410,50 @@ export function SquadLab() {
             </div>
           </div>
 
+          <div className="mt-4 rounded-[var(--radius-card)] border border-border bg-surface px-4 py-4 sm:px-6">
+            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-muted">
+              {t("bench")}
+            </p>
+            <p className="mt-1 text-[0.78rem] text-dim">{t("benchLead")}</p>
+            <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-3">
+              {slots
+                .filter((s) => s.bench)
+                .map((slot, i) => {
+                  const p = picks[slot.key];
+                  return (
+                    <div key={slot.key}>
+                      {p ? (
+                        <PlayerCard
+                          player={p}
+                          delay={i * 50}
+                          selected={openSlot === slot.key}
+                          roleWeights={pool.roleWeights}
+                          substatLabels={pool.substatLabels}
+                          onClick={() =>
+                            setOpenSlot(openSlot === slot.key ? null : slot.key)
+                          }
+                        />
+                      ) : (
+                        <EmptyCard
+                          label={t(`positionsShort.${slot.position}`)}
+                          delay={i * 50}
+                          active={openSlot === slot.key}
+                          onClick={() =>
+                            setOpenSlot(openSlot === slot.key ? null : slot.key)
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
           {openSlotObj ? (
             <div className="mt-5 rounded-[var(--radius-card)] border border-brand bg-surface p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[0.82rem] font-semibold">
+                  {openSlotObj.bench ? `${t("bench")} · ` : ""}
                   {t(`positions.${openSlotObj.position}`)} #{openSlotObj.index + 1}
                 </p>
                 <div className="flex items-center gap-2">
@@ -415,7 +521,7 @@ export function SquadLab() {
             <button
               type="button"
               disabled={!complete || playing}
-              onClick={playChampions}
+              onClick={toLineup}
               className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-brand px-6 text-[0.95rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-40"
             >
               {playing ? (
@@ -425,7 +531,7 @@ export function SquadLab() {
                 </>
               ) : (
                 <>
-                  {t("play")}
+                  {t("toLineup")}
                   <ChevronRight className="size-4" />
                 </>
               )}
@@ -444,6 +550,153 @@ export function SquadLab() {
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+/* ── The team sheet before kick-off ────────────────────────────────────────── */
+
+/**
+ * Your eleven and your bench, swappable. Tap a starter and a reserve (either
+ * order) to swap them. A swap across lines is allowed when it leaves a real
+ * formation — a defender for a forward turns 4-3-3 into 5-3-2 — and refused
+ * when it would not (two keepers, six at the back).
+ */
+function LineupEditor({
+  lineup,
+  setLineup,
+  formations,
+  roleWeights,
+  substatLabels,
+  onBack,
+  onPlay,
+  error,
+}: {
+  lineup: Lineup;
+  setLineup: (l: Lineup) => void;
+  formations: string[];
+  roleWeights: SquadPool["roleWeights"];
+  substatLabels: SquadPool["substatLabels"];
+  onBack: () => void;
+  onPlay: () => void;
+  error: string | null;
+}) {
+  const t = useTranslations("squadlab");
+  const [picked, setPicked] = useState<{ group: "xi" | "bench"; i: number } | null>(null);
+  const [refused, setRefused] = useState(false);
+
+  const shape = formationOf(lineup.xi);
+  const avg = Math.round(
+    lineup.xi.reduce((a, p) => a + p.overall, 0) / Math.max(lineup.xi.length, 1),
+  );
+
+  function tap(group: "xi" | "bench", i: number) {
+    setRefused(false);
+    if (!picked || picked.group === group) {
+      setPicked(picked && picked.group === group && picked.i === i ? null : { group, i });
+      return;
+    }
+    const xiIdx = group === "xi" ? i : picked.i;
+    const benchIdx = group === "bench" ? i : picked.i;
+    const xi = lineup.xi.slice();
+    const bench = lineup.bench.slice();
+    const out = xi[xiIdx];
+    xi[xiIdx] = bench[benchIdx];
+    bench[benchIdx] = out;
+    const keepers = xi.filter((p) => p.position === "Goalkeeper").length;
+    if (keepers !== 1 || !formations.includes(formationOf(xi))) {
+      setRefused(true);
+      setPicked(null);
+      return;
+    }
+    setLineup({ xi, bench });
+    setPicked(null);
+  }
+
+  const card = (p: SquadPlayer, group: "xi" | "bench", i: number, delay: number) => (
+    <PlayerCard
+      player={p}
+      delay={delay}
+      selected={picked?.group === group && picked.i === i}
+      roleWeights={roleWeights}
+      substatLabels={substatLabels}
+      onClick={() => tap(group, i)}
+    />
+  );
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-border px-3.5 text-[0.83rem] text-muted transition-colors hover:border-border-strong hover:text-text"
+        >
+          <ChevronLeft className="size-3.5" />
+          {t("backToDraft")}
+        </button>
+        <span className="text-[0.8rem] text-dim">
+          {t("formation", { f: shape })} · {t("sheetOverall")} {avg}
+        </span>
+      </div>
+
+      <div className="mt-5 max-w-2xl">
+        <p className="font-display text-[1.5rem] leading-tight">{t("lineupTitle")}</p>
+        <p className="mt-1.5 flex items-start gap-2 text-[0.85rem] leading-relaxed text-muted">
+          <ArrowLeftRight className="mt-0.5 size-4 shrink-0 text-brand" />
+          {t("lineupLead")}
+        </p>
+      </div>
+
+      <div className="mv-pitch mt-6 px-4 py-6 sm:px-8 sm:py-9">
+        <div className="relative flex flex-col gap-5">
+          {PITCH_ROWS.map((position, rowIndex) => {
+            const row = lineup.xi
+              .map((p, i) => ({ p, i }))
+              .filter(({ p }) => p.position === position);
+            if (!row.length) return null;
+            return (
+              <div
+                key={position}
+                className="mx-auto flex w-full max-w-[42rem] justify-center gap-2 sm:gap-3"
+              >
+                {row.map(({ p, i }, k) => (
+                  <div key={p.player} className="w-[4.9rem] sm:w-[7rem]">
+                    {card(p, "xi", i, rowIndex * 90 + k * 70)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-[var(--radius-card)] border border-border bg-surface px-4 py-4 sm:px-6">
+        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-muted">
+          {t("bench")}
+        </p>
+        <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-3">
+          {lineup.bench.map((p, i) => (
+            <div key={p.player}>{card(p, "bench", i, i * 50)}</div>
+          ))}
+        </div>
+      </div>
+
+      {refused ? (
+        <p className="mt-3 text-[0.83rem] text-negative">{t("invalidSwap")}</p>
+      ) : null}
+
+      <div className="mt-8 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onPlay}
+          className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-brand px-6 text-[0.95rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover"
+        >
+          {t("play")}
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+      {error ? <p className="mt-4 text-[0.85rem] text-negative">{error}</p> : null}
     </div>
   );
 }
@@ -751,6 +1004,12 @@ function SeasonView({
                 {ownTies.map((tie, i) => {
                   const opp = tie.teamA === season.teamName ? tie.teamB : tie.teamA;
                   const won = tie.winner === season.teamName;
+                  // the API writes the aggregate from team A's side; read it
+                  // from yours, or a won final printed as "0-2"
+                  const agg =
+                    tie.teamA === season.teamName
+                      ? tie.agg
+                      : tie.agg.split("-").reverse().join("-");
                   return (
                     <div
                       key={`${tie.round}-${i}`}
@@ -766,7 +1025,7 @@ function SeasonView({
                       </span>
                       <span className="flex-1 truncate text-[0.85rem]">{label(opp)}</span>
                       <span className="text-[0.7rem] text-dim">
-                        {tie.agg}
+                        {agg}
                         {tie.note ? ` ${tie.note}` : ""}
                       </span>
                       <span
@@ -841,6 +1100,54 @@ function SeasonView({
                 </span>
               </div>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {done && season.squadTotals?.length ? (
+        <section className="mt-10">
+          <h2 className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">
+            {t("squadTotals")}
+          </h2>
+          <div className="mt-3 overflow-x-auto rounded-[var(--radius-card)] border border-border">
+            <table className="w-full min-w-[28rem] text-[0.82rem]">
+              <thead>
+                <tr className="border-b border-border bg-bg-elevated text-[0.6rem] uppercase tracking-[0.07em] text-dim">
+                  <th className="px-3 py-2 text-left font-semibold">{t("colPlayer")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colPlayed")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colMinutes")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colGoals")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colAssists")}</th>
+                  <th className="px-2 py-2 text-right font-semibold">{t("colCards")}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t("colRating")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {season.squadTotals.map((r) => (
+                  <tr key={r.player} className="border-b border-border bg-surface last:border-0">
+                    <td className="px-3 py-2">
+                      {r.player}
+                      {r.injuries ? (
+                        <span className="ml-1.5 text-[0.68rem] text-negative">
+                          {t("injuriesShort", { n: r.injuries })}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">{r.apps}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">{r.minutes}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{r.goals}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">{r.assists}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">
+                      {r.yellows}
+                      {r.reds ? <span className="ml-1 text-negative">+{r.reds}R</span> : null}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {r.rating != null ? r.rating.toFixed(2) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       ) : null}
