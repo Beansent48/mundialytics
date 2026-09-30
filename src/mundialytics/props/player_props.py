@@ -66,6 +66,12 @@ RECENT_W = {"xg": 0.5, "goals": 0.5, "shots": 0.5, "xa": 0.0, "assists": 0.0, "y
 # shots 1.5 -0.025, assist -0.0031, yellow -0.0040 log-loss) and top-1 scorer
 # picks went 37.6% -> 39.7%. scripts/experiment_player_lineup_minutes.py
 LINEUP_MIN_FIT = {"goal": (0.7, 0.895), "shots": (0.8, 0.934), "ass": (0.7, 0.900), "yc": (0.6, 0.927)}
+# The referee on each player's yellow card (v0.60.0): mu x exp(b x ref_dev),
+# ref_dev = the ESPN referee's shrunk deviation in yellows per match
+# (TeamPropsModel.referee_deviation; LaLiga/Bundesliga/Serie A/Ligue 1). b picked
+# on 2022/23-2023/24, held out on 2024/25-2025/26: -0.0006 log-loss there, 4/4
+# folds overall. scripts/experiment_player_yellow_referee.py
+REF_YC_B = 0.16
 
 
 def _pos_group(p: str) -> str:
@@ -144,7 +150,8 @@ class PlayerPropsModel:
             current_squads: "pd.DataFrame | str | Path | None" = None,
             roster_max_age_days: float = ROSTER_MAX_AGE_DAYS,
             current: "pd.DataFrame | str | Path | None" = None,
-            current_penalties: pd.DataFrame | None = None) -> "PlayerPropsModel":
+            current_penalties: pd.DataFrame | None = None,
+            current_minutes: pd.DataFrame | None = None) -> "PlayerPropsModel":
         """`pm`: understat player-match rows (player_id, player, team, game_id, date,
         position, minutes + base stats). All history is training; state = as of
         last game. `shots`/`shots_path`: understat shot events — penalties carry
@@ -167,7 +174,11 @@ class PlayerPropsModel:
         `current_penalties`: penalty attempts of that season (event_id, player,
         scored), from enrichment.text_xg.penalties_from_commentary. Without them
         the current rows carry no penalties and the pen-taker split fades as they
-        accumulate (see _append_current)."""
+        accumulate (see _append_current).
+
+        `current_minutes`: minutes played per (event_id, player), read from the
+        commentary (enrichment.espn_minutes.season_minutes). Where present they
+        replace the role estimate."""
         pm = pm.copy()
         pm["date"] = pd.to_datetime(pm["date"], errors="coerce")
         pm = pm.dropna(subset=["date"])
@@ -175,7 +186,7 @@ class PlayerPropsModel:
             pm[c] = pd.to_numeric(pm[c], errors="coerce").fillna(0.0)
         self._n_current_rows = 0
         if current is not None:
-            pm = self._append_current(pm, current, current_penalties)
+            pm = self._append_current(pm, current, current_penalties, current_minutes)
             self._n_current_rows = int(pm.attrs.get("n_current_rows", 0))
 
         # penalties per (game, player) -> npxg/npgoals + taker-share ingredients
@@ -282,7 +293,8 @@ class PlayerPropsModel:
 
     @staticmethod
     def _append_current(pm: pd.DataFrame, current,
-                        penalties: pd.DataFrame | None = None) -> pd.DataFrame:
+                        penalties: pd.DataFrame | None = None,
+                        minutes: pd.DataFrame | None = None) -> pd.DataFrame:
         """ESPN rows for the current season, in Understat's shape, appended to pm.
 
         Understat stopped on 2026-05-24, so without these every 2026/27 price
@@ -364,6 +376,17 @@ class PlayerPropsModel:
         est_st = cur["player_id"].map(own_st).fillna(grp.map(pos_st)).fillna(83.0)
         est_sb = cur["player_id"].map(own_sb).fillna(grp.map(pos_sb)).fillna(24.0)
         mins = np.where(cur["appearances"] > 0, np.where(started, est_st, est_sb), 0.0)
+        # real minutes from the commentary where there is one (v0.60.0): MAE
+        # 1.6' against Understat on 2025/26 vs 9.9' for the estimate above, and
+        # every prop 5/5 better in the replay (shots 1.5 -0.0007)
+        if minutes is not None and len(minutes):
+            mk = minutes.assign(event_id=minutes["event_id"].astype(str)).drop_duplicates(["event_id", "player"])
+            real = pd.Series(mk["minutes"].to_numpy(dtype=float), index=pd.MultiIndex.from_arrays(
+                [mk["event_id"], mk["player"].astype(str)]))
+            key = pd.MultiIndex.from_arrays([cur["event_id"].astype(str), cur["player"].astype(str)])
+            got = real.reindex(key).to_numpy(dtype=float)
+            has = ~np.isnan(got) & (cur["appearances"].to_numpy() > 0)
+            mins = np.where(has, np.maximum(got, 1.0), mins)
         glob_xps = float(hist["xg"].sum() / max(hist["shots"].sum(), 1.0))
         n_sh = hist.groupby("player_id")["shots"].sum()
         raw_xps = (hist.groupby("player_id")["xg"].sum() / n_sh.replace(0, np.nan)).clip(0.02, 0.5)
@@ -510,7 +533,8 @@ class PlayerPropsModel:
         low = team.lower()
         return next((t for t in self._rosters if t.lower() == low), None)
 
-    def predict_team_players(self, team: str, atk_factor: float = 1.0) -> pd.DataFrame:
+    def predict_team_players(self, team: str, atk_factor: float = 1.0,
+                             ref_dev: float | None = None) -> pd.DataFrame:
         """Prop probabilities for every rostered player of `team` (foundation or
         Understat name). `atk_factor` = engine match lambda / team baseline lambda."""
         us_team = self._resolve_team(team)
@@ -520,10 +544,10 @@ class PlayerPropsModel:
         P = self._players.loc[[i for i in ids if i in self._players.index]].copy()
         if P.empty:
             return P
-        return self._price(P, us_team, atk_factor)
+        return self._price(P, us_team, atk_factor, ref_dev=ref_dev)
 
     def _price(self, P: pd.DataFrame, us_team: str, atk_factor: float,
-               started: pd.Series | None = None) -> pd.DataFrame:
+               started: pd.Series | None = None, ref_dev: float | None = None) -> pd.DataFrame:
         """Prop probabilities for the players in P. `started` (bool per row) switches
         minutes to the confirmed role — see LINEUP_MIN_FIT; None is the morning price."""
         for c in STATS:
@@ -573,6 +597,8 @@ class PlayerPropsModel:
         mu_shots = P["r_shots"] * m_shots * af
         mu_ass = (0.7 * P["r_xa"] + 0.3 * P["r_assists"]) * m_ass * af
         mu_yc = P["r_yellow_cards"] * m_yc
+        if ref_dev:
+            mu_yc = mu_yc * float(np.exp(REF_YC_B * ref_dev))
 
         out = pd.DataFrame({
             "player": P["player"], "pgroup": P["pgroup"], "team": us_team,
@@ -598,7 +624,8 @@ class PlayerPropsModel:
         return (cred * avg + (1 - cred) * prior).to_numpy(dtype=float)
 
     def predict_lineup(self, team: str, starters: list[str], bench: list[str] = (),
-                       atk_factor: float = 1.0) -> tuple[pd.DataFrame, list[str]]:
+                       atk_factor: float = 1.0,
+                       ref_dev: float | None = None) -> tuple[pd.DataFrame, list[str]]:
         """Prop probabilities for a CONFIRMED matchday squad (ESPN names), each
         player priced on the minutes of his role tonight (LINEUP_MIN_FIT).
 
@@ -628,7 +655,8 @@ class PlayerPropsModel:
             return pd.DataFrame(), missing
         P = self._players.loc[ids].copy()
         us_team = self._resolve_team(team) or team
-        out = self._price(P, us_team, atk_factor, started=pd.Series(started, index=P.index))
+        out = self._price(P, us_team, atk_factor, started=pd.Series(started, index=P.index),
+                          ref_dev=ref_dev)
         out["started"] = pd.Series(started, index=P.index).reindex(out.index)
         return out, missing
 
@@ -647,10 +675,11 @@ class PlayerPropsModel:
             return (lam / self.LEAGUE_MEAN_LAMBDA) / (xg_base / self._glob_xg)
         return lam / base
 
-    def team_players_for_lambda(self, team: str, lam: float | None) -> pd.DataFrame:
+    def team_players_for_lambda(self, team: str, lam: float | None,
+                                ref_dev: float | None = None) -> pd.DataFrame:
         """One team's player props given only that side's match lambda (e.g. a
         European tie where the opponent isn't Understat-covered)."""
-        return self.predict_team_players(team, self._atk_factor(team, lam, None))
+        return self.predict_team_players(team, self._atk_factor(team, lam, None), ref_dev=ref_dev)
 
     def predict_fixture(self, home_team: str, away_team: str,
                         lam_home: float | None = None, lam_away: float | None = None,

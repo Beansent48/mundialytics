@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.60.0 — Real minutes, and the referee on player yellows and in the lineup pass (2026-09-30)
+
+### Added
+- **Minutes played read from the commentary**
+  (`enrichment/espn_minutes.py`, `PlayerPropsModel.fit(current_minutes=...)`).
+  - ESPN says who started and who came on, never for how long. The
+    substitutions and red cards in the commentary say when.
+  - Understat's clock is kept: first-half stoppage runs into the second half,
+    one minute short of all of it. The offset was picked on Aug–Dec 2025 and
+    held out on Jan–Jun 2026.
+  - Against Understat's minutes on 2025/26 (53k player-matches): MAE 1.6'
+    against 9.9' for the role estimate it replaces, with 90% within a minute.
+    It covers 100% of 2026/27 appearances.
+  - Replayed on 2021/22–2025/26, every prop improves 5/5 on the estimate
+    (shots 1.5 −0.0007, anytime −0.0002). Week by week on 2026/27, shots 1.5
+    −0.0005.
+- **The referee on each player's yellow card** (`REF_YC_B`).
+  - mu × exp(0.16 × ref_dev), where ref_dev is the ESPN referee's card
+    deviation used by the team models since v0.56.0 (four leagues).
+  - b was picked on 2022/23–2023/24 and held out on 2024/25–2025/26:
+    −0.0006 there, and 4/4 folds overall.
+  - The morning log applies it when ESPN already names the referee.
+- **The lineup pass reads the referee** from the summary it fetches for the
+  XIs.
+  - It re-prices the team event markets with him and with the XI's lambdas,
+    logging them to `lineup_pass_team_log.csv`.
+  - It applies him to the player yellows. `evaluate_lineup_pass.py` grades
+    the team rows against the morning price.
+  - This is where the referee feature is sure to have him, whether or not
+    ESPN names him by the morning.
+
+### Measured, not shipped
+- **Shots relative to the league level:** every count divided by its
+  league-season level before the rollings, with lambda = share × level.
+  - It fixes 2026/27 (totals −0.025, bias −2.2 → −1.6 shots per match) but is
+    worse in all five normal seasons (+0.004, 0/5). SOT and corners behave
+    the same.
+  - This is the second league-level form to fail history for shots after
+    v0.56.0's running correction. The shots bias stays a user decision, now
+    watched by the drift report.
+  - `scripts/experiment_relative_level.py`.
+
 ## v0.59.0 — Market drift report (2026-09-29)
 
 ### Added
