@@ -143,7 +143,8 @@ class PlayerPropsModel:
             shots_path: "str | Path | None" = None,
             current_squads: "pd.DataFrame | str | Path | None" = None,
             roster_max_age_days: float = ROSTER_MAX_AGE_DAYS,
-            current: "pd.DataFrame | str | Path | None" = None) -> "PlayerPropsModel":
+            current: "pd.DataFrame | str | Path | None" = None,
+            current_penalties: pd.DataFrame | None = None) -> "PlayerPropsModel":
         """`pm`: understat player-match rows (player_id, player, team, game_id, date,
         position, minutes + base stats). All history is training; state = as of
         last game. `shots`/`shots_path`: understat shot events — penalties carry
@@ -161,7 +162,12 @@ class PlayerPropsModel:
         `current`: ESPN player-match rows for the season Understat has not
         published (data/external/advanced/espn/espn_player_match_current.csv).
         See _append_current; without it the state freezes at Understat's last
-        match, which is what production did until v0.57.0."""
+        match, which is what production did until v0.57.0.
+
+        `current_penalties`: penalty attempts of that season (event_id, player,
+        scored), from enrichment.text_xg.penalties_from_commentary. Without them
+        the current rows carry no penalties and the pen-taker split fades as they
+        accumulate (see _append_current)."""
         pm = pm.copy()
         pm["date"] = pd.to_datetime(pm["date"], errors="coerce")
         pm = pm.dropna(subset=["date"])
@@ -169,7 +175,7 @@ class PlayerPropsModel:
             pm[c] = pd.to_numeric(pm[c], errors="coerce").fillna(0.0)
         self._n_current_rows = 0
         if current is not None:
-            pm = self._append_current(pm, current)
+            pm = self._append_current(pm, current, current_penalties)
             self._n_current_rows = int(pm.attrs.get("n_current_rows", 0))
 
         # penalties per (game, player) -> npxg/npgoals + taker-share ingredients
@@ -185,6 +191,10 @@ class PlayerPropsModel:
             if c not in pm.columns:
                 pm[c] = 0.0
         pm[["pen_att", "pen_goal"]] = pm[["pen_att", "pen_goal"]].fillna(0.0)
+        # the current season's penalties come with its rows, not from the shots file
+        for c in ("pen_att", "pen_goal"):
+            if f"cur_{c}" in pm.columns:
+                pm[c] = pm[c] + pm.pop(f"cur_{c}").fillna(0.0)
         pm["npxg"] = (pm["xg"] - 0.76 * pm["pen_att"]).clip(lower=0)
         pm["npgoals"] = (pm["goals"] - pm["pen_goal"]).clip(lower=0)
         tp = pm.groupby(["team", "game_id"])["pen_att"].sum().rename("team_pen_att").reset_index()
@@ -271,7 +281,8 @@ class PlayerPropsModel:
         return self
 
     @staticmethod
-    def _append_current(pm: pd.DataFrame, current) -> pd.DataFrame:
+    def _append_current(pm: pd.DataFrame, current,
+                        penalties: pd.DataFrame | None = None) -> pd.DataFrame:
         """ESPN rows for the current season, in Understat's shape, appended to pm.
 
         Understat stopped on 2026-05-24, so without these every 2026/27 price
@@ -286,6 +297,13 @@ class PlayerPropsModel:
         Replayed on 2021/22-2025/26 this recovered ~95% of what full data gives
         over the frozen state, every prop 5/5 (shots 1.5 -0.019, anytime -0.0049)
         and lifted the shortlist from 58% to 83% of players who played.
+
+        Penalties (v0.58.0): ESPN's file marks penalty goals, never the misses,
+        so without `penalties` every current row carried pen_att = 0 and the
+        team penalty rate -- a mean over the last 38 matches -- sank a little
+        more each week, halving a taker's penalty share of mu by mid-season.
+        With them, each row gets its attempts and goals, and its xG counts a
+        penalty at 0.76 instead of at the player's average shot.
         scripts/experiment_player_fresh_form.py. Players are matched by name;
         anyone ESPN names that Understat never measured starts a new record."""
         from mundialytics.identity.current_squads import NameIndex
@@ -353,6 +371,25 @@ class PlayerPropsModel:
         xa90 = hist.groupby("player_id")["xa"].sum() / hist.groupby("player_id")["minutes"].sum() * 90.0
         pos_xa90 = (hist.groupby(hist_g)["xa"].sum() / hist.groupby(hist_g)["minutes"].sum() * 90.0)
 
+        # penalty attempts per row, matched by name within the same match
+        pen_att = pd.Series(0.0, index=cur.index)
+        pen_goal = pd.Series(0.0, index=cur.index)
+        if penalties is not None and len(penalties):
+            pens = penalties.dropna(subset=["player"]).assign(event_id=lambda d: d["event_id"].astype(str))
+            rows_by_event = {e: g for e, g in cur.assign(eid=cur["event_id"].astype(str)).groupby("eid")}
+            for eid, g in pens.groupby("event_id"):
+                squad = rows_by_event.get(eid)
+                if squad is None:
+                    continue
+                idx_e = NameIndex()
+                for i, name in zip(squad.index, squad["player"].astype(str)):
+                    idx_e.add(name, i)
+                for who, scored in zip(g["player"], g["scored"]):
+                    i = idx_e.lookup(who)
+                    if i is not None:
+                        pen_att[i] += 1.0
+                        pen_goal[i] += float(bool(scored))
+
         # teams under the name the Understat rows use, where the club is known
         fd_to_us = {to_foundation_name(t): t for t in pm["team"].dropna().unique()}
         code = {"GK": "GK", "DEF": "DC", "MID": "MC", "ATT": "AMC", "FW": "FW"}
@@ -366,7 +403,9 @@ class PlayerPropsModel:
             "minutes": mins,
             "goals": cur["goals"].to_numpy(), "shots": cur["shots"].to_numpy(),
             "assists": cur["assists"].to_numpy(), "yellow_cards": cur["yellow_cards"].to_numpy(),
-            "xg": (cur["shots"] * cur["player_id"].map(xps).fillna(glob_xps)).to_numpy(),
+            "xg": ((cur["shots"] - pen_att).clip(lower=0) * cur["player_id"].map(xps).fillna(glob_xps)
+                   + 0.76 * pen_att).to_numpy(),
+            "cur_pen_att": pen_att.to_numpy(), "cur_pen_goal": pen_goal.to_numpy(),
             "xa": (cur["player_id"].map(xa90).fillna(grp.map(pos_xa90)).fillna(0.0) * mins / 90.0).to_numpy(),
         })
         out = pd.concat([pm, rows], ignore_index=True)
