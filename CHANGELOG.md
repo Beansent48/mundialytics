@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.58.0 — This season's penalties for the player model (2026-09-29)
+
+### Fixed
+- **Penalty takers and team penalty rates use 2026/27 again.**
+  - Why: since v0.57.0 the ESPN rows feed the player state, but ESPN's player
+    file marks penalty goals and never the misses. Every current row carried
+    zero attempts, and the team penalty rate, a mean over the last 38 matches,
+    sank a little each week. By mid-season a taker's penalty share of mu
+    would have been roughly halved.
+  - Attempts now come from the match commentary
+    (`text_xg.penalties_from_commentary`, with the shooter from `shooter`).
+  - On 2025/26 the commentary gives 552 penalties, exactly Understat's 552,
+    with the same takers and counts. The model's xG for a current row now
+    counts a penalty at 0.76 rather than at the player's average shot.
+- **Text xG counts saved and missed penalties written with a full stop.**
+  - "Penalty saved." was dropped by the parser, which only knew "Penalty
+    saved!". That was 12 of the 58 penalty attempts of 2026/27.
+  - Conversion now reads 79% / 77% / 76% for 2024/25–2026/27, as Understat's
+    78%.
+
 ## v0.57.0 — Player markets on this season's data (2026-09-29)
 
 Understat, the player model's only source, stopped on 2026-05-24. Every 2026/27
