@@ -331,6 +331,10 @@ export type SquadPool = {
   competition: string;
   competitionName: string;
   slots: Record<string, number>;
+  /** The seven reserves: a keeper and two of each outfield line. */
+  benchSlots?: Record<string, number>;
+  /** Shapes the eleven may be rearranged into, "DEF-MID-FWD" ("4-3-3"). */
+  formations?: string[];
   positions: string[];
   players: Record<string, SquadPlayer[]>;
   /** Per-role sub-stat weight formula, /100. */
@@ -351,13 +355,21 @@ export type SquadDeal = {
   candidates: SquadPlayer[];
 };
 
-/** A goal or a booking, with the minute it happened on. */
+/** One event of the live match, on the minute it happened. */
 export type SquadMatchEvent = {
-  type: "goal" | "card";
+  type: "goal" | "card" | "red" | "penMiss" | "sub" | "injury";
+  /** goal: "pen" | "og"; penMiss: "saved" | "missed"; red: "2y" (second yellow). */
+  detail?: string | null;
   side: "home" | "away";
   player: string;
+  /** The assister; for a saved penalty, the keeper who saved it. */
   assist: string | null;
+  /** For a substitution, the man coming on (`player` goes off). */
+  playerIn?: string | null;
+  /** Where the live clock stops: 45'+2 is 45, extra time runs to 120. */
   minute: number;
+  /** As printed: "45+2", "90+4", "105". */
+  minuteLabel?: string;
 };
 
 export type SquadPlayerRating = {
@@ -366,6 +378,17 @@ export type SquadPlayerRating = {
   goals: number;
   assists: number;
   cards: number;
+  red?: boolean;
+  minutes?: number;
+  started?: boolean;
+  injured?: boolean;
+};
+
+export type SquadAbsence = {
+  player: string;
+  /** "sancion" | "lesion" */
+  reason: string;
+  detail: string;
 };
 
 /** One of the squad's own matches. Only the squad's matches carry detail. */
@@ -381,6 +404,16 @@ export type SquadFixture = {
   events: SquadMatchEvent[] | null;
   stats: { key: string; home: number; away: number }[] | null;
   ratings: SquadPlayerRating[] | null;
+  extraTime?: boolean;
+  shootout?: {
+    home: number;
+    away: number;
+    kicks: { side: "home" | "away"; player: string; scored: boolean }[];
+  } | null;
+  /** The eleven that actually started (bans and injuries covered). */
+  lineup?: string[];
+  absences?: SquadAbsence[];
+  date?: string | null;
 };
 
 export type LeaguePhaseRow = {
@@ -442,6 +475,33 @@ export type SquadSeason = {
     assists: number;
     isSquad: boolean;
   }[];
+  /** Your players over the whole competition, most used first. */
+  squadTotals?: {
+    player: string;
+    apps: number;
+    minutes: number;
+    goals: number;
+    assists: number;
+    yellows: number;
+    reds: number;
+    injuries: number;
+    rating: number | null;
+  }[];
+};
+
+/** A Champions League of sides from any era, rated by their real ClubElo. */
+export type HistoricChampions = {
+  /** "campeones" | "variado" | "cualquiera" */
+  pool: string;
+  seed: number;
+  champion: string;
+  runnerUp: string;
+  /** How often the champion won the same field over 600 simulations. */
+  championOdds: number | null;
+  entrants: { team: string; elo: number; year: number; europeanChampion: boolean }[];
+  leaguePhase: { rank: number; team: string; points: number; elo: number }[];
+  bracket: SquadBracket;
+  favourites: { team: string; elo: number; pChampion: number; pFinal: number }[];
 };
 
 export type DayFixtures = {
@@ -551,7 +611,7 @@ export const api = {
     }
     return (await res.json()) as SquadDeal;
   },
-  playChampions: async (squad: string[], mode: string, seed?: number) => {
+  playChampions: async (squad: string[], mode: string, bench: string[] = [], seed?: number) => {
     // A POST carrying a squad the user just invented: nothing to cache, since
     // no two visitors send the same body, and each play takes a random slot in
     // the draw. Playing the whole tournament takes real seconds, so this
@@ -559,7 +619,7 @@ export const api = {
     const res = await fetch(`${BASE}/squadlab/season`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ squad, mode, seed }),
+      body: JSON.stringify({ squad, bench, mode, seed }),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -567,6 +627,9 @@ export const api = {
     }
     return (await res.json()) as SquadSeason;
   },
+  // Deterministic in (pool, seed), so it can be cached like any other page.
+  historicChampions: (pool: string, seed: number) =>
+    request<HistoricChampions>(`/squadlab/historic?pool=${pool}&seed=${seed}`, 3600),
   uefaCompetition: (slug: string, matchday?: number) =>
     request<UefaCompetition>(
       `/competition/${slug}${matchday != null ? `?matchday=${matchday}` : ""}`,
