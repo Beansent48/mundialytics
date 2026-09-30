@@ -152,13 +152,17 @@ def _props_models(_version: float):
         )
         pm = pd.read_csv(pmp).merge(tmx, on="game_id", how="left")
         # this season's penalty attempts, from the commentary text xG downloads
-        pens = None
+        pens = mins = None
         if espn_cur.exists():
             from mundialytics.enrichment.text_xg import penalties_from_commentary
             seasons = pd.read_csv(espn_cur, usecols=["season"])["season"].dropna()
             if len(seasons):
-                pens = penalties_from_commentary(
-                    ROOT / f"data/external/advanced/espn/commentary/{seasons.max()}.jsonl")
+                comm_f = ROOT / f"data/external/advanced/espn/commentary/{seasons.max()}.jsonl"
+                pens = penalties_from_commentary(comm_f)
+                # and the minutes each player actually played, from the substitutions
+                from mundialytics.enrichment.espn_minutes import season_minutes
+                mins = season_minutes(comm_f, pd.read_csv(
+                    espn_cur, usecols=["event_id", "player", "starter"]))
         # `current_squads` decides only WHO is in each roster. Without it the
         # squad is "whoever featured in this club's last ten Understat games",
         # which for a promoted club reaches back to its last top-flight season.
@@ -168,6 +172,7 @@ def _props_models(_version: float):
             current_squads=squads,
             current=espn_cur if espn_cur.exists() else None,
             current_penalties=pens,
+            current_minutes=mins,
         )
     except Exception:
         pp = None

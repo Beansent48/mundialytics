@@ -50,6 +50,10 @@ POLL_MIN = 5
 LOCK = ROOT / "data/processed/logs/lineup_watch.lock"
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
 PLAYER_LOG = ROOT / "data/processed/logs/lineup_pass_players_log.csv"
+# Team markets re-priced with the referee (and the XI's lambdas): ESPN names the
+# referee in the summary it serves the lineups from, so this is where the
+# referee feature (props/team_props.py REF_DEV_*) is sure to have him.
+TEAM_LOG = ROOT / "data/processed/logs/lineup_pass_team_log.csv"
 # The morning player markets, re-priced on the confirmed matchday squad: each
 # player on the minutes of his role tonight (PlayerPropsModel.predict_lineup).
 # Backtest: every prop 5/5 folds better than the morning price.
@@ -110,7 +114,35 @@ def team_values(team: str, names, table: pd.DataFrame | None) -> dict:
     return match_values(names, t[t["snap"] == t["snap"].max()])
 
 
-def lineup_player_rows(pp, e: dict, xis: dict, lams: dict, now: pd.Timestamp) -> list[dict]:
+def referee_of(summary: dict) -> str | None:
+    """The referee ESPN names in a match summary, or None."""
+    for o in (summary.get("gameInfo", {}) or {}).get("officials", []) or []:
+        if str((o.get("position") or {}).get("name", "")).lower() == "referee" or o.get("order") == 1:
+            return str(o.get("fullName") or o.get("displayName") or "").strip() or None
+    return None
+
+
+def lineup_team_rows(tp, e: dict, h: str, a: str, lams: dict, referee: str | None,
+                     now: pd.Timestamp) -> list[dict]:
+    """Team event markets (totals, sides, booking points) with the referee, one row per line."""
+    try:
+        fx = tp.predict_fixture(h, a, referee=referee, lam_home=lams["home"], lam_away=lams["away"])
+    except Exception as exc:
+        print(f"    team props {h} vs {a}: failed ({str(exc)[:60]})", flush=True)
+        return []
+    base = {"logged_at_utc": now.strftime("%Y-%m-%dT%H:%M:%S"), "event_id": e["event_id"],
+            "kickoff_utc": e["kickoff"].strftime("%Y-%m-%dT%H:%M:%S"), "competition": e["competition"],
+            "home": h, "away": a, "referee": referee or ""}
+    out = []
+    for mk, d in fx.items():
+        for key, amb in (("over", "Total"), ("over_home", "Local"), ("over_away", "Visitante")):
+            for ln, p in (d.get(key) or {}).items():
+                out.append({**base, "mercado": mk, "ambito": amb, "linea": ln, "prob": round(float(p), 4)})
+    return out
+
+
+def lineup_player_rows(pp, e: dict, xis: dict, lams: dict, now: pd.Timestamp,
+                       ref_dev: float | None = None) -> list[dict]:
     """Player markets for both confirmed squads, one row per (player, market)."""
     h, a = xis["home"]["team"], xis["away"]["team"]
     out = []
@@ -118,7 +150,8 @@ def lineup_player_rows(pp, e: dict, xis: dict, lams: dict, now: pd.Timestamp) ->
         team = xis[side]["team"]
         try:
             props, missing = pp.predict_lineup(team, xis[side]["starters"], xis[side]["bench"],
-                                               atk_factor=pp._atk_factor(team, float(lams[side]), None))
+                                               atk_factor=pp._atk_factor(team, float(lams[side]), None),
+                                               ref_dev=ref_dev)
         except Exception as exc:
             print(f"    player props {team}: failed ({str(exc)[:60]})", flush=True)
             continue
@@ -159,7 +192,8 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
     values = pd.read_csv(PLAYER_VALUES) if PLAYER_VALUES.exists() else None
     engine = None
     pp = None
-    rows, player_rows = [], []
+    tp = None
+    rows, player_rows, team_rows = [], [], []
     for e in todo:
         s = espn_json(f"{BASE.format(code=e['code'])}/summary?event={e['event_id']}", timeout=30)
         xis = confirmed_xis(s, canon)
@@ -201,11 +235,19 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
         })
         if pp is None:
             from api.engine import props_models
-            _, pp = props_models()
+            tp, pp = props_models()
             pp = pp if pp is not None else False
+            tp = tp if tp is not None else False
+        lams = {"home": p.lambda_home, "away": p.lambda_away}
+        referee = referee_of(s)
+        rd = tp.referee_deviation("yellows", referee, h, a) if (tp and referee) else None
+        if tp:
+            team_rows.extend(lineup_team_rows(tp, e, h, a, lams, referee, now))
         if pp:
-            prow = lineup_player_rows(pp, e, xis, {"home": p.lambda_home, "away": p.lambda_away}, now)
+            prow = lineup_player_rows(pp, e, xis, lams, now, ref_dev=rd)
             player_rows.extend(prow)
+        print(f"    referee: {referee or 'not named yet'}"
+              + (f" (card deviation {rd:+.2f}/match)" if rd is not None else ""), flush=True)
         print(f"  {h} vs {a}: regulars out of the squad {len(missing['home'])}/{len(missing['away'])} -> "
               f"1X2 {p.p_home_win:.2f}/{p.p_draw:.2f}/{p.p_away_win:.2f} ({p.model_source})", flush=True)
 
@@ -216,6 +258,12 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
         LOG.parent.mkdir(parents=True, exist_ok=True)
         out.to_csv(LOG, index=False)
         print(f"logged {len(rows)} match(es) to {LOG}", flush=True)
+        if team_rows:
+            tm = pd.DataFrame(team_rows)
+            if TEAM_LOG.exists():
+                tm = pd.concat([pd.read_csv(TEAM_LOG, dtype={"event_id": str}), tm], ignore_index=True)
+            tm.to_csv(TEAM_LOG, index=False)
+            print(f"logged {len(team_rows)} team-market rows to {TEAM_LOG}", flush=True)
         if player_rows:
             pl = pd.DataFrame(player_rows)
             if PLAYER_LOG.exists():

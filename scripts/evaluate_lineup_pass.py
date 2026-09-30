@@ -27,6 +27,8 @@ LINEUP = ROOT / "data/processed/logs/lineup_pass_log.csv"
 MORNING = ROOT / "data/processed/logs/morning_pass_log.csv"
 RESULTS = ROOT / "data/external/advanced/espn/espn_matches_current.csv"
 PLAYER_LOG = ROOT / "data/processed/logs/lineup_pass_players_log.csv"
+TEAM_LOG = ROOT / "data/processed/logs/lineup_pass_team_log.csv"
+FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
 
 
@@ -66,7 +68,58 @@ def main() -> int:
           f"(delta {d.delta.mean():+.4f} ± {se:.4f}); {what} pass better in {(d.delta < 0).mean():.0%}")
     if what == "lineup":     # the player markets are only re-priced on the confirmed squads
         grade_players()
+        grade_team()
     return 0
+
+
+def grade_team() -> None:
+    """Team event markets: lineup-pass price (with the referee) vs the morning price,
+    same (match, market, side, line), settled from the foundation."""
+    if not TEAM_LOG.exists() or not FOUND.exists():
+        return
+    from mundialytics.serving.track_record import EVENT_COLS
+
+    lp = pd.read_csv(TEAM_LOG, dtype={"event_id": str})
+    f = pd.read_csv(FOUND, low_memory=False)
+    f["fecha"] = pd.to_datetime(f["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    res = {(r.home_team, r.away_team, r.fecha): r for r in f.itertuples(index=False)}
+    log = pd.read_csv(PRED_LOG, low_memory=False)
+    mo = log[log["mercado"].isin(list(EVENT_COLS) + ["booking_pts"])].copy()
+    mo["lk"] = mo["linea"].map(_line_key)
+    mk_ = {(r.home, r.away, r.mercado, r.ambito, r.lk, str(r.fecha)): float(r.prob)
+           for r in mo.itertuples(index=False)}
+    rows = []
+    for r in lp.itertuples(index=False):
+        ko = pd.Timestamp(r.kickoff_utc)
+        days = [ko.strftime("%Y-%m-%d"), ko.tz_localize("UTC").tz_convert("Europe/Madrid").strftime("%Y-%m-%d")]
+        act = next((res[(r.home, r.away, d)] for d in days if (r.home, r.away, d) in res), None)
+        morning = next((mk_[k] for d in days
+                        if (k := (r.home, r.away, r.mercado, r.ambito, _line_key(r.linea), d)) in mk_), None)
+        if act is None or morning is None:
+            continue
+        if r.mercado == "booking_pts":
+            hv = 10 * act.home_yellow_cards + 25 * getattr(act, "home_red_cards", 0)
+            av = 10 * act.away_yellow_cards + 25 * getattr(act, "away_red_cards", 0)
+        else:
+            hc, ac = EVENT_COLS[r.mercado]
+            hv, av = getattr(act, hc), getattr(act, ac)
+        if pd.isna(hv) or pd.isna(av):
+            continue
+        val = {"Total": hv + av, "Local": hv, "Visitante": av}[r.ambito]
+        rows.append({"mercado": r.mercado, "referee": bool(str(r.referee or "").strip() and r.referee == r.referee),
+                     "y": float(val > float(r.linea)), "p_lineup": float(r.prob), "p_morning": morning})
+    if not rows:
+        print(f"\n{lp.event_id.nunique()} matches with lineup team prices, none settled yet")
+        return
+    d = pd.DataFrame(rows)
+    for col in ("lineup", "morning"):
+        p = d[f"p_{col}"].clip(1e-4, 1 - 1e-4)
+        d[f"ll_{col}"] = -(d.y * np.log(p) + (1 - d.y) * np.log(1 - p))
+    g = d.groupby(["mercado", "referee"]).agg(n=("y", "size"), ll_morning=("ll_morning", "mean"),
+                                              ll_lineup=("ll_lineup", "mean"))
+    g["delta"] = g.ll_lineup - g.ll_morning
+    print(f"\nteam markets, {len(d)} settled lines (referee = named by ESPN at lineup time):")
+    print(g.round(4).to_string())
 
 
 def _happened(mk: str, line, act) -> bool:
