@@ -421,7 +421,7 @@ def test_the_squad_replaces_a_random_side_and_inherits_its_draw():
     df = _cards()
     _require_champions_data()
     field = load_field()
-    xi = [c.to_profile() for c in C.best_eleven(df, "real madrid")]
+    xi = C.best_eleven(df, "real madrid")
     run = ChampionsRun("Tu Equipo", xi, 1800.0, field, rng=np.random.default_rng(2))
     # a random real club's slot, whichever it is, and its exact eight fixtures
     assert run.replaced in field["elo"]
@@ -441,21 +441,23 @@ def test_a_full_run_produces_a_champion_and_your_own_matches():
     df = _cards()
     _require_champions_data()
     field = load_field()
-    xi = [c.to_profile() for c in C.best_eleven(df, "bayern munich")]
+    xi = C.best_eleven(df, "bayern munich")
     res = ChampionsRun("Tu Equipo", xi, 1900.0, field,
-                       rng=np.random.default_rng(6)).play()
+                       rng=np.random.default_rng(6), cards_df=df).play()
     assert len(res.table) == 36
     assert (res.table["played"] == 8).all()
     assert res.champion and res.runner_up and res.champion != res.runner_up
     own = [m for m in res.matches
            if m.stage == "liga" and "Tu Equipo" in (m.home, m.away)]
     assert len(own) == 8
-    # goals scored by your side must all be attributed to one of your players
+    # every goal your side scored is one of your players' or an opponent's own
+    # goal, and the live log agrees with the scoreline
     names = {p.player for p in xi}
     for m in own:
         gf = m.home_goals if m.home == "Tu Equipo" else m.away_goals
-        assert len(m.goal_events) == gf
+        assert len(m.goal_events) + m.own_goals_for == gf
         assert all(s in names for s, _ in m.goal_events)
+        assert m.log is not None and (m.log.home_goals, m.log.away_goals) == (m.home_goals, m.away_goals)
 
 
 def test_squad_elo_is_monotone_in_squad_quality():

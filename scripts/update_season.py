@@ -447,6 +447,16 @@ def main() -> None:
     else:
         print("\n=== 7b/8 upcoming-round logging SKIPPED ===", flush=True)
 
+    # SquadLab's live match plays by rules measured on the commentary (goal
+    # clock, red-card and game-state effects, substitution patterns, injury
+    # lengths) and names events by each card's per-90 rates from the props
+    # model. Both move with the season -- the injury curve especially, whose
+    # follow-up grows every week. Optional: the game keeps last week's rules.
+    run_step("7n/8 SquadLab match dynamics (ESPN commentary)",
+             [PY, "scripts/measure_squadlab_match_dynamics.py"], optional=True, timeout=900)
+    run_step("7n2/8 SquadLab card rates (props model per card)",
+             [PY, "scripts/build_squadlab_card_rates.py"], optional=True, timeout=1200)
+
     # League forecasts and Golden Boot races cost ~30 s each and are keyed on the
     # matches played, so this refresh has just invalidated them. Computing them
     # here means no visitor waits past the web client's 20 s timeout — which

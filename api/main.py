@@ -1249,14 +1249,18 @@ class DealRequest(BaseModel):
 
     seed: int = Field(ge=0, lt=2 ** 53)
     position: str
-    index: int = Field(default=0, ge=0, le=10)
+    # 0-10 the eleven, 11-17 the bench (the index only seeds the deal)
+    index: int = Field(default=0, ge=0, le=17)
     reroll: int = Field(default=0, ge=0)
     # card ids already drafted; a man is removed with ALL of his cards
-    taken: list[str] = Field(default_factory=list, max_length=11)
+    taken: list[str] = Field(default_factory=list, max_length=18)
 
 
 class SeasonRequest(BaseModel):
     squad: list[str] = Field(min_length=11, max_length=11)
+    # the reserves: who replaces the banned, the injured and the tired. Optional
+    # so an old client with no bench still plays (with nobody to bring on).
+    bench: list[str] = Field(default_factory=list, max_length=7)
     # Draft vs Sandbox is only a build method now — both play the Champions.
     mode: str = "draft"
     # Omit for a fresh random draw; pass one to replay the same path.
@@ -1300,9 +1304,23 @@ def squadlab_deal(req: DealRequest) -> dict:
     return data
 
 
+@app.get("/squadlab/historic")
+def squadlab_historic(pool: str = "campeones", seed: int = 7) -> dict:
+    """A Champions League of sides from any era, rated by their real ClubElo.
+
+    Deterministic in (pool, seed): the same link replays the same tournament.
+    """
+    from api import squadlab as sl
+
+    try:
+        return sl.play_historic(pool, seed)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/squadlab/season")
 def squadlab_season(req: SeasonRequest) -> dict:
-    """Play the whole Champions League once with the chosen eleven.
+    """Play the whole Champions League once with the chosen eleven and bench.
 
     Not cached: the squad is the user's and each playthrough takes a random slot
     in the draw, so there is no key that would ever be hit twice.
@@ -1310,7 +1328,7 @@ def squadlab_season(req: SeasonRequest) -> dict:
     from api import squadlab as sl
 
     try:
-        return sl.play_champions(req.squad, seed=req.seed)
+        return sl.play_champions(req.squad, seed=req.seed, bench_names=req.bench)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:

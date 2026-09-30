@@ -37,9 +37,9 @@ def run(field):
     for pos, n in (("Goalkeeper", 1), ("Defender", 4), ("Midfielder", 3),
                    ("Forward", 3)):
         at = df[(df["position"] == pos) & (df["kind"] == "actual")].nlargest(n, "overall")
-        squad += [c.to_profile() for c in cards_from_frame(at)]
+        squad += cards_from_frame(at)
     r = ChampionsRun(SQUAD_TEAM_NAME, squad, 1750.0, field,
-                     rng=np.random.default_rng(5))
+                     rng=np.random.default_rng(5), cards_df=df)
     return r, r.play()
 
 
@@ -64,6 +64,11 @@ def test_attributed_goals_add_up(run) -> None:
             scored[team] = scored.get(team, 0) + int(goals)
         for team, events in (m.rival_events or {}).items():
             named[team] = named.get(team, 0) + len(events)
+        # in your own matches an opponent's goal can be one of your players'
+        # own goals, which is named on your side of the log instead
+        if m.own_goals_against:
+            opp = m.away if m.home == SQUAD_TEAM_NAME else m.home
+            named[opp] = named.get(opp, 0) + m.own_goals_against
 
     for team, total in scored.items():
         assert named.get(team, 0) == total, \

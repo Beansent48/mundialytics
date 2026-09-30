@@ -364,12 +364,14 @@
   "squadlab": {
     "eyebrow": "Build a team",
     "title": "SquadLab",
-    "lead": "Pick eleven players and play the real Champions League. Your team takes a random club's slot in the draw — the same engine that prices the real matches.",
+    "lead": "Pick eleven players and seven substitutes and play the real Champions League, minute by minute. Your team takes a random club's slot in the draw, a different one every time.",
     "mode": {
       "draft": "Draft",
       "draftLead": "From packs: five candidates per slot, and each player you sign leaves the pool — no duplicates.",
       "sandbox": "Sandbox",
-      "sandboxLead": "Any eleven you like, no constraints, from any league."
+      "sandboxLead": "Any eleven you like, no constraints, from any league.",
+      "historic": "All-time Champions League",
+      "historicLead": "36 sides from any era in today's format, each with its real Elo at the end of that season."
     },
     "positions": {
       "Goalkeeper": "Goalkeeper",
@@ -482,6 +484,59 @@
     "percentileNote": "Percentiles vs his position. The role weights each stat (%).",
     "primeSeason": "The prime season",
     "careerHighlight": "Career highlight",
-    "noHighlight": "Special card — no current data."
+    "noHighlight": "Special card — no current data.",
+    "bench": "Bench",
+    "benchLead": "Seven substitutes: they come on in the changes and cover bans and injuries.",
+    "toLineup": "See the line-up",
+    "lineupTitle": "Your Champions League eleven",
+    "lineupLead": "Tap a starter, then a substitute, to swap them. Swapping across lines (a defender for a forward) reshapes the formation, as long as the new one exists.",
+    "formation": "Formation {f}",
+    "invalidSwap": "That swap leaves a formation that does not exist (or two keepers).",
+    "backToDraft": "Back to the draft",
+    "afterExtraTime": "Full time after extra time",
+    "afterPens": "Full time · penalties",
+    "extraTime": "Extra time",
+    "shootout": "Penalty shoot-out",
+    "shootoutLine": "Penalties: {home}–{away}",
+    "absences": "Unavailable",
+    "absenceBan": "{player} (suspended)",
+    "absenceInjury": "{player} (injured, {detail})",
+    "penGoal": "(penalty)",
+    "ownGoal": "(own goal)",
+    "penSavedBy": "penalty saved by {player}",
+    "penMissed": "penalty missed",
+    "secondYellow": "second yellow",
+    "redCard": "straight red",
+    "injured": "injured",
+    "squadTotals": "Your players in the Champions League",
+    "colPlayer": "Player",
+    "colMinutes": "Min",
+    "colGoals": "G",
+    "colAssists": "A",
+    "colCards": "YC",
+    "colRating": "Rating",
+    "injuriesShort": "{n, plural, one {# injury} other {# injuries}}",
+    "historic": {
+      "title": "All-time Champions League",
+      "lead": "Every side enters with its club's real Elo on 1 June of the year that season ended (ClubElo): how far above the Europe of its day it stood. It is the only comparison across eras that can be measured; nobody counted Gullit's duels.",
+      "pool": {
+        "campeones": "European champions",
+        "campeonesLead": "The 36 strongest European champions since 1956, each in the year it won.",
+        "variado": "Varied draw",
+        "variadoLead": "One side per club, in one of its ten best seasons, at random.",
+        "cualquiera": "Any era",
+        "cualquieraLead": "36 random seasons among the 400 best in history."
+      },
+      "play": "Play the all-time Champions League",
+      "again": "Another draw",
+      "champion": "European champion",
+      "beat": "beat {team} in the final",
+      "odds": "started with a {p} chance",
+      "path": "The knockout rounds",
+      "favourites": "Who was the favourite?",
+      "favouritesNote": "Chance of winning the same field, over 600 simulations.",
+      "wasChampion": "European champion that year",
+      "start": "Go to the all-time Champions League"
+    }
   }
 }

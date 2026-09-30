@@ -1,5 +1,102 @@
 # Changelog
 
+## v0.61.0 — SquadLab: a live match played minute by minute, a bench, and the all-time Champions League (2026-09-30)
+
+### Added
+- **The live match engine** (`squadlab/match_engine.py`). A SquadLab match used
+  to be a Poisson scoreline dressed up afterwards: goals at random minutes, no
+  substitutions, penalties with nobody taking them, and a coin toss for a
+  shoot-out. Now the team model still sets the expected goals, and the match
+  is played one minute at a time. Every rule it uses was measured on ~3,100
+  big-five matches of ESPN commentary (2024/25–2026/27,
+  `scripts/measure_squadlab_match_dynamics.py`):
+  - **Goal clock:** 0.71× the average rate in the first five minutes, 1.49×
+    in second-half stoppage.
+  - **Game state:** a side one goal up scores 0.93× its rate, one goal down
+    1.02×.
+  - **Red cards:** the side down to ten scores 0.49× its rate, and the other
+    side 1.48×.
+  - **Penalties:** 0.137 awarded per side per match, 77% scored. The taker
+    is the side's designated one.
+  - **Other events:** own goals are 2.9% of goals and fall mostly to
+    defenders; assists come on 77% of open-play goals; bookings follow the
+    booking clock; a booked player gets a second yellow at the measured rate
+    per minute.
+  - **Substitutions:** whole real patterns (how many, when, and whether an
+    injury forced one), picked by the score at the hour. Who comes off
+    depends on position (forwards 51%, keepers 1%).
+  - **Keeping the team model's total:** the state and red-card factors move
+    goals around within a match. A normalising constant (1.022) keeps the
+    average total on the team model's number, and a 3,000-match test holds
+    it there.
+  - Shots, shots on target and xG are consistent with what happened. xG
+    follows our own text-xG fit (0.233 per goal, 0.093 per other shot).
+- **Who gets each event comes from the player's own record**
+  (`scripts/build_squadlab_card_rates.py` → `squadlab_card_rates.csv`). Each
+  card carries per-90 goals, assists, shots, bookings and a penalty-taker
+  share. Market value plays no part.
+  - **Current cards** use the player-props model's validated recipe.
+  - **Primes** use the Understat (or StatsBomb) rows of their own season.
+  - **Icons** use their career.
+  - **Cards with no rows** read their rates off their own axes.
+- **Penalty conversion is the same for every taker:** conversion does not
+  persist from season to season (r = −0.065, 66 takers with at least 6 kicks
+  in each half). The taker decides whose name goes on the goal, not how often
+  it goes in.
+- **A seven-man bench** (a keeper and two of each line). It covers bans and
+  injuries, and its players come on as substitutes.
+  - A substitution changes the side's strength only by the part of the drop
+    beyond real clubs' typical starter-to-bench gap (2.5–3.2 overall). That
+    ordinary drop is already in the goal clock, which was measured on real
+    matches.
+- **Discipline and injuries carried through the competition:**
+  - UEFA's rules: a one-match ban on the 3rd, 5th and 7th booking, cautions
+    wiped after the quarter-finals, and a one-match ban for a sending-off. Two
+    yellows in one match count as the red, not towards the tally.
+  - An injury keeps a player out for the number of days drawn from a
+    Kaplan-Meier curve fitted on 2026/27. Half are back within 8 days and a
+    quarter are still out after 28. Follow-up is ~30 days, so the long tail
+    is a lower bound that grows as the season does.
+  - The calendar is the real one (fixture dates, UEFA's usual knockout
+    rhythm). The eleven's Elo is recomputed from whoever actually starts.
+- **Extra time and shoot-outs played out** in your ties: aggregate over two
+  legs, thirty minutes at the average rate, then kick by kick.
+- **The squad's shape counts, with provisional coefficients**
+  (`scripts/experiment_squadlab_attack_defense_split.py`). The eleven was one
+  number (the mean overall); now attack, defence and keeper beyond that level
+  tilt the goals scored and conceded (+0.017 / −0.025 / −0.018 per SD).
+  - The coefficients were fitted on 2024/25–2025/26 and judged on 2026/27,
+    which no card has seen: −0.0046 NLL per match on 209 matches, 90% CI
+    −0.011 to +0.001.
+  - The signs held in 5 or 6 of 6 season fits, but the result is small and
+    not yet conclusive. Re-check once the season is longer.
+  - It replaces the "balance dock", a bounded guess that was never measured.
+- **Web.** The draft now deals the bench too. Before kick-off, a team-sheet
+  screen lets you swap starters and reserves. A swap across lines reshapes
+  the formation if the new one exists (4-3-3, 4-4-2, 3-4-3, 3-5-2, 5-3-2,
+  5-2-3, 4-5-1). Other changes:
+  - The live match shows every event: substitutions, injuries, missed and
+    saved penalties, second yellows and reds, extra time and the shoot-out
+    kicks, plus who was unavailable and why.
+  - The end of the run shows each player's appearances, minutes, goals,
+    assists, cards, injuries and average rating.
+  - The opponents now field their real XI with names on both sides.
+- **La Champions histórica**, back in the web (`squadlab/historic.py`,
+  `GET /squadlab/historic`). Every side enters with its club's **real ClubElo
+  on 1 June of the year that season ended**, the same scale and calibration as
+  the European layer.
+  - The first version rated sides through the player bridge from whatever
+    StatsBomb had released, which put Leicester 2016 above Bayern 2013.
+  - There are three fields: the 36 strongest European champions since 1956
+    (`data/curated/european_champions.csv`), one side per club, and any era.
+    Each comes with 600 simulations of the same field, to show who was the
+    favourite.
+  - Nottingham Forest (1979, 1980) and Steaua (1986) are missing. The local
+    ClubElo files do not carry them, and a stand-in would be an invented
+    strength.
+- Weekly refresh steps **7n** (match dynamics) and **7n2** (card rates), both
+  optional.
+
 ## v0.60.0 — Real minutes, and the referee on player yellows and in the lineup pass (2026-09-30)
 
 ### Added
