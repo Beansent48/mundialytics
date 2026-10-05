@@ -50,3 +50,6 @@ data/processed/logs/runs/
 
 # Local scratch space (not part of the project)
 tmp/
+
+# experiment outputs (results live in the scripts own docstrings)
+scripts/european_form/*.csv
