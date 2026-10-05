@@ -210,4 +210,9 @@ def as_prediction(lp: LoggedPrediction, fallback) -> SimpleNamespace:
         for side in ("home", "away"):
             attr = f"expected_{k}_{side}"
             setattr(ns, attr, lp.expected.get(f"{k}_{side}", getattr(fallback, attr, None)))
+    # Which expected counts are the LOGGED pre-kickoff numbers rather than the
+    # fallback's. Serving must not quietly replace these with a value recomputed
+    # today: for a played match that model has already seen the result, and the
+    # whole point of the log is that the record is what we said beforehand.
+    ns.expected_from_log = frozenset(lp.expected)
     return ns

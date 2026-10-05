@@ -325,9 +325,27 @@ _STAT_MARKET = {
 
 def _expected_stats(pred, fx: dict | None) -> list[dict]:
     """Per-side expected shots/SoT/corners/fouls/cards, each with a most-probable
-    range. The point estimate is the engine's; the range wraps it with the team-
-    props dispersion, so it reads as "≈13, most likely 10–15" rather than a bare
-    number the eye can't calibrate."""
+    range, read from the SAME source as the team-props card below it.
+
+    The point estimate is the team-props lambda when that market is available:
+    TeamPropsModel is the validated recipe we actually serve (rolling windows +
+    EWMA, ASYM supremacy on the engine's lambdas, MLE-strengths prior, league
+    level, running residual, referee), while the engine's own EventLambdaModel is
+    rolling form + Elo and never sees the squad-value / lineup tilts. Taking the
+    engine's number here showed one quantity twice with two different values on
+    the same page. The engine's lambdas stay as the fallback (no props cache, or
+    a market the props model dropped).
+
+    EXCEPT where the number was logged before kick-off (`expected_from_log`, set
+    by logged_prediction.as_prediction). Those stay exactly as logged: `fx` is
+    recomputed today, so on a played match it has already seen the result, and
+    substituting it would turn the record into hindsight. This is the same rule
+    the 1X2 and O/U follow.
+
+    The range wraps the point estimate with the team-props dispersion, so it
+    reads as "≈13, most likely 10–15" rather than a bare number the eye can't
+    calibrate.
+    """
     vals = {
         "shots": (pred.expected_shots_home, pred.expected_shots_away),
         "shotsOnTarget": (pred.expected_sot_home, pred.expected_sot_away),
@@ -335,11 +353,22 @@ def _expected_stats(pred, fx: dict | None) -> list[dict]:
         "fouls": (pred.expected_fouls_home, pred.expected_fouls_away),
         "yellows": (pred.expected_yellows_home, pred.expected_yellows_away),
     }
+    logged = getattr(pred, "expected_from_log", frozenset())
     out = []
     for key, (h, a) in vals.items():
-        disp = float(((fx or {}).get(_STAT_MARKET[key]) or {}).get("dispersion") or 1.0)
+        market = _STAT_MARKET[key]
+        mk = ((fx or {}).get(market) or {})
+        disp = float(mk.get("dispersion") or 1.0)
+        lh, la = mk.get("lambda_home"), mk.get("lambda_away")
+        if {f"{market}_home", f"{market}_away"} <= logged:
+            source = "logged"
+        elif lh is not None and la is not None:
+            h, a = float(lh), float(la)
+            source = "team_props"
+        else:
+            source = "engine"
         out.append({
-            "key": key,
+            "key": key, "source": source,
             "home": round(float(h), 1), "away": round(float(a), 1),
             "homeRange": _stat_range(h, disp), "awayRange": _stat_range(a, disp),
         })
