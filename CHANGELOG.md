@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.61.1 — The match page prices its expected stats with the model we serve (2026-10-06)
 
 ### Fixed
 - **The match page priced its expected shots/corners/cards with a model it does
