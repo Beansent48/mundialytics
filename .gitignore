@@ -53,3 +53,6 @@ tmp/
 
 # experiment outputs (results live in the scripts own docstrings)
 scripts/european_form/*.csv
+data/processed/logs/wf_totals_from_shots.csv
+data/processed/logs/validate_expected_stats_source.csv
+data/processed/logs/ou25_book_prices.csv
