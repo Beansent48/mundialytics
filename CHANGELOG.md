@@ -15,10 +15,14 @@
   saw the squad-value and lineup-absence tilts. The point estimate now comes
   from the team-props lambda, with the engine's kept as the per-market
   fallback, and each row carries a `source` field saying which was used.
-  Measured on the last two matchdays (104 matches, in-sample for both models),
-  the team-props lambdas are closer to the actual counts in all five markets:
-  shots 3.75 vs 4.29 MAE, fouls 2.34 vs 2.73, corners 2.01 vs 2.19, SoT 1.78
-  vs 1.92, yellows 0.99 vs 1.09.
+  Validated out of sample (`scripts/validate_expected_stats_source.py`): both
+  models fitted per season on everything before it, 2021/22-2025/26, 15,708
+  side-observations per market. Team props wins **5/5 seasons in all five
+  markets**, on MAE and on RMSE — shots −4.6%, SoT −4.5%, corners −4.2%, fouls
+  −2.3%, yellows −1.0% — and is better centred (mean bias on corners +0.154 →
+  −0.014, SoT +0.187 → +0.041; fouls is the one it reads slightly low, −0.288).
+  A first in-sample look had said ~10%: that number flattered the more flexible
+  model and is not the one to quote.
 - **Expected counts logged before kick-off are never swapped for a recomputed
   one.** `fx` is computed today, so on a played match it has already seen the
   result; serving it in place of the logged number would turn the record into
