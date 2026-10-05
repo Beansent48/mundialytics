@@ -15,6 +15,18 @@
   rewriting its meaning would break every drift series built on it. Verified by
   re-running the report on the current log: byte-identical output while no row
   has a `tp_*` yet. `tests/test_logged_served_model.py`.
+- **The lineup pass records them too.** The row that supersedes the match-day
+  one an hour before kick-off, priced on the confirmed XI, carried only the goal
+  lambdas — so the played page fell back to a recomputation for exactly the
+  match whose pre-kickoff expectation was the best one we had. The fixture is
+  now priced once in the caller and feeds both the market rows and the row's
+  `tp_*` columns, which also removes a second `predict_fixture` call per match.
+- **The referee on the web's team-props card: dropped, not forgotten.** A dry
+  run of the match-day logger reports ESPN naming the referee in **0 of 48**
+  upcoming fixtures 3–8 days out, so the card would price nothing. The lineup
+  pass an hour before kick-off stays the only place the referee can be known,
+  and it already uses it. This also settles the open question from
+  2026-09-30 about whether ESPN names referees before kick-off: not this far out.
 
 ## v0.61.1 — The match page prices its expected stats with the model we serve (2026-10-06)
 
