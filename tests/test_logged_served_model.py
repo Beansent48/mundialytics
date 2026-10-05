@@ -99,7 +99,7 @@ def test_count_drift_runs_on_a_log_that_mixes_both_vintages():
         "home": ["a", "c"], "away": ["b", "d"], "fecha": ["2026-09-16", "2026-10-07"],
         "lambda_home": [1.5, 1.6], "lambda_away": [1.2, 1.1],
         "exp_shots_home": [13.0, 13.0], "exp_shots_away": [11.0, 11.0],
-        "tp_shots_home": [None, 15.0], "tp_shots_away": [None, 9.0],
+        "tp_shots_home": [None, 16.0], "tp_shots_away": [None, 10.0],
     })
     found = pd.DataFrame({
         "date": ["2026-09-16", "2026-10-07"], "home_team": ["a", "c"], "away_team": ["b", "d"],
@@ -109,8 +109,9 @@ def test_count_drift_runs_on_a_log_that_mixes_both_vintages():
     out = rmd.count_drift(log, found)
     shots = out[(out["market"] == "shots") & (out["scope"] == "all")]
     assert len(shots) == 1
-    # (13+11) from the old row, (15+9) from the new one -> 24.0 either way, and
-    # the point is that both rows are counted, not dropped for a missing column
+    # Both rows must be counted -- the old one must not be dropped for a missing
+    # tp_* column -- and the new one must be measured on its tp_* (16+10=26), not
+    # on the exp_* sitting right next to it (13+11=24). Mean 25, not 24.
     assert shots.iloc[0]["n"] == 2
-    assert shots.iloc[0]["expected"] == 24.0
+    assert shots.iloc[0]["expected"] == 25.0
     assert shots.iloc[0]["actual"] == 24.0
