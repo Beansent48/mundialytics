@@ -508,6 +508,31 @@ def _log(args) -> None:
             continue
         if stand_in:
             print(f"  debutante: {r.home} vs {r.away} -> sustituto {stand_in}")
+        # Team props BEFORE the row is built, so the logged expectation can carry
+        # the lambdas we actually price with (tp_*) next to the engine's (exp_*).
+        # They are different models: exp_* is the engine's EventLambdaModel
+        # (rolling form + Elo), tp_* is TeamPropsModel, which beats it out of
+        # sample in all five markets, 5/5 seasons
+        # (scripts/validate_expected_stats_source.py). exp_* is kept and
+        # unchanged -- it has been logged since 2026-09-14 and rewriting its
+        # meaning would break every drift series built on it.
+        referee, fxp = None, None
+        if tp is not None:
+            try:
+                referee = espn_referee(r)
+                n_referees += referee is not None
+                fxp = tp.predict_fixture(r.home, r.away, referee=referee,
+                                         lam_home=p.lambda_home, lam_away=p.lambda_away)
+            except Exception:
+                fxp = None
+        tp_cols = {}
+        for key, market in (("shots", "shots"), ("sot", "sot"), ("corners", "corners"),
+                            ("fouls", "fouls"), ("yellows", "yellows")):
+            d = (fxp or {}).get(market) or {}
+            for side in ("home", "away"):
+                v = d.get(f"lambda_{side}")
+                if v is not None:
+                    tp_cols[f"tp_{key}_{side}"] = round(float(v), 3)
         base = dict(logged_at=stamp, season=season,
                     jornada=int(r.jornada) if pd.notna(r.jornada) else 0,
                     partido=f"{r.home} vs {r.away}", fecha=f"{r.date:%Y-%m-%d}",
@@ -519,7 +544,8 @@ def _log(args) -> None:
                     stand_in="; ".join(f"{t}={'+'.join(v)}" for t, v in stand_in.items()),
                     **{f"exp_{k}_{side}": round(float(getattr(p, f"expected_{k}_{side}")), 3)
                        for k in ("shots", "sot", "corners", "fouls", "yellows")
-                       for side in ("home", "away")})
+                       for side in ("home", "away")},
+                    **tp_cols)
         trio = {"1": p.p_home_win, "X": p.p_draw, "2": p.p_away_win}
         pick = max(trio, key=trio.get)
         rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
@@ -546,14 +572,7 @@ def _log(args) -> None:
         rows.append({**base, "mercado": "ht_ft", "ambito": "Total", "linea": "",
                      "prob": round(paths[best], 4), "seleccion": best})
 
-        if tp is None:
-            continue
-        try:
-            referee = espn_referee(r)
-            n_referees += referee is not None
-            fxp = tp.predict_fixture(r.home, r.away, referee=referee,
-                                     lam_home=p.lambda_home, lam_away=p.lambda_away)
-        except Exception:
+        if fxp is None:      # no props models, or this fixture failed to price
             continue
         if pp is not None:
             rd = tp.referee_deviation("yellows", referee, r.home, r.away) if referee else None

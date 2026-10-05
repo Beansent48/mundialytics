@@ -40,15 +40,37 @@ FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 OUT = ROOT / "data/processed/logs/market_drift.json"
 Z_ALERT = 3.0
 MIN_N = 60
-# expectation column pairs in the log -> actual column pairs in the foundation
+# expectation column pairs in the log -> actual column pairs in the foundation.
+# For the five event counts the log carries two expectations: tp_* from
+# TeamPropsModel (the model the board is actually priced with) and exp_* from the
+# engine's own EventLambdaModel. tp_* wins where present -- a drift report should
+# measure what we serve -- and exp_* covers the rows logged before 2026-10-06,
+# when only it existed. Mixing the two in one series is the point: the question
+# the report answers is "is the board drifting", not "which model was it".
 COUNTS = {
-    "goals": (("lambda_home", "lambda_away"), ("home_goals", "away_goals")),
-    "shots": (("exp_shots_home", "exp_shots_away"), ("home_shots", "away_shots")),
-    "sot": (("exp_sot_home", "exp_sot_away"), ("home_sot", "away_sot")),
-    "corners": (("exp_corners_home", "exp_corners_away"), ("home_corners", "away_corners")),
-    "fouls": (("exp_fouls_home", "exp_fouls_away"), ("home_fouls", "away_fouls")),
-    "yellows": (("exp_yellows_home", "exp_yellows_away"), ("home_yellow_cards", "away_yellow_cards")),
+    "goals": ((("lambda_home",), ("lambda_away",)), ("home_goals", "away_goals")),
+    "shots": ((("tp_shots_home", "exp_shots_home"), ("tp_shots_away", "exp_shots_away")),
+              ("home_shots", "away_shots")),
+    "sot": ((("tp_sot_home", "exp_sot_home"), ("tp_sot_away", "exp_sot_away")),
+            ("home_sot", "away_sot")),
+    "corners": ((("tp_corners_home", "exp_corners_home"), ("tp_corners_away", "exp_corners_away")),
+                ("home_corners", "away_corners")),
+    "fouls": ((("tp_fouls_home", "exp_fouls_home"), ("tp_fouls_away", "exp_fouls_away")),
+              ("home_fouls", "away_fouls")),
+    "yellows": ((("tp_yellows_home", "exp_yellows_home"), ("tp_yellows_away", "exp_yellows_away")),
+                ("home_yellow_cards", "away_yellow_cards")),
 }
+
+
+def _coalesce(m: pd.DataFrame, names: tuple[str, ...]) -> pd.Series | None:
+    """First column of `names` present in `m`, filled from the ones after it."""
+    have = [n for n in names if n in m.columns]
+    if not have:
+        return None
+    out = m[have[0]].astype(float)
+    for n in have[1:]:
+        out = out.combine_first(m[n].astype(float))
+    return out
 PICK_ONE = {"1X2", "ht_1x2", "ht_ft"}
 
 
@@ -60,11 +82,12 @@ def count_drift(log: pd.DataFrame, found: pd.DataFrame) -> pd.DataFrame:
     m = one.merge(f.rename(columns={"home_team": "home", "away_team": "away"}),
                   on=["home", "away", "fecha"], how="inner")
     rows = []
-    for name, ((eh, ea), (ah, aa)) in COUNTS.items():
-        if not {eh, ea, ah, aa} <= set(m.columns):
+    for name, ((hnames, anames), (ah, aa)) in COUNTS.items():
+        eh, ea = _coalesce(m, hnames), _coalesce(m, anames)
+        if eh is None or ea is None or not {ah, aa} <= set(m.columns):
             continue
-        d = m.dropna(subset=[eh, ea, ah, aa])
-        d = d.assign(exp=d[eh] + d[ea], act=d[ah] + d[aa])
+        d = m.assign(_eh=eh, _ea=ea).dropna(subset=["_eh", "_ea", ah, aa])
+        d = d.assign(exp=d["_eh"] + d["_ea"], act=d[ah] + d[aa])
         for league, g in [("all", d)] + list(d.groupby("competition")):
             if len(g) < 2:
                 continue

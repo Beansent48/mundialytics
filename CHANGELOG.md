@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **The pre-kickoff log recorded a model we do not price with.**
+  `log_upcoming_round.py` wrote `exp_*` from the engine's own `EventLambdaModel`
+  while the board's event markets were priced by `TeamPropsModel` — so the
+  record, the drift report built on it, and the played page's "what we said"
+  all described the weaker model (team props wins 5/5 seasons in all five
+  markets, `scripts/validate_expected_stats_source.py`). The log now carries
+  `tp_*` alongside, and `report_market_drift.py` and
+  `logged_prediction.expected_from_row` both prefer it per market. `exp_*` is
+  left exactly as it was: it is all the rows logged before 2026-10-06 carry, and
+  rewriting its meaning would break every drift series built on it. Verified by
+  re-running the report on the current log: byte-identical output while no row
+  has a `tp_*` yet. `tests/test_logged_served_model.py`.
+
 ## v0.61.1 — The match page prices its expected stats with the model we serve (2026-10-06)
 
 ### Fixed
