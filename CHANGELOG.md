@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **The match page priced its expected shots/corners/cards with a model it does
+  not serve.** `api/main.py:_expected_stats` read the engine's own
+  `EventLambdaModel` (rolling event form + Elo) while the team-props card
+  directly below it read `TeamPropsModel` — the validated recipe, with EWMA
+  windows, the ASYM supremacy features built on the engine's lambdas, the
+  MLE-strengths prior, league-season level, the running residual and the
+  referee. The page therefore showed one quantity twice with two different
+  numbers (up to 1.7 shots and 0.9 fouls apart on a side), and the one on
+  display was the weaker model — also the only number on the page that never
+  saw the squad-value and lineup-absence tilts. The point estimate now comes
+  from the team-props lambda, with the engine's kept as the per-market
+  fallback, and each row carries a `source` field saying which was used.
+  Measured on the last two matchdays (104 matches, in-sample for both models),
+  the team-props lambdas are closer to the actual counts in all five markets:
+  shots 3.75 vs 4.29 MAE, fouls 2.34 vs 2.73, corners 2.01 vs 2.19, SoT 1.78
+  vs 1.92, yellows 0.99 vs 1.09.
+- **Expected counts logged before kick-off are never swapped for a recomputed
+  one.** `fx` is computed today, so on a played match it has already seen the
+  result; serving it in place of the logged number would turn the record into
+  hindsight, which is exactly what the track record was fixed for in 2026-09.
+  `logged_prediction.as_prediction` now marks which stats came from the log
+  (`expected_from_log`) and those are served as logged (`source: "logged"`) —
+  the same rule the 1X2 and O/U already follow. `tests/test_expected_stats_source.py`.
+
 ## v0.61.0 — SquadLab: a live match played minute by minute, a bench, and the all-time Champions League (2026-09-30)
 
 ### Added
