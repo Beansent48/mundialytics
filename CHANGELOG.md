@@ -27,6 +27,17 @@
   pass an hour before kick-off stays the only place the referee can be known,
   and it already uses it. This also settles the open question from
   2026-09-30 about whether ESPN names referees before kick-off: not this far out.
+- **Season tallies could be poisoned by a file's own history.**
+  `build_current_squads.match_tallies` summed every row of the ESPN match-roster
+  files, but `fetch_espn_match_events.py` appends over an arbitrary
+  `--from/--to` window, so older seasons can sit in them. A historical UEFA
+  backfill run for an experiment on 2026-10-06 left two extra seasons behind,
+  the daily job rebuilt the squads over them, and `uefa_apps` went from 1 to as
+  many as **35** for European players — the figure SquadLab divides its
+  per-appearance rates by. Nothing failed; the numbers were simply wrong. The
+  tallies now keep only the newest season label in the file, so extra history is
+  harmless instead of silently poisonous.
+  `tests/test_current_squads.py::test_season_tallies_ignore_rows_from_older_seasons`.
 
 ## v0.61.1 — The match page prices its expected stats with the model we serve (2026-10-06)
 
