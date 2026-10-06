@@ -138,8 +138,26 @@ def fetch_rosters(leagues: dict[str, str] | None = None) -> pd.DataFrame:
 
 
 def match_tallies(src: Path) -> pd.DataFrame:
-    """Minutes played and season tallies, from the stored match rosters."""
+    """Minutes played and season tallies, from the stored match rosters.
+
+    SEASON-TALLIES ONLY FROM THE SEASON IN PROGRESS. These files are appended to
+    by fetch_espn_match_events.py, which takes an arbitrary --from/--to window,
+    so nothing stops older rows from living in them -- and this function used to
+    sum whatever it found. On 2026-10-06 a historical backfill of the UEFA file
+    (for an experiment) left two extra seasons in it, the daily job rebuilt the
+    squads over them, and every European player's uefa_apps jumped from 1 to as
+    many as 35, which SquadLab then divides its per-appearance rates by. Nothing
+    warned: the counts were simply wrong. Keeping only the newest season label
+    makes the file's extra history harmless instead of silently poisonous.
+    """
     df = pd.read_csv(src, low_memory=False)
+    if "season" in df.columns and df["season"].notna().any():
+        newest = str(df["season"].dropna().astype(str).max())
+        older = (df["season"].astype(str) != newest).sum()
+        if older:
+            print(f"  {src.name}: ignoro {older:,} filas de temporadas anteriores "
+                  f"(me quedo con {newest})")
+        df = df[df["season"].astype(str) == newest].copy()
     for c in NUMERIC:
         df[c] = pd.to_numeric(df.get(c), errors="coerce").fillna(0.0)
     df["starter"] = df.get("starter", False).astype(bool)
