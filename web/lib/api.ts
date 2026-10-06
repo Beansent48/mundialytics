@@ -105,6 +105,13 @@ export type ExpectedStat = {
   key: string;
   home: number;
   away: number;
+  /**
+   * Where the number comes from: "logged" is the pre-kickoff number as it was
+   * recorded (played matches, never recomputed); "team_props" is the recipe the
+   * props card is built from (the normal case for an upcoming match); "engine"
+   * is the fallback when the props models aren't loaded or dropped that market.
+   */
+  source?: "logged" | "team_props" | "engine";
   /** Most-probable range per side; null when the model can't price the stat. */
   homeRange: StatRange | null;
   awayRange: StatRange | null;
