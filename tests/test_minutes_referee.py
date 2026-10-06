@@ -86,14 +86,28 @@ def test_lineup_pass_reads_the_referee_and_prices_team_markets():
     assert lp.referee_of(s) == "Javier Alberola Rojas"
     assert lp.referee_of({"gameInfo": {}}) is None
 
-    class FakeTP:
-        def predict_fixture(self, h, a, referee=None, lam_home=None, lam_away=None):
-            self.referee = referee
-            return {"yellows": {"over": {4.5: 0.4}, "over_home": {1.5: 0.6}}}
-
-    tp = FakeTP()
+    # The caller prices the fixture once and hands the result to both the market
+    # rows and the match row's tp_* columns, so the helper now takes `fx`.
+    fx = {"yellows": {"over": {4.5: 0.4}, "over_home": {1.5: 0.6},
+                      "lambda_home": 1.54, "lambda_away": 1.85}}
     e = {"event_id": "1", "competition": "LaLiga", "kickoff": pd.Timestamp("2026-10-09T19:00")}
-    rows = lp.lineup_team_rows(tp, e, "betis", "sevilla", {"home": 1.4, "away": 1.1},
+    rows = lp.lineup_team_rows(e, "betis", "sevilla", fx,
                                "Javier Alberola Rojas", pd.Timestamp("2026-10-09T18:00"))
-    assert tp.referee == "Javier Alberola Rojas"
+    assert {r["referee"] for r in rows} == {"Javier Alberola Rojas"}
     assert {(r["ambito"], r["linea"], r["prob"]) for r in rows} == {("Total", 4.5, 0.4), ("Local", 1.5, 0.6)}
+
+
+def test_the_lineup_pass_row_carries_the_served_lambdas():
+    """An hour before kick-off, on the confirmed XI, is the best expectation we
+    ever have for a match -- it should be in the record, not only in the market
+    probabilities derived from it."""
+    import log_lineup_pass as lp
+
+    fx = {"shots": {"lambda_home": 14.9, "lambda_away": 10.2},
+          "yellows": {"lambda_home": 1.54, "lambda_away": 1.85},
+          "booking_pts": {"lambda_home": None, "lambda_away": None}}
+    cols = lp.team_props_columns(fx)
+    assert cols["tp_shots_home"] == 14.9 and cols["tp_shots_away"] == 10.2
+    assert cols["tp_yellows_home"] == 1.54
+    assert "tp_corners_home" not in cols, "a market with no lambda must not invent one"
+    assert lp.team_props_columns(None) == {}

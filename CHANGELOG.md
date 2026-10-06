@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.62.0 — The record names the model we price with (2026-10-06)
+
+### Fixed
+- **The pre-kickoff log recorded a model we do not price with.**
+  `log_upcoming_round.py` wrote `exp_*` from the engine's own `EventLambdaModel`
+  while the board's event markets were priced by `TeamPropsModel` — so the
+  record, the drift report built on it, and the played page's "what we said"
+  all described the weaker model (team props wins 5/5 seasons in all five
+  markets, `scripts/validate_expected_stats_source.py`). The log now carries
+  `tp_*` alongside, and `report_market_drift.py` and
+  `logged_prediction.expected_from_row` both prefer it per market. `exp_*` is
+  left exactly as it was: it is all the rows logged before 2026-10-06 carry, and
+  rewriting its meaning would break every drift series built on it. Verified by
+  re-running the report on the current log: byte-identical output while no row
+  has a `tp_*` yet. `tests/test_logged_served_model.py`.
+- **The lineup pass records them too.** The row that supersedes the match-day
+  one an hour before kick-off, priced on the confirmed XI, carried only the goal
+  lambdas — so the played page fell back to a recomputation for exactly the
+  match whose pre-kickoff expectation was the best one we had. The fixture is
+  now priced once in the caller and feeds both the market rows and the row's
+  `tp_*` columns, which also removes a second `predict_fixture` call per match.
+- **The referee on the web's team-props card: dropped, not forgotten.** A dry
+  run of the match-day logger reports ESPN naming the referee in **0 of 48**
+  upcoming fixtures 3–8 days out, so the card would price nothing. The lineup
+  pass an hour before kick-off stays the only place the referee can be known,
+  and it already uses it. This also settles the open question from
+  2026-09-30 about whether ESPN names referees before kick-off: not this far out.
+- **Season tallies could be poisoned by a file's own history.**
+  `build_current_squads.match_tallies` summed every row of the ESPN match-roster
+  files, but `fetch_espn_match_events.py` appends over an arbitrary
+  `--from/--to` window, so older seasons can sit in them. A historical UEFA
+  backfill run for an experiment on 2026-10-06 left two extra seasons behind,
+  the daily job rebuilt the squads over them, and `uefa_apps` went from 1 to as
+  many as **35** for European players — the figure SquadLab divides its
+  per-appearance rates by. Nothing failed; the numbers were simply wrong. The
+  tallies now keep only the newest season label in the file, so extra history is
+  harmless instead of silently poisonous.
+  `tests/test_current_squads.py::test_season_tallies_ignore_rows_from_older_seasons`.
+
 ## v0.61.1 — The match page prices its expected stats with the model we serve (2026-10-06)
 
 ### Fixed

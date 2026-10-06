@@ -72,6 +72,28 @@ def _num(v) -> float | None:
     return None if pd.isna(f) else f
 
 
+def expected_from_row(r) -> dict:
+    """The expected event counts a logged row carries, best model first.
+
+    `tp_*` is TeamPropsModel, the model the board is actually priced with and
+    the one the page serves for an upcoming match. `exp_*` is the engine's own
+    EventLambdaModel: measurably worse (team props wins 5/5 seasons in all five
+    markets, scripts/validate_expected_stats_source.py) and all that rows logged
+    before 2026-10-06 carry. Preferring tp_* per market keeps the played page
+    showing the same model it showed before kick-off, and leaves exp_* untouched
+    for the rows and drift series that have nothing else.
+    """
+    out = {}
+    for k in STAT_KEYS:
+        for side in ("home", "away"):
+            v = _num(r.get(f"tp_{k}_{side}"))
+            if v is None:
+                v = _num(r.get(f"exp_{k}_{side}"))
+            if v is not None:
+                out[f"{k}_{side}"] = v
+    return out
+
+
 def find_logged(home: str, away: str, match_date, window_days: int = 4) -> LoggedPrediction | None:
     """The earliest pre-kickoff 1X2 row for this fixture, or None.
 
@@ -111,12 +133,7 @@ def find_logged(home: str, away: str, match_date, window_days: int = 4) -> Logge
     lh, la = _num(r.get("lambda_home")), _num(r.get("lambda_away"))
     ph, pd_, pa = _num(r.get("p_home")), _num(r.get("p_draw")), _num(r.get("p_away"))
     full = None not in (lh, la, ph, pd_, pa)
-    expected = {}
-    for k in STAT_KEYS:
-        for side in ("home", "away"):
-            v = _num(r.get(f"exp_{k}_{side}"))
-            if v is not None:
-                expected[f"{k}_{side}"] = v
+    expected = expected_from_row(r)
     return LoggedPrediction(
         logged_at=str(r["logged_at"]),
         full=full,

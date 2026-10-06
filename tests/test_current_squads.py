@@ -233,3 +233,44 @@ def test_no_player_is_listed_at_two_clubs_in_the_same_row_set():
     df = _squads()
     dupes = df.duplicated(subset=["team", "player"])
     assert not dupes.any(), f"{int(dupes.sum())} duplicated (team, player) rows"
+
+
+# ── season tallies ────────────────────────────────────────────────────────────
+
+def test_season_tallies_ignore_rows_from_older_seasons():
+    """What the 2026-10-06 backfill broke.
+
+    fetch_espn_match_events.py appends to these files over whatever --from/--to
+    window it is given, so older rows can end up in them. match_tallies used to
+    sum the whole file: a historical UEFA backfill left two extra seasons behind,
+    the daily job rebuilt the squads over them, and uefa_apps went from 1 to 35
+    for European players -- the number SquadLab divides its per-appearance rates
+    by. Nothing failed; the counts were just wrong.
+    """
+    import sys
+    sys.path[:0] = [str(ROOT / "scripts")]
+    import build_current_squads as bcs
+
+    rows = []
+    for season, n_events in (("2024-2025", 12), ("2025-2026", 11), ("2026-2027", 1)):
+        for ev in range(n_events):
+            rows.append({"event_id": f"{season}-{ev}", "season": season,
+                         "competition": "Champions League", "date": f"{season[:4]}-09-17",
+                         "team": "paris sg", "player": "Vitinha", "position": "Midfielder",
+                         "starter": True, "subbed_in": False, "goals": 1, "shots": 2,
+                         "sot": 1, "assists": 0, "yellow_cards": 0, "red_cards": 0,
+                         "own_goals": 0, "appearances": 1, "sub_ins": 0})
+    src = ROOT / "tests" / "fixtures" / "_tmp_match_rows.csv"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(src, index=False)
+    try:
+        out = bcs.match_tallies(src)
+    finally:
+        src.unlink(missing_ok=True)
+
+    assert len(out) == 1
+    got = out.iloc[0]
+    assert got["season"] == "2026-2027"
+    assert got["apps"] == 1, "older seasons must not be counted as this season's appearances"
+    assert got["goals"] == 1
+    assert got["squad_matches"] == 1

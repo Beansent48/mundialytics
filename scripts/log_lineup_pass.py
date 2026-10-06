@@ -122,14 +122,24 @@ def referee_of(summary: dict) -> str | None:
     return None
 
 
-def lineup_team_rows(tp, e: dict, h: str, a: str, lams: dict, referee: str | None,
+def team_props_columns(fx: dict | None) -> dict:
+    """The team-props lambdas as tp_* columns, in the shape log_upcoming_round
+    writes them, so a lineup-pass row carries the same expectation the match-day
+    row does -- priced an hour before kick-off on the confirmed XI, which is the
+    best number we ever have for it."""
+    out = {}
+    for key in ("shots", "sot", "corners", "fouls", "yellows"):
+        d = (fx or {}).get(key) or {}
+        for side in ("home", "away"):
+            v = d.get(f"lambda_{side}")
+            if v is not None:
+                out[f"tp_{key}_{side}"] = round(float(v), 3)
+    return out
+
+
+def lineup_team_rows(e: dict, h: str, a: str, fx: dict, referee: str | None,
                      now: pd.Timestamp) -> list[dict]:
     """Team event markets (totals, sides, booking points) with the referee, one row per line."""
-    try:
-        fx = tp.predict_fixture(h, a, referee=referee, lam_home=lams["home"], lam_away=lams["away"])
-    except Exception as exc:
-        print(f"    team props {h} vs {a}: failed ({str(exc)[:60]})", flush=True)
-        return []
     base = {"logged_at_utc": now.strftime("%Y-%m-%dT%H:%M:%S"), "event_id": e["event_id"],
             "kickoff_utc": e["kickoff"].strftime("%Y-%m-%dT%H:%M:%S"), "competition": e["competition"],
             "home": h, "away": a, "referee": referee or ""}
@@ -223,6 +233,21 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
             continue
         use = (absent["home"], absent["away"]) if None not in absent.values() else None
         p = engine.predict_match(h, a, competition=e["competition"], lineup_absent=use)
+        if pp is None:
+            from api.engine import props_models
+            tp, pp = props_models()
+            pp = pp if pp is not None else False
+            tp = tp if tp is not None else False
+        lams = {"home": p.lambda_home, "away": p.lambda_away}
+        referee = referee_of(s)
+        rd = tp.referee_deviation("yellows", referee, h, a) if (tp and referee) else None
+        fx = None
+        if tp:
+            try:
+                fx = tp.predict_fixture(h, a, referee=referee,
+                                        lam_home=lams["home"], lam_away=lams["away"])
+            except Exception as exc:
+                print(f"    team props {h} vs {a}: failed ({str(exc)[:60]})", flush=True)
         rows.append({
             "logged_at_utc": now.strftime("%Y-%m-%dT%H:%M:%S"), "event_id": e["event_id"],
             "kickoff_utc": e["kickoff"].strftime("%Y-%m-%dT%H:%M:%S"), "competition": e["competition"],
@@ -232,17 +257,10 @@ def run_pass(lookahead: int = LOOKAHEAD_MIN, dry_run: bool = False) -> int:
             "lambda_home": round(p.lambda_home, 4), "lambda_away": round(p.lambda_away, 4),
             "p_home": round(p.p_home_win, 4), "p_draw": round(p.p_draw, 4), "p_away": round(p.p_away_win, 4),
             "p_over_25": round(p.p_over_25, 4), "model_source": p.model_source, **prov,
+            **team_props_columns(fx),
         })
-        if pp is None:
-            from api.engine import props_models
-            tp, pp = props_models()
-            pp = pp if pp is not None else False
-            tp = tp if tp is not None else False
-        lams = {"home": p.lambda_home, "away": p.lambda_away}
-        referee = referee_of(s)
-        rd = tp.referee_deviation("yellows", referee, h, a) if (tp and referee) else None
-        if tp:
-            team_rows.extend(lineup_team_rows(tp, e, h, a, lams, referee, now))
+        if fx is not None:
+            team_rows.extend(lineup_team_rows(e, h, a, fx, referee, now))
         if pp:
             prow = lineup_player_rows(pp, e, xis, lams, now, ref_dev=rd)
             player_rows.extend(prow)
