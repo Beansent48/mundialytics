@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.62.0 — The record names the model we price with (2026-10-06)
 
 ### Fixed
 - **The pre-kickoff log recorded a model we do not price with.**
