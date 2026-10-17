@@ -93,20 +93,26 @@ leaves the λ untouched and prints why.
 
 The level needs **our own served λ for matches already played this season**,
 because that is what the harness measured against; reconstructing them with
-today's fit would not be the same quantity. Two sources, in order:
+today's fit would not be the same quantity. Two sources:
 
-1. `data/processed/served_lambdas_current.csv`, the walk-forward cache for the
-   season in progress (`scripts/build_served_lambdas_current.py` — the same
-   thing `generate_deployed_walkforward.py` builds for past seasons). ~25 min,
-   so not a daily step.
-2. the pre-kickoff log, which carries `lambda_home`/`lambda_away` since PR #25
-   and tops the level up between regenerations.
+1. the pre-kickoff log, which has carried `lambda_home`/`lambda_away` since PR
+   #25 and **grows every day** by itself (step 7b);
+2. `data/processed/served_lambdas_current.csv`, a **one-off backfill** of the
+   part of the season played before that (`build_served_lambdas_current.py`,
+   step 7a, ~25 min).
 
-Why both: on 2026-10-17 the log alone held 47 settled matches, about 9 per
-league, which at K=70 leaves the correction at **11%** of its strength. With the
-cache seeded from the full season (297 matches, ~60 per league) it runs at 46%,
-and the levels come out ×1.014 (Bundesliga) to ×1.042 (LaLiga) — against a raw
-book-implied ×1.081. Re-run the cache every few rounds.
+**Nothing needs regenerating.** The backfill covers up to the log's first row
+and the log covers everything after it, so once the two meet the level
+strengthens on its own, and a new season bootstraps itself because round one is
+logged before it is played. Step 7a checks and exits in a second when the gap is
+closed, so it is safe to run daily and it self-heals a lost or stale cache
+(`--force` rebuilds anyway).
+
+The gap mattered on the day: the log alone held 47 settled matches, about 9 per
+league, which at K=70 is **11%** of the correction's strength; with the backfill
+it was 46%. Both callers now print the match count behind each level, because
+this correction can only ever weaken **silently** — if the log stopped carrying
+the λ, n would fall and nothing else would complain.
 
 ## Levels on the day it was deployed
 
@@ -117,6 +123,9 @@ book-implied ×1.081. Re-run the cache every few rounds.
 | Serie A | ×1.0297 |
 | Ligue 1 | ×1.0373 |
 | LaLiga | ×1.0423 |
+
+Measured on 45 (Bundesliga) to 77 (LaLiga) matches, so 39–52% of full strength
+and rising with every round.
 
 On a typical LaLiga fixture that is about +2.9pp on P(over 2.5), with the 1X2
 moving only as a goal distribution must (slightly fewer draws) — the validation
