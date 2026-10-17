@@ -24,6 +24,7 @@ Steps:
 """
 
 import argparse
+import pathlib
 import sys
 from pathlib import Path
 
@@ -79,6 +80,13 @@ def align_to_real(out: pd.DataFrame) -> pd.DataFrame:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", action="store_true", help="use the commentary already on disk")
+    ap.add_argument("--align", choices=("real", "history"), default="real",
+                    help="'real' (default, deployed): scale this season's text xG DOWN onto "
+                         "Sofascore, the real xG it continues. 'history': leave it on the "
+                         "Understat level step 1 put it on -- the level the xG-rate model was "
+                         "trained at and that lambda_scale_ measures. See "
+                         "docs/FOOTBALL_SEMANTICS_AUDIT_2026_10_17.md finding 1.")
+    ap.add_argument("--out", default=None, help="write somewhere else than the deployed file")
     args = ap.parse_args()
     now = pd.Timestamp.now()
     year = now.year if now.month >= 7 else now.year - 1
@@ -136,10 +144,15 @@ def main() -> int:
             "xg_match_confidence": "espn_commentary_text_model",
         })
     out = pd.DataFrame(rows).sort_values("date")
-    out = align_to_real(out)
-    out.to_csv(OUT, index=False)
+    if args.align == "real":
+        out = align_to_real(out)
+    else:
+        print("  left on the Understat level (--align history): no downscale to Sofascore",
+              flush=True)
+    dest = pathlib.Path(args.out) if args.out else OUT
+    out.to_csv(dest, index=False)
     print(f"{cur}: {len(out)} matches, mean xG {out[['home_xg', 'away_xg']].values.mean():.2f} "
-          f"(up to {out['date'].max()}) -> {OUT}", flush=True)
+          f"(up to {out['date'].max()}) -> {dest}", flush=True)
     return 0
 
 
