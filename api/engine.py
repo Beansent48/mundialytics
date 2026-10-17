@@ -38,13 +38,29 @@ PROPS_FP = _code_fingerprint(
 )
 
 
+def _xg_digest(df: pd.DataFrame) -> str:
+    """Cheap content fingerprint of the xG columns.
+
+    The key below used to be row count + last date + code + squad values, none of
+    which move when xG VALUES change while the row count and the last date stay
+    put -- a provider re-score, a backfill, or the 2026-10-17 provider-level
+    harmonisation. The cached fit was then reloaded from disk and the new numbers
+    never reached a single request. O(n) over 46k rows, microseconds.
+    """
+    cols = [c for c in ("home_xg", "away_xg") if c in df.columns]
+    if not cols:
+        return "noxg"
+    v = df[cols]
+    return f"{int(v.notna().to_numpy().sum())}x{round(float(v.sum(numeric_only=True).sum()), 1)}"
+
+
 def _cached_fit(tag: str, df: pd.DataFrame, build):
     import joblib
 
     # the squad values are read at fit time, so a new snapshot must refit
     sv = ROOT / "data/processed/squad_values.csv"
     sv_v = int(sv.stat().st_mtime) if sv.exists() else 0
-    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{ENGINE_FP}_{sv_v}"
+    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{ENGINE_FP}_{sv_v}_{_xg_digest(df)}"
     cache_f = CACHE_DIR / f"engine_{key}.joblib"
     if cache_f.exists():
         try:
@@ -105,6 +121,21 @@ def _club_engine(_version: float):
         return eng
 
     engine = _cached_fit("clubs", df, build)
+    # The market level is set AFTER the fit on purpose: the fit is cached to disk,
+    # and a level baked into it would be served long after the matches it was
+    # measured on. This runs on every cache miss of _club_engine, which is keyed
+    # on the foundation's mtime, so the daily refresh refreshes the level too.
+    if DEPLOYED_CLUB_ENGINE_KWARGS.get("market_level_shift"):
+        try:
+            from mundialytics.features.market_level import market_level_detail
+            k = float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"].get("k", 70.0))
+            det = market_level_detail(df, None, k=k)
+            engine.set_market_levels({c: m for c, (_, m) in det.items()})
+            print("market level " + (", ".join(f"{c} x{m:.4f} (n={n})"
+                                               for c, (n, m) in sorted(det.items()))
+                                     or "unavailable, lambdas left alone"))
+        except Exception as exc:          # never let it stop the engine loading
+            print(f"market level unavailable, lambdas left alone: {exc}")
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
     return engine, teams, df
 

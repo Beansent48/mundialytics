@@ -56,10 +56,18 @@ class LeagueState:
 
     @property
     def standings(self) -> pd.DataFrame:
-        """Live table from played matches (cached)."""
+        """Live table from played matches, plus any points deduction (cached).
+
+        The deduction has to enter here rather than at any caller: the resume
+        simulator anchors on `start_points = standings.points`, so wiring it in
+        once carries it into every title / top-four / relegation probability as
+        well as the table the UI shows.
+        """
         if self._standings is None:
+            from mundialytics.statistical_core.competition.deductions import load_deductions
             self._standings = compute_standings(
-                self.played, teams=self.teams, competition=self.competition
+                self.played, teams=self.teams, competition=self.competition,
+                adjustments=load_deductions(self.season, self.competition),
             )
         return self._standings
 

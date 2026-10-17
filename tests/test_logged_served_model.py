@@ -115,3 +115,21 @@ def test_count_drift_runs_on_a_log_that_mixes_both_vintages():
     assert shots.iloc[0]["n"] == 2
     assert shots.iloc[0]["expected"] == 25.0
     assert shots.iloc[0]["actual"] == 24.0
+
+
+def test_the_fit_cache_key_moves_when_xg_values_move():
+    """A provider re-score, a backfill or a level harmonisation changes xG values
+    without changing the row count or the last date. The key used to miss that,
+    so the stale fit was reloaded from disk and the new numbers reached nobody."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("eng_k", ROOT / "api/engine.py")
+    eng = importlib.util.module_from_spec(spec)
+    sys.modules["eng_k"] = eng
+    spec.loader.exec_module(eng)
+    base = pd.DataFrame({"date": ["2026-10-12"] * 3, "home_xg": [1.0, 2.0, 3.0],
+                         "away_xg": [1.0, 1.0, 1.0]})
+    moved = base.assign(home_xg=[1.2, 2.0, 3.0])           # one match re-scored
+    same_n = base.assign(home_xg=[3.0, 2.0, 1.0])          # reordered, same total
+    assert eng._xg_digest(base) != eng._xg_digest(moved)
+    assert eng._xg_digest(base) == eng._xg_digest(same_n)   # a permutation is the same fit
+    assert eng._xg_digest(base.drop(columns=["home_xg", "away_xg"])) == "noxg"

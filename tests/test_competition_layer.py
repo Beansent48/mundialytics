@@ -211,3 +211,29 @@ def test_cutoff_split_and_no_result_leak():
     # Final-table sanity: complete season -> Barcelona champion.
     full = load_league_state_from_foundation("LaLiga", "2024-2025", foundation=found)
     assert "barcelona" in full.standings.iloc[0]["team"].lower()
+
+
+def test_a_points_deduction_moves_the_table_but_not_the_results():
+    """Finding 4 of the 2026-10-17 audit: no result can express a federation's
+    sanction, so the table and every probability built on it were short by it."""
+    import pandas as pd
+    from mundialytics.statistical_core.competition.standings import compute_standings
+    played = pd.DataFrame({
+        "home_team": ["everton", "arsenal", "everton"],
+        "away_team": ["arsenal", "everton", "chelsea"],
+        "home_goals": [2, 0, 1], "away_goals": [0, 0, 0]})
+    plain = compute_standings(played, competition="Premier League").set_index("team")
+    docked = compute_standings(played, competition="Premier League",
+                               adjustments={"everton": -8}).set_index("team")
+    on_pitch = ["played", "won", "drawn", "lost", "goals_for", "goals_against", "goal_diff"]
+    assert plain.loc["everton", "points"] == 7 and docked.loc["everton", "points"] == -1
+    assert plain.loc["everton", "rank"] == 1 and docked.loc["everton", "rank"] == 3
+    assert plain.sort_index()[on_pitch].equals(docked.sort_index()[on_pitch])
+
+
+def test_deduction_table_is_optional_and_sums_repeat_rows():
+    from mundialytics.statistical_core.competition.deductions import load_deductions
+    assert load_deductions("2023-2024", "Premier League", path="does/not/exist.csv") == {}
+    pl = load_deductions("2023-2024", "Premier League")
+    assert pl.get("everton") == -8          # -6 on appeal plus a second -2
+    assert load_deductions("1999-2000", "Premier League") == {}
