@@ -474,13 +474,19 @@ def _log(args) -> None:
     # which is the one thing that would make the track record meaningless.
     if DEPLOYED_CLUB_ENGINE_KWARGS.get("market_level_shift"):
         try:
-            from mundialytics.features.market_level import market_levels
-            lv = market_levels(df, None,
-                               k=float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"]
-                                       .get("k", 70.0)))
-            eng.set_market_levels(lv)
-            shown = {c: round(v, 4) for c, v in sorted(lv.items())}
-            print(f"  nivel de mercado: {shown or 'sin datos, lambdas intactas'}")
+            from mundialytics.features.market_level import market_level_detail
+            k = float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"].get("k", 70.0))
+            det = market_level_detail(df, None, k=k)
+            eng.set_market_levels({c: m for c, (_, m) in det.items()})
+            if det:
+                # n is printed because this correction can only ever weaken
+                # SILENTLY: if the log stopped carrying lambda_home/away, n would
+                # fall and nothing else would complain.
+                for c, (n, m) in sorted(det.items()):
+                    print(f"  nivel de mercado  {c:16s} x{m:.4f}  "
+                          f"(n={n}, {n / (n + k):.0%} de fuerza)")
+            else:
+                print("  nivel de mercado: sin datos, lambdas intactas")
         except Exception as exc:
             print(f"  nivel de mercado no disponible, lambdas intactas: {exc}")
     known = set(df.home_team) | set(df.away_team)

@@ -473,6 +473,13 @@ def main() -> None:
         # Fails (exit 3/4) when any fixture in the window is left without a
         # prediction or a league's calendar is missing -- a lost matchday is a
         # test of the model that can never be run again.
+        # One-off backfill of the lambdas we served before PR #25 started
+        # logging them, which the market level measures itself against. It
+        # exits in a second once the backfill meets the log's first row, so it
+        # is safe to run daily and it self-heals a lost or new-season cache.
+        run_step("7a/8 served-lambda backfill (market level, no-op once closed)",
+                 [PY, "scripts/build_served_lambdas_current.py"], optional=True,
+                 timeout=3600)
         run_step("7b/8 log upcoming round (pre-match track record)",
                  [PY, "scripts/log_upcoming_round.py"])
         # And looking back: anything played this week with no prediction logged
@@ -512,14 +519,7 @@ def main() -> None:
     if args.full:
         run_step("8/8 deployed walk-forward cache (Resultados)",
                  [PY, "scripts/generate_deployed_walkforward.py"])
-        # The market level measures itself against the lambdas we served for
-        # matches already played this season, and the pre-kickoff log only
-        # carries them since PR #25. This rebuilds the full season, which takes
-        # the correction from ~11% of its strength to ~46%. Optional: without it
-        # the level falls back to the log and simply stays weaker.
-        run_step("8b/8 served lambdas, season in progress (market level)",
-                 [PY, "scripts/build_served_lambdas_current.py"], optional=True,
-                 timeout=3600)
+
     else:
         print("\n=== 8/8 walk-forward cache SKIPPED (use --full) ===", flush=True)
 

@@ -89,11 +89,12 @@ def book_over25(seasons: tuple[str, ...] | None = None) -> pd.DataFrame:
 def served_lambdas() -> pd.DataFrame:
     """fecha + canonical teams -> the lambdas we actually served, current season.
 
-    Two sources, in order: the walk-forward cache for the season in progress
-    (`scripts/build_served_lambdas_current.py`, which is the same thing
-    generate_deployed_walkforward.py builds for past seasons), topped up from
-    the pre-kickoff log, which carries lambda_home/lambda_away since PR #25 and
-    so keeps the level current between regenerations.
+    Two sources, in order: a ONE-OFF backfill for the part of the season that
+    predates PR #25 (`scripts/build_served_lambdas_current.py`), and the
+    pre-kickoff log, which has carried lambda_home/lambda_away since then and
+    grows every day. Nothing needs regenerating: the backfill covers up to the
+    log's first row and the log covers everything after it, so the level keeps
+    strengthening on its own as the season goes.
 
     Reconstructing these with today's fit instead would not be what was
     validated: the harness used the lambda the model serving that week produced.
@@ -154,12 +155,22 @@ def _implied_scale(lh: np.ndarray, la: np.ndarray, p_book: np.ndarray,
 
 
 def market_levels(matches: pd.DataFrame, asof, k: float = 70.0) -> dict[str, float]:
-    """{competition: level multiplier} for the season `matches` ends in.
+    """{competition: level multiplier} -- see market_level_detail."""
+    return {c: m for c, (_, m) in market_level_detail(matches, asof, k).items()}
+
+
+def market_level_detail(matches: pd.DataFrame, asof,
+                        k: float = 70.0) -> dict[str, tuple[int, float]]:
+    """{competition: (matches measured on, level multiplier)}.
 
     Only matches played strictly before `asof` contribute, and the multiplier is
     shrunk to 1 with `k` pseudo-matches, so a league with little history barely
     moves. Returns {} when there is nothing to measure, which leaves the lambdas
     untouched.
+
+    The count is returned so the daily refresh can print it: the correction can
+    only ever weaken silently -- if the pre-kickoff log stopped carrying
+    lambda_home/lambda_away, n would fall and nothing else would complain.
     """
     if matches is None or matches.empty or "date" not in matches.columns:
         return {}
@@ -192,5 +203,6 @@ def market_levels(matches: pd.DataFrame, asof, k: float = 70.0) -> dict[str, flo
     j["s"] = _implied_scale(j.lh.to_numpy(float), j.la.to_numpy(float),
                             j.p_book.to_numpy(float))
     g = j.groupby("competition")["s"].agg(["sum", "size"])
-    return {str(c): float(np.clip((r["sum"] + k) / (r["size"] + k), *CLIP))
+    return {str(c): (int(r["size"]),
+                     float(np.clip((r["sum"] + k) / (r["size"] + k), *CLIP)))
             for c, r in g.iterrows()}

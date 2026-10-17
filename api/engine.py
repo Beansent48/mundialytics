@@ -127,9 +127,13 @@ def _club_engine(_version: float):
     # on the foundation's mtime, so the daily refresh refreshes the level too.
     if DEPLOYED_CLUB_ENGINE_KWARGS.get("market_level_shift"):
         try:
-            from mundialytics.features.market_level import market_levels
+            from mundialytics.features.market_level import market_level_detail
             k = float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"].get("k", 70.0))
-            engine.set_market_levels(market_levels(df, None, k=k))
+            det = market_level_detail(df, None, k=k)
+            engine.set_market_levels({c: m for c, (_, m) in det.items()})
+            print("market level " + (", ".join(f"{c} x{m:.4f} (n={n})"
+                                               for c, (n, m) in sorted(det.items()))
+                                     or "unavailable, lambdas left alone"))
         except Exception as exc:          # never let it stop the engine loading
             print(f"market level unavailable, lambdas left alone: {exc}")
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
