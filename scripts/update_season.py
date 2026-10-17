@@ -512,6 +512,14 @@ def main() -> None:
     if args.full:
         run_step("8/8 deployed walk-forward cache (Resultados)",
                  [PY, "scripts/generate_deployed_walkforward.py"])
+        # The market level measures itself against the lambdas we served for
+        # matches already played this season, and the pre-kickoff log only
+        # carries them since PR #25. This rebuilds the full season, which takes
+        # the correction from ~11% of its strength to ~46%. Optional: without it
+        # the level falls back to the log and simply stays weaker.
+        run_step("8b/8 served lambdas, season in progress (market level)",
+                 [PY, "scripts/build_served_lambdas_current.py"], optional=True,
+                 timeout=3600)
     else:
         print("\n=== 8/8 walk-forward cache SKIPPED (use --full) ===", flush=True)
 

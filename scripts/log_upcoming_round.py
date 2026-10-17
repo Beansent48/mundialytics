@@ -467,6 +467,22 @@ def _log(args) -> None:
     # the logged track record is built with exactly what the app serves.
     eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS)
     eng.fit(df, elo_history=pd.DataFrame(elo.history))
+    # The market level is NOT loaded by fit() (the app's fit is cached to disk and
+    # would carry a stale one), so every caller sets it. The lineup and morning
+    # passes get it through club_engine(); this logger fits its own engine, and
+    # without this line the log would quote a different price from the site --
+    # which is the one thing that would make the track record meaningless.
+    if DEPLOYED_CLUB_ENGINE_KWARGS.get("market_level_shift"):
+        try:
+            from mundialytics.features.market_level import market_levels
+            lv = market_levels(df, None,
+                               k=float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"]
+                                       .get("k", 70.0)))
+            eng.set_market_levels(lv)
+            shown = {c: round(v, 4) for c, v in sorted(lv.items())}
+            print(f"  nivel de mercado: {shown or 'sin datos, lambdas intactas'}")
+        except Exception as exc:
+            print(f"  nivel de mercado no disponible, lambdas intactas: {exc}")
     known = set(df.home_team) | set(df.away_team)
     # Provenance on every row: which model, trained up to when. With the lambdas
     # and the full 1X2 the whole score matrix can be rebuilt from the log, so a

@@ -187,6 +187,20 @@ Transfermarkt ───────────── squad market value ──�
   (`data/processed/logs/lineup_pass_log.csv`, `morning_pass_log.csv`); the first
   logged prediction stays the track record, and `scripts/evaluate_lineup_pass.py`
   grades each against it on the same matches.
+- **Goals level from the market** — the engine's own in-season residual is a
+  useless detector of a league-wide shift: in a normal season it wobbles ±2%
+  with no persistence, so any correction fast enough to catch a real one buys
+  that noise instead (measured twice — shots 2/5 folds, goals 1/6). The betting
+  market's implied level is not: inverting the closing over/under 2.5 line gives
+  a level that is unbiased in every season from 2020/21 to 2025/26
+  (0.989–1.019), and in 2026/27 it is 4.5% short where the engine is 12.9%
+  short. Both λ are multiplied by that level for their league-season, measured
+  on matches **already played** and shrunk to 1 with 70 pseudo-matches. Six
+  historical folds: O/U 2.5 log loss −0.00047 ± 0.00025 (t −1.90) in **5 of 6**,
+  1X2 untouched; 2026/27 −0.00538. Flat over K=40–400 and 5/6 on the closing
+  line, the opening line and the market average alike. Only the *level* comes
+  from outside, never the price of the match being predicted — the per-match
+  judgement is the model's (`scripts/market_level/README.md`).
 - **Calibration** — Platt scaling per market, validated on held-out seasons.
 - **Scopes** — club and national-team models are fitted and used separately.
   Strength parameters are not comparable across contexts, so mixing them would
@@ -496,7 +510,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  339 tests green on a clean checkout; 109 more
+tests/                  345 tests green on a clean checkout; 109 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
