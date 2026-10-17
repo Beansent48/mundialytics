@@ -51,11 +51,35 @@ Worth noting on its own: Understat's goals/xG drifts monotonically from 1.016
 do not move 12% in one direction across the big five for a decade; the provider
 does. Any xG-scaled quantity fitted at a past cutoff inherits that drift.
 
-**Fix and test.** Estimate the scale per provider (or harmonise at ingestion and
-drop the correction). The provider offset is already measured on 250 paired
-matches — 0.9066 / 0.939 ≈ 0.966 — which is a far better estimator than a
-season residual. Unlike an in-season level term this is validatable: a
-provider's scale is a property of the provider, not of the season.
+### Fixed and deployed
+
+Harmonise forward instead of backward: `build_espn_text_xg.py --align history`
+leaves the text xG on the Understat level step 1 already put it on, and
+`update_season._on_history_level` lifts the Sofascore rows onto that same level
+using the 250 shared matches (1.024–1.094 per league). One scale throughout, so
+the xG-rate model is scored at the level it was trained at and `lambda_scale_`
+measures the inflation its own data carries.
+
+Measured on the 2026/27 fold, weekly-refit walk-forward (`outputs/xg_level/`):
+
+| | baseline | harmonised | diff |
+|---|---|---|---|
+| O/U 2.5 log loss | 0.66937 | 0.66549 | **−0.00388 ± 0.00111, t = −3.49** |
+| 1X2 RPS | 0.19887 | 0.19893 | +0.00006, t = +0.48 |
+
+Historical rows are the reference level and provably do not move, so there is no
+historical fold to validate on — by construction, not by omission. The evidence
+is the mechanism plus t = −3.49 on 297 matches, and the change cannot regress a
+past fold.
+
+**Correction to the first version of this finding.** It projected ≈4.8% of λ,
+about a third of the goals deficit. Wrong: λ_total moves only **1.14%** (2.740
+→ 2.771). Two things damp it — a Poisson GLM does not pass a uniform rescale of
+its features through one-for-one, and `lambda_scale_` is refitted on the
+harmonised data (0.9066 → 0.9009), giving part of it back. The gain is real and
+significant but it comes from feeding the model inputs on its training scale,
+not from correcting the level. The 2026/27 level deficit is still mostly
+unexplained.
 
 ---
 
@@ -120,6 +144,40 @@ This also sits exactly where the Bet365 gap was diagnosed (promoted sides,
 matchdays 1-5), and it is independent of the squad-value shift that already
 helped there.
 
+### Measured: NEGATIVE, twice. Not deployed.
+
+Two fallbacks, both on the 7-fold harness, both scored on the matches the fix
+actually touches.
+
+**A — prune the form to 730 days** (`XGRateModel.form_max_age_days`, opt-in,
+off by default). A club without 3 matches inside the window falls back to the
+league rate. On the 1,907 matches across 7 folds that involve a stale club:
+d_rps **+0.00012**, d_ou **−0.00065**, **3/6 historical folds** on both. Nothing.
+(It also cleared a worry: `d_rps` on every *other* match is ±0.00000, so the
+pruning really only moves what it should.)
+
+**B — treat a club absent >730 days as a debutant**, priced off last season's
+relegated sides, a better prior than the league mean. **1/6 folds**, and on the
+matches it touched d_rps +0.00237, d_ou +0.00266 — worse.
+
+Scope limit worth naming on B: it moved only 40 λ of 10,700, far fewer than
+intended. `train` includes the season in progress, so the moment a returning
+club plays once it is "recent" again and the stand-in stops. B therefore tested
+"debutant for its first match only", not for as long as it lacks current form.
+A is the test of the full-duration version, with the league mean as the interim
+prior, and A failed too.
+
+So the honest reading: Coventry's 2001 form is absurd **as a description** and
+no worse **as a predictor** than either replacement. Both are uninformative; a
+returning club is simply hard to price, which is what
+`promoted_gap_2026_09_29` already found from the other direction. The defect is
+real, vivid and — on the goal arm — not worth fixing. What a returning club
+needs is a better prior, and the one that measured positive is squad value,
+already deployed.
+
+Left unmeasured: the same defect in `TeamPropsModel` (see the correction below).
+It is a different model with different fallbacks, so A and B do not settle it.
+
 ---
 
 ### Correction (same day): the root cause is in the props layer too
@@ -182,6 +240,28 @@ is cheap insurance to add a per-club, per-season adjustment column that
 `standings` adds after summing results.
 
 ---
+
+## 5. The fit cache key did not cover the xG it was fitted on
+
+**Found while deploying finding 1. Confirmed, fixed.**
+
+`api/engine._cached_fit` keyed the joblib fit on row count, last date, a code
+fingerprint and the squad-value mtime:
+
+```
+clubs_46138_2026-10-12_d15e3ed7_1792142627
+```
+
+Nothing in there moves when xG **values** change while the row count and the
+last date stay put — which is exactly what a provider re-score, a backfill, or
+finding 1's harmonisation does. The stale fit would be reloaded from disk and
+the new numbers would reach no request at all. Same shape as the drift report's
+bug: a key that does not capture what it is keying.
+
+No cache file happened to exist when finding 1 landed, so today's deployment was
+not affected. The key now carries a cheap xG content digest (non-null count plus
+rounded sum, O(n) over 46k rows); a permutation of the same values is correctly
+still a cache hit.
 
 ## Checked and correct
 
