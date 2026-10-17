@@ -40,7 +40,17 @@ DEFAULT_OUT_CANONICAL = "data/external/xg/understat/understat_xg_matches.csv"
 DEFAULT_OUT_TEAM_MATCH = "data/processed/understat_team_match_xg.csv"
 
 # Understat `situation` value that is a penalty (excluded from non-penalty xG).
+# It never actually occurs: Understat leaves `situation` EMPTY on a penalty, and
+# `astype(str)` turned that into the string "nan", so `isin({"penalty"})` was
+# always False and npxg came out byte-for-byte equal to xg for twelve seasons --
+# a column whose name said non-penalty xG and whose contents were xG. The 6,677
+# shots with no situation have mean xG 0.7564 and 6,674 of them sit in
+# [0.74, 0.79]: Understat prices every penalty at 0.761169.
 PENALTY_SITUATIONS = {"penalty"}
+# A missing situation is a penalty, checked rather than trusted: if a future
+# scrape starts leaving it empty for something else, the mean xG of that group
+# moves out of this band and the build says so instead of quietly mislabelling.
+PENALTY_XG_BAND = (0.70, 0.80)
 GOAL_RESULTS = {"goal"}  # `result` values counted as a goal (excludes "own goal" scorer credit)
 
 
@@ -83,7 +93,18 @@ def build_understat_xg_matches(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
     df["date10"] = pd.to_datetime(df["date"], errors="coerce").dt.date.astype("string")
     situation = df["situation"].astype(str).str.strip().str.lower()
     result = df["result"].astype(str).str.strip().str.lower()
-    df["is_penalty"] = situation.isin(PENALTY_SITUATIONS)
+    missing = df["situation"].isna() | situation.isin({"nan", "none", ""})
+    if missing.any():
+        mean_xg = float(df.loc[missing, "xg"].mean())
+        if PENALTY_XG_BAND[0] <= mean_xg <= PENALTY_XG_BAND[1]:
+            print(f"  {int(missing.sum()):,} shots with no situation, mean xG "
+                  f"{mean_xg:.4f} -> treated as penalties", flush=True)
+        else:
+            print(f"  WARNING: {int(missing.sum()):,} shots with no situation but "
+                  f"mean xG {mean_xg:.4f} is outside {PENALTY_XG_BAND} -- NOT "
+                  f"treated as penalties; npxg will equal xg for them", flush=True)
+            missing = missing & False
+    df["is_penalty"] = situation.isin(PENALTY_SITUATIONS) | missing
     df["is_goal"] = result.isin(GOAL_RESULTS)
     df["npxg"] = df["xg"].where(~df["is_penalty"], 0.0)
     # Open-play vs set-piece decomposition (set-piece skill is a distinct, more
