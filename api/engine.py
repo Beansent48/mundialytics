@@ -38,13 +38,29 @@ PROPS_FP = _code_fingerprint(
 )
 
 
+def _xg_digest(df: pd.DataFrame) -> str:
+    """Cheap content fingerprint of the xG columns.
+
+    The key below used to be row count + last date + code + squad values, none of
+    which move when xG VALUES change while the row count and the last date stay
+    put -- a provider re-score, a backfill, or the 2026-10-17 provider-level
+    harmonisation. The cached fit was then reloaded from disk and the new numbers
+    never reached a single request. O(n) over 46k rows, microseconds.
+    """
+    cols = [c for c in ("home_xg", "away_xg") if c in df.columns]
+    if not cols:
+        return "noxg"
+    v = df[cols]
+    return f"{int(v.notna().to_numpy().sum())}x{round(float(v.sum(numeric_only=True).sum()), 1)}"
+
+
 def _cached_fit(tag: str, df: pd.DataFrame, build):
     import joblib
 
     # the squad values are read at fit time, so a new snapshot must refit
     sv = ROOT / "data/processed/squad_values.csv"
     sv_v = int(sv.stat().st_mtime) if sv.exists() else 0
-    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{ENGINE_FP}_{sv_v}"
+    key = f"{tag}_{len(df)}_{str(df['date'].max())[:10]}_{ENGINE_FP}_{sv_v}_{_xg_digest(df)}"
     cache_f = CACHE_DIR / f"engine_{key}.joblib"
     if cache_f.exists():
         try:
