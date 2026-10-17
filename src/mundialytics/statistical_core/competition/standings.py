@@ -2,7 +2,8 @@
 League standings table computed from played matches.
 
 Produces the classic table (played, W/D/L, GF/GA/GD, points) and a rank, applying
-tiebreakers. The default tiebreak order is points -> goal difference -> goals for,
+tiebreakers, plus any administrative points deduction passed in ``adjustments``
+(see ``competition/deductions.py``). The default tiebreak order is points -> goal difference -> goals for,
 which matches the Premier League, Bundesliga and Ligue 1. La Liga and Serie A break
 ties on head-to-head first; that refinement is supported via ``tiebreak`` and
 applied when the tied set is fully decided by their mutual results.
@@ -68,6 +69,7 @@ def compute_standings(
     played: pd.DataFrame,
     teams: list[str] | None = None,
     competition: str | None = None,
+    adjustments: dict[str, int] | None = None,
 ) -> pd.DataFrame:
     """Build a league table from played matches.
 
@@ -81,6 +83,12 @@ def compute_standings(
         appear (0 points). If ``None``, inferred from the matches present.
     competition
         Used to pick the tiebreak rule. ``None`` -> goal-difference tiebreak.
+    adjustments
+        ``{team: points}`` added after the results are summed, for administrative
+        deductions no result can express (Juventus -10 in 2022/23, Everton -8 and
+        Nottingham Forest -4 in 2023/24). ``competition/deductions.py`` loads them
+        from ``data/reference/points_deductions.csv``. It moves points only: W/D/L,
+        goals and the head-to-head tiebreak are what happened on the pitch.
 
     Returns
     -------
@@ -124,6 +132,11 @@ def compute_standings(
                 rec["points"] += DRAW_POINTS
             else:
                 rec["lost"] += 1
+
+    for team, pts in (adjustments or {}).items():
+        t = canonical_name(team)
+        if t in records:
+            records[t]["points"] += int(pts)
 
     use_h2h = competition is not None and canonical_name(competition).lower() in HEAD_TO_HEAD_LEAGUES
 

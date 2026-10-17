@@ -211,6 +211,51 @@ def update_understat(season: str) -> None:
         print(f"    {out.name}: {len(existing)} -> {len(combined)} rows", flush=True)
 
 
+def _on_history_level(df: pd.DataFrame, path) -> pd.DataFrame:
+    """Lift a current-season provider onto the level the HISTORY is on.
+
+    Audit finding 1 (docs/FOOTBALL_SEMANTICS_AUDIT_2026_10_17.md): history is
+    Understat, which runs ~7% hotter than Sofascore's Opta numbers, and the
+    models are both trained and scale-corrected at Understat's level
+    (`lambda_scale_` = goals/xG over 730 days, 90.7% Understat). Dropping
+    Sofascore-level rows in beside them corrected that inflation twice: 2026/27
+    goals/xG read 0.979 where the window said 0.907.
+
+    The text xG arrives already on Understat's level (build_espn_text_xg step 1,
+    with `--align history` so step 3 does not pull it back down to Sofascore), so
+    it passes through and also serves as the bridge: Understat froze 2026-05-24
+    and Sofascore starts 2026-08-15, so they never share a match and this is the
+    only way to measure the offset.
+
+    Measured on the 2026/27 fold, weekly-refit walk-forward: over/under 2.5 log
+    loss 0.66937 -> 0.66549 (-0.00388 +/- 0.00111, t = -3.49), 1X2 RPS flat
+    (+0.00006, t = +0.48). Historical rows cannot move -- they are the reference
+    level -- so there is no historical fold to validate on, by construction.
+    """
+    if path != SOFA_TEAM_MATCH or not TEXT_TEAM_MATCH.exists():
+        return df
+    k = ["date", "home_team_fd", "away_team_fd"]
+    xg = [f"{sd}_{v}" for sd in ("home", "away") for v in ("xg", "npxg", "xg_op", "xg_sp")]
+    try:
+        j = pd.read_csv(TEXT_TEAM_MATCH).merge(df, on=k, suffixes=("_u", "_s"))
+    except (OSError, KeyError, ValueError):
+        return df
+    if len(j) < 100:          # too few shared matches to measure the offset
+        return df
+    lift = (j.groupby("competition_u")[["home_xg_u", "away_xg_u"]].sum().sum(axis=1)
+            / j.groupby("competition_u")[["home_xg_s", "away_xg_s"]].sum().sum(axis=1))
+    overall = (j[["home_xg_u", "away_xg_u"]].values.sum()
+               / j[["home_xg_s", "away_xg_s"]].values.sum())
+    out = df.copy()
+    f = out["competition"].map(lift).fillna(overall)
+    for c in xg:
+        if c in out.columns:
+            out[c] = out[c] * f
+    print(f"    sofascore lifted to the history level on {len(j)} shared matches: "
+          f"{lift.round(3).to_dict()}", flush=True)
+    return out
+
+
 def augment_foundation_with_xg() -> None:
     """Re-attach the 8 xG columns (the foundation builder predates xG)."""
     found = pd.read_csv(FOUND, low_memory=False)
@@ -223,7 +268,7 @@ def augment_foundation_with_xg() -> None:
     sources = [pd.read_csv(TEAM_MATCH)[cols]]
     for extra in (SOFA_TEAM_MATCH, TEXT_TEAM_MATCH):
         if extra.exists():
-            sources.append(pd.read_csv(extra)[cols])
+            sources.append(_on_history_level(pd.read_csv(extra), extra)[cols])
     tm = pd.concat(sources, ignore_index=True)
     tm = tm.rename(columns={"home_team_fd": "home_team", "away_team_fd": "away_team"})
     tm["date"] = pd.to_datetime(tm["date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -284,7 +329,7 @@ def main() -> None:
     # Our own xG from ESPN's commentary text: covers whatever Sofascore does not (all of
     # it while Sofascore refuses us). Optional for the same reason as 3b.
     run_step("3c/8 ESPN text xG (current season)",
-             [PY, "scripts/build_espn_text_xg.py"],
+             [PY, "scripts/build_espn_text_xg.py", "--align", "history"],
              optional=True, timeout=1800)
 
     prev_rows = len(pd.read_csv(FOUND, low_memory=False)) if FOUND.exists() else None
@@ -428,6 +473,13 @@ def main() -> None:
         # Fails (exit 3/4) when any fixture in the window is left without a
         # prediction or a league's calendar is missing -- a lost matchday is a
         # test of the model that can never be run again.
+        # One-off backfill of the lambdas we served before PR #25 started
+        # logging them, which the market level measures itself against. It
+        # exits in a second once the backfill meets the log's first row, so it
+        # is safe to run daily and it self-heals a lost or new-season cache.
+        run_step("7a/8 served-lambda backfill (market level, no-op once closed)",
+                 [PY, "scripts/build_served_lambdas_current.py"], optional=True,
+                 timeout=3600)
         run_step("7b/8 log upcoming round (pre-match track record)",
                  [PY, "scripts/log_upcoming_round.py"])
         # And looking back: anything played this week with no prediction logged
@@ -467,6 +519,7 @@ def main() -> None:
     if args.full:
         run_step("8/8 deployed walk-forward cache (Resultados)",
                  [PY, "scripts/generate_deployed_walkforward.py"])
+
     else:
         print("\n=== 8/8 walk-forward cache SKIPPED (use --full) ===", flush=True)
 

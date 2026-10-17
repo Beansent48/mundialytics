@@ -1,0 +1,4 @@
+season,competition,team,points,note,verified
+2022-2023,Serie A,juventus,-10,"Plusvalenze. -15 applied Jan 2023, annulled on appeal Apr 2023, -10 imposed May 2023. This row is the FINAL-TABLE value; a live table between January and April should read -15 and between April and May 0 (see effective_from/effective_to below if that precision is ever needed).",no
+2023-2024,Premier League,everton,-8,"PSR. -10 reduced to -6 on appeal, plus a further -2 for a second breach.",no
+2023-2024,Premier League,nottingham forest,-4,"PSR.",no

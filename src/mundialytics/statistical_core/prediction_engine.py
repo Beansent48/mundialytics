@@ -81,6 +81,17 @@ DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     # injured), known in the morning -- the morning pass (scripts/log_morning_pass.py):
     # -0.00026, 6/6. Superseded by the lineup pass once the squads are out.
     "morning_shift": {"theta": -0.3928},
+    # League-season goals level read off the market instead of off our own
+    # residual, which failed twice (shots v0.56.0 2/5, goals 1/6: in a normal
+    # season the residual wobbles +/-2% with no persistence). The book's implied
+    # level is unbiased every season; in 2026/27 it is 4.5% short where we are
+    # 12.9% short. K=70 on six historical folds: O/U 2.5 log loss -0.00047
+    # +/- 0.00025 (t -1.90), 5/6 folds, 1X2 -0.00000 (4/6); 2026/27 -0.00538.
+    # Flat over K=40-400, and 5/6 on B365 closing, B365 opening and the market
+    # average alike. Only the LEVEL comes from outside, from matches already
+    # played -- never the price of the match being predicted.
+    # features/market_level.py; scripts/market_level/README.md.
+    "market_level_shift": {"k": 70},
 }
 
 
@@ -253,6 +264,7 @@ class PredictionEngine:
         sharpen_gamma_1x2: float = 1.0,  # 1X2 sharpening exponent (1.0 = off; 1.2 = LOFO-validated)
         outcome_rho: float | None = None,  # DC rho for the OUTCOME matrix (None = ad_rho). LOFO-optimal -0.17 with gamma 1.3
         rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
+        market_level_shift: dict | None = None,  # {"k": shrinkage}; see features/market_level.py
         xg_rate_kwargs: dict | None = None,     # passthrough to XGRateModel (e.g. {"use_ewma": True})
         goal_temper: float | None = None,  # marginal pmf tempering >1 (goals are sub-Poisson, Pearson ~0.91); None = off
         coherent_markets: bool = False,  # read every goal market from a matrix that agrees with the sharpened 1X2
@@ -296,6 +308,12 @@ class PredictionEngine:
         # to the blended lambda on the xG-rate path. Validated on 6 walk-forward
         # folds: O/U log-loss -0.0013, BTTS -0.0010 pooled, strongest in recent folds.
         self.rescale_lambda_to_goals = bool(rescale_lambda_to_goals)
+        self.market_level_shift = dict(market_level_shift) if market_level_shift else None
+        # Deliberately NOT loaded by fit(): the fitted engine is cached to disk, and
+        # a level baked into it would be served long after the matches it was
+        # measured on. The caller sets it after the fit -- api/engine.club_engine()
+        # does, and a backtest must compute it walk-forward anyway.
+        self.market_levels_: dict[str, float] = {}
         self.lambda_scale_: float = 1.0
         self.xg_rate_kwargs = dict(xg_rate_kwargs or {})
         self.goal_temper = float(goal_temper) if goal_temper is not None else None
@@ -449,6 +467,15 @@ class PredictionEngine:
     def set_squad_values(self, values: dict[str, float]) -> None:
         """Replace the squad values the shift reads ({team: squad value in EUR})."""
         self.squad_values_ = {canonical_name(k): float(v) for k, v in values.items() if v and v > 0}
+
+    def set_market_levels(self, levels: dict[str, float]) -> None:
+        """{competition: multiplier} from features.market_level.market_levels()."""
+        self.market_levels_ = {str(k): float(v) for k, v in (levels or {}).items()}
+
+    def _market_level(self, competition: str) -> float:
+        if not self.market_level_shift:
+            return 1.0
+        return float(getattr(self, "market_levels_", {}).get(competition, 1.0))
 
     def _squad_value_tilt(self, home: str, away: str, lh: float, la: float) -> tuple[float, float, bool]:
         """(lh, la, applied): the squad-value shift, or the lambdas untouched when it is
@@ -687,6 +714,13 @@ class PredictionEngine:
             model_src = f"blend_gl{self.blend_gl:.0%}_ad{self.blend_ad:.0%}_adxg{self.blend_ad_xg:.0%}"
         lh = float(np.clip(lh, 0.05, 6.0))
         la = float(np.clip(la, 0.05, 6.0))
+        # League-season level from the market. A common multiplier, so it commutes
+        # with every tilt below (each depends only on log(lh/la)) and touches the
+        # total alone.
+        mkt = self._market_level(competition)
+        if mkt != 1.0:
+            lh, la = lh * mkt, la * mkt
+            model_src += f"_mkt{mkt:.3f}"
         lh, la, tilted = self._squad_value_tilt(h, a, lh, la)
         if tilted:
             model_src += "_sv"

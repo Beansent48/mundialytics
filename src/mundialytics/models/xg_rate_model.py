@@ -48,6 +48,15 @@ class XGRateModel:
     # -0.0006 RPS, better in 5/5 folds. Gated off until the end-to-end engine
     # validation passes the deploy bar (the SETPIECE lesson).
     use_ewma: bool = False
+    # Drop form older than this many days when seeding the walk-forward state at
+    # fit time. OFF by default (None) = the deployed behaviour, which takes the
+    # last `max(WINDOWS)` rows with no regard for WHEN they were played: a club
+    # promoted after years away is then priced on ancient football -- Coventry's
+    # 2026/27 xG form is its 2000/01 Premier League, and the `len(hist) >= 3`
+    # fallback never fires because it has 38 rows. With a window set, a club
+    # without 3 recent matches falls back to the league rate instead.
+    # See docs/FOOTBALL_SEMANTICS_AUDIT_2026_10_17.md finding 2.
+    form_max_age_days: int | None = None
     _model: PoissonRegressor | None = field(default=None, init=False)
     _feats: list[str] = field(default_factory=list, init=False)
     _has_sp: bool = field(default=False, init=False)
@@ -142,8 +151,15 @@ class XGRateModel:
             self._global["xg_op"] = float(pd.to_numeric(lr["xg_op"], errors="coerce").median())
             self._global["xg_sp"] = float(pd.to_numeric(lr["xg_sp"], errors="coerce").median())
         cap = max(self.windows)
+        asof = pd.to_datetime(lr["date"], errors="coerce").max()
+        floor_date = (asof - pd.Timedelta(days=int(self.form_max_age_days))
+                      if self.form_max_age_days and pd.notna(asof) else None)
         for team, g in lr.sort_values("date").groupby("team"):
             t = str(team)
+            if floor_date is not None:
+                g = g[pd.to_datetime(g["date"], errors="coerce") >= floor_date]
+                if g.empty:
+                    continue
             self._hist_for[t] = pd.to_numeric(g["xg_for"], errors="coerce").dropna().tolist()[-cap:]
             self._hist_against[t] = pd.to_numeric(g["xg_against"], errors="coerce").dropna().tolist()[-cap:]
             if self._has_sp:
