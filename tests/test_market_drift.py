@@ -53,3 +53,61 @@ def test_count_drift_compares_the_logged_expectation_with_the_result():
     shots = c[(c["market"] == "shots") & (c["scope"] == "all")].iloc[0]
     assert shots["expected"] == 22.0 and shots["actual"] == 26.0 and shots["z"] > rmd.Z_ALERT
     assert set(c["market"]) == {"shots"}          # no expectation logged -> not reported
+
+
+def _log(partido, mercado, ambito, linea, fp, logged_at):
+    return pd.DataFrame({"partido": partido, "mercado": mercado, "ambito": ambito,
+                         "linea": linea, "model_fp": fp, "logged_at": logged_at})
+
+
+def test_era_join_survives_a_market_with_no_line():
+    """The player markets carry no line: NaN on one side, "" on the other.
+
+    Before this was canonicalised through a float, 45% of the log failed to join
+    and landed in the oldest era by default -- which is the opposite of the point.
+    """
+    log = _log(["p1", "p2"], "jug_goleador", ["mbappe", "kane"], [np.nan, np.nan],
+               "fp_new", "2026-10-05")
+    ev = pd.DataFrame({"partido": ["p1", "p2"], "mercado_id": "jug_goleador",
+                       "ambito": ["mbappe", "kane"], "linea": ["", ""],
+                       "acierto": [1.0, 0.0]})
+    out = rmd.attach_era(ev, log)
+    assert list(out["era"]) == ["fp_new", "fp_new"]
+
+
+def test_a_rows_era_is_the_model_that_priced_it_not_its_month():
+    """October fixtures logged before PR #25 are priced by the September model."""
+    log = pd.concat([
+        _log(["p1"], "shots", "Total", [22.5], None, "2026-09-18"),
+        _log(["p2"], "shots", "Total", [22.5], "fp_new", "2026-10-05")])
+    ev = pd.DataFrame({"partido": ["p1", "p2"], "mercado_id": "shots", "ambito": "Total",
+                       "linea": ["22.5", "22.5"], "acierto": [1.0, 1.0]})
+    assert list(rmd.attach_era(ev, log)["era"]) == [rmd.ERA_NONE, "fp_new"]
+    assert rmd.era_order(rmd.attach_era(ev, log)) == [rmd.ERA_NONE, "fp_new"]
+
+
+def test_a_pooled_alert_is_never_blamed_on_a_superseded_model():
+    """With too few results on the newest era the verdict is undecided, not a
+    reading taken from the era before it."""
+    n_old, n_new = 400, 10
+    ev = pd.concat([
+        _ev(0.6, 0.85, n=n_old).assign(partido=[f"old{i}" for i in range(n_old)]),
+        _ev(0.6, 0.60, n=n_new).assign(partido=[f"new{i}" for i in range(n_new)])])
+    log = pd.concat([
+        _log([f"old{i}" for i in range(n_old)], "shots", "Total", 24.5, None, "2026-09-18"),
+        _log([f"new{i}" for i in range(n_new)], "shots", "Total", 24.5, "fp_new", "2026-10-05")])
+    pooled = rmd.calibration_drift(ev).to_dict("records")
+    pooled[0]["kind"] = "calibration"
+    v = rmd.era_verdicts(pooled, ev, log, pd.DataFrame())[0]
+    assert v["era"] == "fp_new" and v["n"] == n_new
+    assert v["status"] == "undecided"          # not "live" off the 400 old rows
+
+
+def test_an_alert_still_there_on_the_newest_model_stays_live():
+    n = 400
+    ev = _ev(0.6, 0.85, n=n).assign(partido=[f"m{i}" for i in range(n)])
+    log = _log([f"m{i}" for i in range(n)], "shots", "Total", 24.5, "fp_new", "2026-10-05")
+    pooled = rmd.calibration_drift(ev).to_dict("records")
+    pooled[0]["kind"] = "calibration"
+    v = rmd.era_verdicts(pooled, ev, log, pd.DataFrame())[0]
+    assert v["era"] == "fp_new" and v["status"] == "live" and v["z"] >= rmd.Z_ALERT

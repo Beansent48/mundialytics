@@ -19,8 +19,20 @@ Windows: the current season so far and the last 28 days. A row is an ALERT
 when |z| >= 3 on at least MIN_N observations. Informational only: it never
 changes a prediction. Written to data/processed/logs/market_drift.json.
 
+Both windows pool model versions, and that made the report mislead on
+2026-10-17: it showed nine alerts of which six were about a model that no
+longer serves anything. Split by the `model_fp` the log carries since PR #25,
+fouls went -4.20pp -> -0.59, shots +2.54 -> -0.19 and corners -2.62 -> +0.34:
+the v0.56-0.60 work had already fixed them, and the pooled window kept
+crediting them to the live board. So every pooled alert now carries a verdict
+against the LATEST era that has settled results for that same market -- live,
+already fixed, or not yet decidable -- under `verdict` in the JSON. A window of
+calendar days cannot do this: October fixtures logged before PR #25 are priced
+by the September model, so match date is not model version.
+
     python scripts/report_market_drift.py
     python scripts/report_market_drift.py --as-of 2026-08-31   # what it said then
+    python scripts/report_market_drift.py --by-era             # full per-era tables
 """
 
 import argparse
@@ -72,6 +84,52 @@ def _coalesce(m: pd.DataFrame, names: tuple[str, ...]) -> pd.Series | None:
         out = out.combine_first(m[n].astype(float))
     return out
 PICK_ONE = {"1X2", "ht_1x2", "ht_ft"}
+# rows logged before PR #25 carry no fingerprint; they are one era, the oldest
+ERA_NONE = "pre-huella"
+
+
+def _era_key(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalised (partido, market, scope, line) -- the log's unique row identity.
+
+    `linea` reaches here as "2.5", "2.5000" or NaN depending on the writer, and
+    evaluate_log turns a missing one into "", so both sides are canonicalised
+    through a float. Without that the player markets (no line) do not join and
+    45% of the log silently lands in the wrong era.
+    """
+    out = pd.DataFrame(index=df.index)
+    out["partido"] = df["partido"].astype(str)
+    out["mercado_id"] = (df["mercado_id"] if "mercado_id" in df.columns
+                         else df["mercado"]).astype(str)
+    out["_amb"] = df["ambito"].astype(str).str.strip()
+    lin = pd.to_numeric(df["linea"], errors="coerce")
+    out["_lin"] = np.where(lin.notna(), [f"{v:g}" if pd.notna(v) else "" for v in lin], "")
+    return out
+
+
+ERA_KEY = ["partido", "mercado_id", "_amb", "_lin"]
+
+
+def attach_era(ev: pd.DataFrame, log: pd.DataFrame) -> pd.DataFrame:
+    """`ev` plus the `era` (model_fp) and `logged_at` of the row that served it."""
+    if ev.empty:
+        return ev.assign(era=pd.Series(dtype=str), logged_at=pd.Series(dtype=str))
+    cols = [c for c in ("model_fp", "logged_at") if c in log.columns]
+    right = pd.concat([_era_key(log), log[cols]], axis=1).drop_duplicates(ERA_KEY)
+    out = pd.concat([ev.reset_index(drop=True),
+                     _era_key(ev).reset_index(drop=True)[["_amb", "_lin"]]], axis=1)
+    out = out.merge(right, on=ERA_KEY, how="left")
+    out["era"] = out["model_fp"].fillna(ERA_NONE) if "model_fp" in out else ERA_NONE
+    return out
+
+
+def era_order(ev: pd.DataFrame) -> list[str]:
+    """Eras oldest-first, by when they were logged (ERA_NONE is always oldest)."""
+    if ev.empty or "era" not in ev.columns:
+        return []
+    when = (ev.groupby("era")["logged_at"].max() if "logged_at" in ev.columns
+            else pd.Series(dtype=str))
+    return sorted(ev["era"].unique(),
+                  key=lambda e: ("" if e == ERA_NONE else str(when.get(e, ""))))
 
 
 def count_drift(log: pd.DataFrame, found: pd.DataFrame) -> pd.DataFrame:
@@ -119,6 +177,56 @@ def calibration_drift(ev: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def era_verdicts(alerts: list[dict], ev: pd.DataFrame, log: pd.DataFrame,
+                 found: pd.DataFrame) -> list[dict]:
+    """For each pooled alert: is it still there on the newest model that has results?
+
+    `status` is "live" when the latest era with at least MIN_N settled
+    observations of that market still has |z| >= Z_ALERT, "fixed" when that era
+    is quiet, and "undecided" when no era has enough of them yet -- which is the
+    honest answer for a count alert in a round of 47 matches, not a clean bill.
+    """
+    out = []
+    if not alerts:
+        return out
+    e = attach_era(ev, log)
+    order = era_order(e)
+    # per-era tables, both kinds. A match's era is the one its 1X2 row was
+    # logged under, which is what carries the count expectations too.
+    log_era = log.assign(_era=log["model_fp"].fillna(ERA_NONE)
+                         if "model_fp" in log.columns else ERA_NONE)
+    per_era: dict[str, pd.DataFrame] = {}
+    for era in order:
+        sub_e, sub_l = e[e["era"] == era], log_era[log_era["_era"] == era]
+        parts = [calibration_drift(sub_e) if len(sub_e) else pd.DataFrame()]
+        if len(sub_l) and len(found) and "date" in found.columns:
+            parts.append(count_drift(sub_l, found))
+        per_era[era] = pd.concat([p for p in parts if len(p)], ignore_index=True) \
+            if any(len(p) for p in parts) else pd.DataFrame()
+    for a in alerts:
+        row = {"kind": a["kind"], "market": a["market"], "scope": a["scope"],
+               "pooled_n": a["n"], "pooled_z": a["z"],
+               "era": None, "n": 0, "z": None, "status": "undecided"}
+        # The NEWEST era that priced this market at all, and only that one. No
+        # falling back to an older era: doing so is how a pooled alert gets
+        # blamed on a model that no longer serves it, which is the whole bug.
+        for era in reversed(order):
+            t = per_era.get(era)
+            if t is None or t.empty:
+                continue
+            hit = t[(t["kind"] == a["kind"]) & (t["market"] == a["market"])
+                    & (t["scope"] == a["scope"])]
+            if hit.empty:
+                continue
+            r = hit.iloc[0]
+            row.update(era=era, n=int(r["n"]), z=float(r["z"]))
+            if int(r["n"]) >= MIN_N:
+                row["status"] = "live" if abs(float(r["z"])) >= Z_ALERT else "fixed"
+            break
+        out.append(row)
+    return out
+
+
 def report(as_of: pd.Timestamp | None = None) -> dict:
     found = pd.read_csv(FOUND, low_memory=False)
     found["date"] = pd.to_datetime(found["date"], errors="coerce")
@@ -144,9 +252,16 @@ def report(as_of: pd.Timestamp | None = None) -> dict:
             out["windows"][window] = {"rows": [], "alerts": []}
             continue
         t["alert"] = (t["z"].abs() >= Z_ALERT) & (t["n"] >= MIN_N)
-        out["windows"][window] = {"rows": t.to_dict("records"),
-                                  "alerts": t[t["alert"]].sort_values("z", key=abs, ascending=False)
-                                  .to_dict("records")}
+        alerts = (t[t["alert"]].sort_values("z", key=abs, ascending=False)
+                  .to_dict("records"))
+        out["windows"][window] = {"rows": t.to_dict("records"), "alerts": alerts}
+        if window == "season":
+            out["verdict"] = era_verdicts(alerts, e, lg, found)
+    out["eras"] = (attach_era(ev, log)
+                   .groupby("era")
+                   .agg(n=("acierto", "size"), partidos=("partido", "nunique"),
+                        logged_last=("logged_at", "max"))
+                   .reset_index().to_dict("records")) if len(ev) else []
     return out
 
 
@@ -176,6 +291,21 @@ def main() -> int:
                       f"dice {a['expected']:.3f} / pasa {a['actual']:.3f}  z={a['z']:+.1f}")
         else:
             print("  sin derivas")
+    v = r.get("verdict") or []
+    if v:
+        lab = {"live": "VIGENTE", "fixed": "ya arreglada", "undecided": "sin datos aun"}
+        live = sum(1 for x in v if x["status"] == "live")
+        print(f"\n== veredicto por version de modelo ({live} de {len(v)} vigentes) ==")
+        print("  la alerta agrupada mezcla modelos; esto la juzga en la era mas nueva"
+              " que tenga resultados")
+        for x in sorted(v, key=lambda y: {"live": 0, "undecided": 1, "fixed": 2}[y["status"]]):
+            z = f"z={x['z']:+.1f}" if x["z"] is not None else "z=--"
+            era = x["era"] or "-"
+            print(f"    {lab[x['status']]:14s} {x['market']:22s} {x['scope']:16s} "
+                  f"agrupada z={x['pooled_z']:+.1f} -> era {era:14s} n={x['n']:<5} {z}")
+    for e in r.get("eras") or []:
+        print(f"  era {e['era']:14s} n={e['n']:<6} partidos={e['partidos']:<4} "
+              f"ultimo log {str(e['logged_last'])[:16]}")
     if not args.no_write:
         OUT.parent.mkdir(parents=True, exist_ok=True)
         OUT.write_text(json.dumps(r, indent=1, default=str), encoding="utf-8")
