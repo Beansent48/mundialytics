@@ -1,7 +1,7 @@
 # Goals level from the market (2026-10-17)
 
-**Validated, 5/6 folds, NOT deployed** — deploying it anchors the engine's totals
-level to the market, which is a product decision, not a measurement one.
+**Validated 5/6 folds and DEPLOYED** (`market_level_shift={"k": 70}` in
+`DEPLOYED_CLUB_ENGINE_KWARGS`, `src/mundialytics/features/market_level.py`).
 
 ## Why this route
 
@@ -79,3 +79,54 @@ Operationally it is free: the daily refresh already downloads these CSVs (step
 1/8), and only past matches' prices are needed.
 
     python scripts/market_level/score_market_level.py [--k 20,40,70,120,200,400]
+
+
+## How it runs in production
+
+`api/engine.club_engine()` calls `market_levels(df, None, k=70)` and
+`engine.set_market_levels(...)` **after** the cached fit, never inside `fit()`:
+the fit is cached to disk, so a level baked into it would be served long after
+the matches it was measured on (audit finding 5, the same shape). It refreshes
+whenever `_club_engine`'s key — the foundation's mtime — moves, which the daily
+refresh does. Costs ~19 s per engine load, and it fails soft: any exception
+leaves the λ untouched and prints why.
+
+The level needs **our own served λ for matches already played this season**,
+because that is what the harness measured against; reconstructing them with
+today's fit would not be the same quantity. Two sources, in order:
+
+1. `data/processed/served_lambdas_current.csv`, the walk-forward cache for the
+   season in progress (`scripts/build_served_lambdas_current.py` — the same
+   thing `generate_deployed_walkforward.py` builds for past seasons). ~25 min,
+   so not a daily step.
+2. the pre-kickoff log, which carries `lambda_home`/`lambda_away` since PR #25
+   and tops the level up between regenerations.
+
+Why both: on 2026-10-17 the log alone held 47 settled matches, about 9 per
+league, which at K=70 leaves the correction at **11%** of its strength. With the
+cache seeded from the full season (297 matches, ~60 per league) it runs at 46%,
+and the levels come out ×1.014 (Bundesliga) to ×1.042 (LaLiga) — against a raw
+book-implied ×1.081. Re-run the cache every few rounds.
+
+## Levels on the day it was deployed
+
+| league | multiplier |
+|---|---|
+| Bundesliga | ×1.0140 |
+| Premier League | ×1.0294 |
+| Serie A | ×1.0297 |
+| Ligue 1 | ×1.0373 |
+| LaLiga | ×1.0423 |
+
+On a typical LaLiga fixture that is about +2.9pp on P(over 2.5), with the 1X2
+moving only as a goal distribution must (slightly fewer draws) — the validation
+had 1X2 RPS at −0.00000.
+
+## Rejected variant
+
+Hierarchical shrinkage (league → pooled five-league level → 1), which is better
+football since the 2026/27 drift is global and would have helped the thin-data
+case: **4/6 folds** at every (K_pool, K_league) tried, O/U −0.00039 to −0.00043
+with t −1.14 to −1.50, against the flat form's 5/6 and t −1.90. Better on
+2026/27 (−0.0090 to −0.0120) and worse on history — the same trap the in-season
+level forms fell into, so not deployed.

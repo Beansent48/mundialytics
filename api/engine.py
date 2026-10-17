@@ -121,6 +121,17 @@ def _club_engine(_version: float):
         return eng
 
     engine = _cached_fit("clubs", df, build)
+    # The market level is set AFTER the fit on purpose: the fit is cached to disk,
+    # and a level baked into it would be served long after the matches it was
+    # measured on. This runs on every cache miss of _club_engine, which is keyed
+    # on the foundation's mtime, so the daily refresh refreshes the level too.
+    if DEPLOYED_CLUB_ENGINE_KWARGS.get("market_level_shift"):
+        try:
+            from mundialytics.features.market_level import market_levels
+            k = float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"].get("k", 70.0))
+            engine.set_market_levels(market_levels(df, None, k=k))
+        except Exception as exc:          # never let it stop the engine loading
+            print(f"market level unavailable, lambdas left alone: {exc}")
     teams = sorted(set(df["home_team"]) | set(df["away_team"]))
     return engine, teams, df
 
