@@ -18,7 +18,7 @@ alone), so `score_level.py` can grid over shrinkage without refitting anything.
 
 The engine is untouched: nothing here is wired into production.
 
-usage: python scripts/goals_level/wf_lambdas.py SEASON OUT.csv [--src foundation]
+usage: python scripts/goals_level/wf_lambdas.py SEASON OUT.csv [--src foundation] [--found PATH] [--form-max-age DAYS] [--stale-as-debutant DAYS]
 
 The default source is the xG-available subset the squad-value harness used, so
 the baseline stays comparable with the recorded 0.1995/0.2006. `--src foundation`
@@ -47,9 +47,18 @@ SRC = ROOT / "data/processed/enriched/understat_xg/canonical_matches_with_xg.csv
 def main() -> None:
     season, out = sys.argv[1], sys.argv[2]
     foundation = "--src" in sys.argv and sys.argv[sys.argv.index("--src") + 1] == "foundation"
+    alt = sys.argv[sys.argv.index("--found") + 1] if "--found" in sys.argv else None
+    age = (int(sys.argv[sys.argv.index("--form-max-age") + 1])
+           if "--form-max-age" in sys.argv else None)
+    # A club absent for longer than this counts as a DEBUTANT, so
+    # predict_match_or_proxy prices it off last season's relegated sides instead
+    # of off its own ancient form. Falling back to the league mean instead
+    # (--form-max-age) measured 3/6 folds, i.e. nothing: see the audit, finding 2.
+    stale_days = (int(sys.argv[sys.argv.index("--stale-as-debutant") + 1])
+                  if "--stale-as-debutant" in sys.argv else None)
     if foundation:
         from mundialytics.statistical_core.engine_utils import load_clubs_data
-        df = load_clubs_data()
+        df = load_clubs_data(alt) if alt else load_clubs_data()
         need = ["home_goals", "away_goals", "date"]
     else:
         df = pd.read_csv(SRC, low_memory=False)
@@ -70,9 +79,15 @@ def main() -> None:
     for wk, blk in test.groupby(test["date"].dt.to_period("W-SUN"), sort=True):
         cutoff = blk["date"].min()
         train = df[df["date"] < cutoff]
-        eng = PredictionEngine(**DEPLOYED_CLUB_ENGINE_KWARGS).fit(
-            train, squad_value_asof=cutoff)
+        kw = dict(DEPLOYED_CLUB_ENGINE_KWARGS)
+        if age is not None:
+            kw["xg_rate_kwargs"] = {**kw.get("xg_rate_kwargs", {}),
+                                    "form_max_age_days": age}
+        eng = PredictionEngine(**kw).fit(train, squad_value_asof=cutoff)
         known = set(train["home_team"]) | set(train["away_team"])
+        if stale_days is not None:
+            recent = train[train["date"] >= cutoff - pd.Timedelta(days=stale_days)]
+            known = set(recent["home_team"]) | set(recent["away_team"])
         for r in blk.itertuples(index=False):
             comp = r.competition
             current = set(test.loc[test.competition == comp, "home_team"]) | \
