@@ -122,9 +122,31 @@ helped there.
 
 ---
 
+### Correction (same day): the root cause is in the props layer too
+
+`props/team_props.TeamPropsModel._latest_team_state` does the same thing —
+`g["ev_for"].tail(w).mean()`, the last *w* rows whatever their date, with the
+same `len(g) < 3` guard that a club with 38 ancient rows sails past. That is
+the model the **board's event markets are actually priced with** (`tp_*` in the
+log), so Coventry's shots, corners and cards form is also its 2001 form.
+
+Its league-position features are built correctly, per `(competition, season)`.
+
+Unlike the goal side this is **not measurable from the live log**: only 11
+settled 2026/27 matches carry both a stale club and an event expectation, and
+they say nothing (shots error 6.16 vs 4.79, corners 1.87 vs 2.43, yellows 1.82
+vs 1.60). Testing it needs `backtest_team_props.py` across folds.
+
 ## 3. No rolling window resets at the season boundary
 
-**Real, unmeasured, weaker claim than 2.**
+**Real, mostly inert where I first pointed it, unmeasured.**
+
+Correction to the first version of this finding: the deployed board does not
+read the engine's `EventLambdaModel` (`exp_*` in the log) — `TeamPropsModel`
+prices the event markets, and the goal path drops the GL model whenever the
+xG-rate model is ready. So `features/team_features.py` feeds almost nothing
+served, and the live exposure of this finding is the two form states covered by
+finding 2.
 
 `features/team_features.add_pre_match_rolling_features` and
 `XGRateModel._add_rolling` both group by `team` alone. On matchday 1,
