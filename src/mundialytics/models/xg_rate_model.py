@@ -57,6 +57,21 @@ class XGRateModel:
     # without 3 recent matches falls back to the league rate instead.
     # See docs/FOOTBALL_SEMANTICS_AUDIT_2026_10_17.md finding 2.
     form_max_age_days: int | None = None
+    # Which quantity the FORM windows are built from. The target stays xG either
+    # way, so lambda_scale_ keeps its meaning; only the rolling history changes.
+    # "npxg" is the textbook-better predictor -- a penalty is 0.76 xG of pure
+    # noise for next week -- and was untestable until 2026-10-17, because
+    # home_npxg was a byte-for-byte copy of home_xg for twelve seasons
+    # (build_understat_xg_matches looked for situation == "penalty" and Understat
+    # leaves it EMPTY). OFF by default pending the walk-forward.
+    # "xg" (deployed), "npxg" (windows only, target stays xG -- MEASURED AND
+    # NEGATIVE: the features drop ~8% while the target does not, so the GLM
+    # answers by raising its coefficients and lambda rises ~1% in every fold.
+    # That flatters a season whose level is low and hurts the rest: 2/6 folds),
+    # or "npxg_full" (windows AND target, so lambda comes out in npxG units and
+    # rescale_lambda_to_goals must divide goals by npxG -- the level-neutral way
+    # to ask whether npxG is the better predictor).
+    form_source: str = "xg"
     _model: PoissonRegressor | None = field(default=None, init=False)
     _feats: list[str] = field(default_factory=list, init=False)
     _has_sp: bool = field(default=False, init=False)
@@ -73,16 +88,37 @@ class XGRateModel:
 
     # ── feature engineering ────────────────────────────────────────────────────
 
+    def _form_cols(self) -> tuple[str, str]:
+        return (("home_npxg", "away_npxg")
+                if self.form_source in ("npxg", "npxg_full")
+                else ("home_xg", "away_xg"))
+
     def _long_rows(self, matches: pd.DataFrame) -> pd.DataFrame:
-        m = matches.dropna(subset=["home_xg", "away_xg"]).copy()
+        need = ["home_xg", "away_xg"]
+        fh, fa = self._form_cols()
+        if self.form_source in ("npxg", "npxg_full"):
+            if not {fh, fa}.issubset(matches.columns):
+                self.form_source = "xg"          # no npxg on hand: fall back cleanly
+                fh, fa = self._form_cols()
+            else:
+                need += [fh, fa]
+        full = self.form_source == "npxg_full"
+        m = matches.dropna(subset=need).copy()
         self._has_sp = (self.use_setpiece and all(c in m.columns for c in SP_COLS)
                         and m[list(SP_COLS)].notna().all(axis=1).sum() >= 300)
         rows = []
         for _, r in m.iterrows():
+            # `xg_for` is the TARGET (always xG); `form_for` drives the windows.
             base_h = {"match_id": r.get("match_id"), "date": r.get("date"), "team": r["home_team"],
-                      "opp": r["away_team"], "is_home": 1, "xg_for": r["home_xg"], "xg_against": r["away_xg"]}
+                      "opp": r["away_team"], "is_home": 1,
+                      "xg_for": r[fh] if full else r["home_xg"],
+                      "xg_against": r[fa] if full else r["away_xg"],
+                      "form_for": r[fh], "form_against": r[fa]}
             base_a = {"match_id": r.get("match_id"), "date": r.get("date"), "team": r["away_team"],
-                      "opp": r["home_team"], "is_home": 0, "xg_for": r["away_xg"], "xg_against": r["home_xg"]}
+                      "opp": r["home_team"], "is_home": 0,
+                      "xg_for": r[fa] if full else r["away_xg"],
+                      "xg_against": r[fh] if full else r["home_xg"],
+                      "form_for": r[fa], "form_against": r[fh]}
             if self._has_sp:
                 base_h.update(xg_op=r.get("home_xg_op"), xg_sp=r.get("home_xg_sp"))
                 base_a.update(xg_op=r.get("away_xg_op"), xg_sp=r.get("away_xg_sp"))
@@ -93,7 +129,7 @@ class XGRateModel:
 
     def _add_rolling(self, lr: pd.DataFrame) -> pd.DataFrame:
         lr = lr.sort_values(["team", "date", "match_id"]).copy()
-        cols = {"xg_for": self.windows, "xg_against": self.windows}
+        cols = {"form_for": self.windows, "form_against": self.windows}
         if self._has_sp:
             cols.update({"xg_op": (SP_WINDOW,), "xg_sp": (SP_WINDOW,)})
         for col, wins in cols.items():
@@ -102,29 +138,29 @@ class XGRateModel:
                 lr[f"{col}_r{w}"] = (lr.groupby("team", group_keys=False)[col]
                                      .apply(lambda s: s.shift(1).rolling(w, min_periods=3).mean()))
         if self.use_ewma:
-            for col in ["xg_for", "xg_against"]:
+            for col in ["form_for", "form_against"]:
                 lr[f"{col}_ewm"] = (lr.groupby("team", group_keys=False)[col]
                                     .apply(lambda s: s.shift(1).ewm(halflife=5, min_periods=3).mean()))
-        opp_src = [f"xg_against_r{w}" for w in self.windows]
+        opp_src = [f"form_against_r{w}" for w in self.windows]
         if self._has_sp:
             opp_src += [f"xg_op_r{SP_WINDOW}", f"xg_sp_r{SP_WINDOW}"]
         if self.use_ewma:
-            opp_src += ["xg_against_ewm"]
+            opp_src += ["form_against_ewm"]
         opp = lr[["match_id", "team"] + opp_src].rename(
             columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
         return lr.merge(opp, on=["match_id", "opp"], how="left")
 
     def _feature_list(self) -> list[str]:
-        feats = [f"xg_for_r{w}" for w in self.windows]
+        feats = [f"form_for_r{w}" for w in self.windows]
         if self._has_sp:
             feats += [f"xg_op_r{SP_WINDOW}", f"xg_sp_r{SP_WINDOW}"]
         if self.use_ewma:
-            feats += ["xg_for_ewm"]
-        feats += [f"opp_xg_against_r{w}" for w in self.windows]
+            feats += ["form_for_ewm"]
+        feats += [f"opp_form_against_r{w}" for w in self.windows]
         if self._has_sp:
             feats += [f"opp_xg_op_r{SP_WINDOW}", f"opp_xg_sp_r{SP_WINDOW}"]
         if self.use_ewma:
-            feats += ["opp_xg_against_ewm"]
+            feats += ["opp_form_against_ewm"]
         return feats + ["is_home"]
 
     # ── fit / predict ──────────────────────────────────────────────────────────
@@ -145,8 +181,8 @@ class XGRateModel:
         self._model = PoissonRegressor(alpha=self.alpha, max_iter=1000).fit(
             train[self._feats], train["xg_for"].clip(lower=0))
         # Global fallback rates + walk-forward form state seeded from training.
-        self._global = {"xg_for": float(pd.to_numeric(lr["xg_for"], errors="coerce").median()),
-                        "xg_against": float(pd.to_numeric(lr["xg_against"], errors="coerce").median())}
+        self._global = {"xg_for": float(pd.to_numeric(lr["form_for"], errors="coerce").median()),
+                        "xg_against": float(pd.to_numeric(lr["form_against"], errors="coerce").median())}
         if self._has_sp:
             self._global["xg_op"] = float(pd.to_numeric(lr["xg_op"], errors="coerce").median())
             self._global["xg_sp"] = float(pd.to_numeric(lr["xg_sp"], errors="coerce").median())
@@ -160,15 +196,15 @@ class XGRateModel:
                 g = g[pd.to_datetime(g["date"], errors="coerce") >= floor_date]
                 if g.empty:
                     continue
-            self._hist_for[t] = pd.to_numeric(g["xg_for"], errors="coerce").dropna().tolist()[-cap:]
-            self._hist_against[t] = pd.to_numeric(g["xg_against"], errors="coerce").dropna().tolist()[-cap:]
+            self._hist_for[t] = pd.to_numeric(g["form_for"], errors="coerce").dropna().tolist()[-cap:]
+            self._hist_against[t] = pd.to_numeric(g["form_against"], errors="coerce").dropna().tolist()[-cap:]
             if self._has_sp:
                 self._hist_op[t] = pd.to_numeric(g["xg_op"], errors="coerce").dropna().tolist()[-cap:]
                 self._hist_sp[t] = pd.to_numeric(g["xg_sp"], errors="coerce").dropna().tolist()[-cap:]
             if self.use_ewma:
                 # unshifted final EWM = correct pre-match value for the team's NEXT match
-                ef = pd.to_numeric(g["xg_for"], errors="coerce").ewm(halflife=5, min_periods=1).mean()
-                ea = pd.to_numeric(g["xg_against"], errors="coerce").ewm(halflife=5, min_periods=1).mean()
+                ef = pd.to_numeric(g["form_for"], errors="coerce").ewm(halflife=5, min_periods=1).mean()
+                ea = pd.to_numeric(g["form_against"], errors="coerce").ewm(halflife=5, min_periods=1).mean()
                 if len(ef):
                     self._ewm_for[t] = float(ef.iloc[-1]); self._ewm_against[t] = float(ea.iloc[-1])
         return self
@@ -179,10 +215,19 @@ class XGRateModel:
 
     def update_form(self, home_team: str, away_team: str, home_xg: float, away_xg: float,
                     home_xg_op: float | None = None, away_xg_op: float | None = None,
-                    home_xg_sp: float | None = None, away_xg_sp: float | None = None) -> None:
+                    home_xg_sp: float | None = None, away_xg_sp: float | None = None,
+                    home_npxg: float | None = None, away_npxg: float | None = None) -> None:
         """Append a played match to the walk-forward form state (call after each match
         in chronological order). op/sp values are optional; when omitted, the op/sp
-        state simply keeps its last-known window (slight staleness, no error)."""
+        state simply keeps its last-known window (slight staleness, no error).
+
+        With form_source="npxg" the windows hold npxG, so npxG has to be appended
+        too -- seeding the state from npxG and then topping it up with xG would
+        mix the two and drift the level upward by the penalty share."""
+        if self.form_source in ("npxg", "npxg_full"):
+            if home_npxg is None or away_npxg is None:
+                raise ValueError("form_source='npxg' needs home_npxg/away_npxg")
+            home_xg, away_xg = float(home_npxg), float(away_npxg)
         cap = max(self.windows)
         for team, xf, xa, xo, xs in [(str(home_team), home_xg, away_xg, home_xg_op, home_xg_sp),
                                      (str(away_team), away_xg, home_xg, away_xg_op, away_xg_sp)]:

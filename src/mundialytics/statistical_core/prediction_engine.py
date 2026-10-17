@@ -405,13 +405,20 @@ class PredictionEngine:
             if xr.is_ready:
                 self.xg_rate_model_ = xr
                 if self.rescale_lambda_to_goals:
-                    m = matches.dropna(subset=["home_xg", "away_xg", "home_goals", "away_goals"]).copy()
+                    # With form_source="npxg_full" the xG-rate model returns npxG
+                    # units, so the goals conversion has to divide by npxG, not xG
+                    # -- otherwise the correction is off by the penalty share.
+                    xc = (["home_npxg", "away_npxg"]
+                          if self.xg_rate_kwargs.get("form_source") == "npxg_full"
+                          and {"home_npxg", "away_npxg"}.issubset(matches.columns)
+                          else ["home_xg", "away_xg"])
+                    m = matches.dropna(subset=xc + ["home_goals", "away_goals"]).copy()
                     m["date"] = pd.to_datetime(m.get("date"), errors="coerce")
                     m = m.dropna(subset=["date"])
                     recent = m[m["date"] >= m["date"].max() - pd.Timedelta(days=730)]
                     if len(recent) >= 300:
                         goals = pd.to_numeric(recent["home_goals"], errors="coerce") + pd.to_numeric(recent["away_goals"], errors="coerce")
-                        xg = pd.to_numeric(recent["home_xg"], errors="coerce") + pd.to_numeric(recent["away_xg"], errors="coerce")
+                        xg = pd.to_numeric(recent[xc[0]], errors="coerce") + pd.to_numeric(recent[xc[1]], errors="coerce")
                         if xg.mean() > 0:
                             self.lambda_scale_ = float(np.clip(goals.mean() / xg.mean(), 0.85, 1.10))
 

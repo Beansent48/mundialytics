@@ -18,7 +18,7 @@ alone), so `score_level.py` can grid over shrinkage without refitting anything.
 
 The engine is untouched: nothing here is wired into production.
 
-usage: python scripts/goals_level/wf_lambdas.py SEASON OUT.csv [--src foundation] [--found PATH] [--form-max-age DAYS] [--stale-as-debutant DAYS]
+usage: python scripts/goals_level/wf_lambdas.py SEASON OUT.csv [--src foundation] [--found PATH] [--form-max-age DAYS] [--stale-as-debutant DAYS] [--npxg-form]
 
 The default source is the xG-available subset the squad-value harness used, so
 the baseline stays comparable with the recorded 0.1995/0.2006. `--src foundation`
@@ -50,6 +50,11 @@ def main() -> None:
     alt = sys.argv[sys.argv.index("--found") + 1] if "--found" in sys.argv else None
     age = (int(sys.argv[sys.argv.index("--form-max-age") + 1])
            if "--form-max-age" in sys.argv else None)
+    # Build the xG-rate model's FORM windows from npxG instead of xG (target
+    # stays xG). Untestable before 2026-10-17: home_npxg was a byte-for-byte
+    # copy of home_xg for twelve seasons.
+    npxg_form = "--npxg-form" in sys.argv
+    npxg_full = "--npxg-full" in sys.argv
     # A club absent for longer than this counts as a DEBUTANT, so
     # predict_match_or_proxy prices it off last season's relegated sides instead
     # of off its own ancient form. Falling back to the league mean instead
@@ -80,9 +85,15 @@ def main() -> None:
         cutoff = blk["date"].min()
         train = df[df["date"] < cutoff]
         kw = dict(DEPLOYED_CLUB_ENGINE_KWARGS)
+        extra = {}
         if age is not None:
-            kw["xg_rate_kwargs"] = {**kw.get("xg_rate_kwargs", {}),
-                                    "form_max_age_days": age}
+            extra["form_max_age_days"] = age
+        if npxg_full:
+            extra["form_source"] = "npxg_full"
+        elif npxg_form:
+            extra["form_source"] = "npxg"
+        if extra:
+            kw["xg_rate_kwargs"] = {**kw.get("xg_rate_kwargs", {}), **extra}
         eng = PredictionEngine(**kw).fit(train, squad_value_asof=cutoff)
         known = set(train["home_team"]) | set(train["away_team"])
         if stale_days is not None:
@@ -103,8 +114,10 @@ def main() -> None:
                          "lh": float(p.lambda_home), "la": float(p.lambda_away),
                          "proxy": bool(stand)})
             if eng.xg_rate_model_ is not None and pd.notna(r.home_xg) and pd.notna(r.away_xg):
-                eng.xg_rate_model_.update_form(r.home_team, r.away_team,
-                                               r.home_xg, r.away_xg)
+                eng.xg_rate_model_.update_form(
+                    r.home_team, r.away_team, r.home_xg, r.away_xg,
+                    home_npxg=getattr(r, "home_npxg", None),
+                    away_npxg=getattr(r, "away_npxg", None))
         print(f"{season} {wk} n={len(rows)} {time.time() - t0:.0f}s", flush=True)
     pd.DataFrame(rows).to_csv(out, index=False)
     print("DONE", season, len(rows), flush=True)
