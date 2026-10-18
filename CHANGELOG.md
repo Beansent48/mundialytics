@@ -1,5 +1,72 @@
 # Changelog
 
+## v0.63.0 — The sharpening stops draining the draw (2026-10-18)
+
+### Changed
+- **`sharpen_gamma_1x2` now applies to the home-vs-away contrast only.**
+  `p_i^gamma` renormalized is exactly `(u, v) -> (gamma*u, gamma*v)` on the two
+  log-odds against the draw, so the one exponent that corrects the model's
+  under-confidence on the favourite was also draining the draw — which did not
+  need it: the raw trio prices draws at 0.2560 against 0.2540 happening. The
+  published trio priced them at **0.2318**, a gap of +0.0222 with se 0.0041,
+  **z = +5.4 and short in 6 of 6 walk-forward seasons**; the 27-season rate is
+  higher still at 0.2587. Since `coherent_markets` (v0.57) reweights every
+  outcome region of the scoreline matrix onto the published trio, that deficit
+  was being subtracted from every exact score, BTTS and HT/FT number on the
+  page as well.
+
+  Applying the same exponent to the contrast alone (`sharpen_contrast_only`,
+  new, **defaults to False** so every number scored before today stays
+  reproducible) adds no constant and fits nothing, so all six walk-forward
+  seasons are out of sample: 1X2 log loss, exact score and HT/FT **−0.00128
+  each** and 1X2 RPS **−0.00015**, every one of them in **6 of 6** seasons.
+  Draw O/E 1.096 → 1.029; over/under and BTTS flat (−0.00006). For scale that
+  is about 40% of what the coherence deployment itself was worth. The engine's
+  draw pricing now sits within 0.2 points of Bet365's on the same matches
+  (0.2468 against 0.2489, with 0.2529 happening), where it was 1.7 points below
+  it. `scripts/draw_deficit/README.md`, `tests/test_sharpen_contrast_only.py`.
+
+  Why it was stale rather than wrong: `prediction_engine.py` records that
+  gamma = 1.3 came from a **joint gamma/rho scan that picked it together with
+  rho = −0.17**. rho was later smoothed to −0.06 and gamma was never
+  re-scanned. The re-scan confirms the original was self-consistent — at
+  rho = −0.17 the best gamma is 1.26, at −0.06 it is 1.20 — so moving rho
+  should have moved gamma. **Anything fitted jointly needs re-scanning when its
+  partner changes.** rho is itself a partial substitute for the draw axis and
+  wants to be weaker now (−0.03), but that is 0.00024 in sample and a second
+  change in the same place, so it is left alone.
+
+- **Published figures re-run.** 1X2 RPS 0.1999 → **0.1998**, log loss
+  0.9857 → **0.9846**, coverage of the base-rates-to-closing-line span 85% →
+  **86%**, O/U 2.5 log loss 0.6794 → 0.6793; every season improves or ties.
+  The reliability diagram is regenerated and the draw curve now sits on the
+  diagonal with the other two. Scored on the same walk-forward λ as before —
+  the sharpening is post-hoc on the trio and does not touch λ — so this
+  isolates the change. The λ themselves still predate `market_level_shift`;
+  the weekly `--full` refresh regenerates them. The lineup-pass replay figure
+  (0.1976) is from its own harness and was not re-run.
+
+- **The replicas call the engine's map instead of copying it.**
+  `sharpen_trio` is now importable and takes `(N, 3)`, and the five vectorized
+  backtests that each had their own `P ** GAM`
+  (`scripts/goals_level/score_level.py`, `scripts/espn_xg/score_xg_source.py`,
+  `scripts/squad_value/{lofo,lofo2,retune}.py`) plus the gamma-fitting tool
+  (`scripts/fit_calibration.py`) call it. A reimplementation drifting from what
+  we serve is the bug the September audit kept finding;
+  `score_level.verify()`'s assert against `deployed_markets_from_lambdas` would
+  have caught this one and now cannot go stale.
+
+### Note
+- The engine fit cache is keyed on a hash of `prediction_engine.py`, so the
+  next API start or daily refresh refits. The fits themselves are unchanged —
+  the sharpening is post-hoc — but the cache cannot know that.
+- `report_market_drift.py` **cannot see this class of problem**:
+  `calibration_drift()` opens with `ev[~ev.mercado_id.isin(PICK_ONE)]` and
+  `PICK_ONE = {"1X2", "ht_1x2", "ht_ft"}`, because a pick-one market logs one
+  selection rather than three probabilities. The 1X2's own per-outcome
+  calibration is unmonitored. The log has carried `p_home`/`p_draw`/`p_away`
+  since PR #25, so the fix is cheap; it is not in this release.
+
 ## v0.62.0 — The record names the model we price with (2026-10-06)
 
 ### Fixed
