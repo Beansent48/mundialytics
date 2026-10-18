@@ -48,6 +48,21 @@ from mundialytics.statistical_core.schemas import canonical_name
 #     PredictionEngine(**{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": w})
 # PredictionEngine copies xg_rate_kwargs internally, so sharing this dict is safe.
 #
+# sharpen_gamma_1x2 STAYS AT 1.3 (2026-10-19), and the reason is the whole point
+# of sharpen_contrast_only below. 1.3 came from a joint gamma/rho scan that picked
+# that PAIR at rho = -0.17; rho was smoothed to -0.06 on 2026-09-14 and gamma was
+# never re-scanned, so for the POWER form (p^gamma) the deployed pair had indeed
+# gone stale -- re-scanned at the current rho its LOSO optimum is 1.20, worth 1X2
+# log loss -0.00058 (5/6) and ECE 0.0131 -> 0.0085 (scripts/sharpening_draws/).
+# But the deployed form is no longer p^gamma. The CONTRAST form's own LOSO optimum
+# is 1.268 (1.246-1.287 across folds), so 1.20 belongs to a map we do not serve and
+# handing it over would repeat the very error above: change the form, re-scan the
+# parameter. 1.3 sits 5e-05 of mean log loss from 1.268 -- two folds on the count,
+# below the resolution of the measurement either way -- and fitting the exponent
+# per fold scores WORSE than fixing it, exactly as fitting the second axis did.
+# scripts/draw_deficit/README.md has the grid; both forms were measured twice, in
+# two independent harnesses, whose deltas agree to ~3e-05 (their absolute levels
+# differ by ~5e-04, so never mix absolutes between the two write-ups).
 # coherent_markets (2026-09-23): the sharpened 1X2 used to sit next to a raw
 # scoreline matrix -- 84% home win on the page, 75% summing its own grid. The
 # matrix is now reweighted so each outcome region carries the published 1X2, and
@@ -361,6 +376,14 @@ class PredictionEngine:
         # rho: a joint gamma/rho LOFO scan (all 6 folds picking gamma=1.3, rho=-0.17,
         # interior optimum, -0.00025 RPS) showed the matrix wants a stronger low-score
         # correction than the fit. None = legacy behavior (use ad_rho everywhere).
+        # That pair no longer holds: rho was smoothed to -0.06 (2026-09-14), which
+        # leaves gamma = 1.3 stale FOR THE POWER FORM (its optimum at this rho is
+        # 1.20) but not for the contrast form actually served, whose own optimum is
+        # 1.268. They were co-fitted once, so a change to either should re-scan the
+        # other -- and several scripts under
+        # scripts/ still pin the old pair (gamma 1.3, rho -0.17) inline instead of
+        # reading DEPLOYED_CLUB_ENGINE_KWARGS. Consistent as snapshots, no longer
+        # "the deployed config" whatever their variables are called.
         self.outcome_rho = float(outcome_rho) if outcome_rho is not None else None
         # Understat xG runs hot vs actual goals and the gap is DRIFTING (goals/xG
         # ratio ~0.99 in 2021 -> ~0.92 in 2025/26), so the xG-rate lambda over-states
