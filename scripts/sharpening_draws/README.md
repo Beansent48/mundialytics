@@ -161,9 +161,38 @@ Against `power` @ 1.20, contrast @ 1.28 is **−0.00012 RPS (5/6)** and
   contrast form,** which wants 1.28 — LOSO picks 1.28 in five folds of six.
   Once it stops draining the draw it can afford more sharpening. This is the
   gamma/rho lesson again: change the form, re-scan the parameter.
-* **The two commits are not additive.** Merging them naively gives contrast
-  @ 1.20, which is +0.00021 of log loss *worse* than contrast @ 1.3 and the
-  weakest of the three good arms. Take one or the other, not both.
+* **The two commits ARE additive, and the mean says otherwise than the folds.**
+  See the second correction below — this bullet first read "not additive" off
+  the mean, which is not how this repo decides.
+
+### Second correction: the folds and the mean disagree, and the folds decide
+
+The bullet above judged contrast @ 1.20 by its mean (+0.00021 of log loss worse
+than contrast @ 1.3) and called the merge of the two branches the weakest good
+arm. That is the wrong criterion, and the table this experiment had already
+printed says so:
+
+| comparison (vs `power` @ 1.20) | 1X2 log loss | folds | 1X2 RPS | folds |
+|---|---|---|---|---|
+| contrast @ 1.3 | **−0.00068** | 4/6 | −0.00012 | 5/6 |
+| contrast @ 1.20 | −0.00047 | **5/6** | −0.00002 | **5/6** |
+
+1.3 has the better aggregate and the worse record; 1.20 has the worse aggregate
+and the better record. **This project decides on fold counts, not means** — the
+5-of-6 bar is the whole standard — so contrast @ 1.20 is the pairing that
+clears it, on log loss, exact score, HT/FT and the RPS guard alike. Its one
+losing fold (2024/25) is +0.00003, flat rather than a reversal.
+
+That pairing is exactly what merging the two branches produces, so there is no
+third decision: take the `sharpen_contrast_only` flag and the 1.20 exponent
+together. `draw_deficit` re-derived these counts independently (−0.00066 at 4/6
+and −0.00011 at 5/6 against the figures here) and reports a strictly temporal
+expanding-window fit at 5 of 5, −0.00069.
+
+Also recorded, and deliberately not proposed: the contrast form at 1.25 beats
+both on every count (−0.00069 log loss, 6/6). It was read off the table that
+would justify it, so proposing it would be selecting a parameter on the test
+folds — the one thing this repo's validation discipline exists to prevent.
 
 Contrast @ 1.28 and contrast @ 1.3 are the same within noise (−0.000033 log
 loss, 4/6), so v0.63.0's 1.3 is already at that form's optimum and does not
