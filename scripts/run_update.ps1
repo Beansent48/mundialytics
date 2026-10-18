@@ -144,6 +144,25 @@ try {
     Write-Warning "lineup watcher not started: $($_.Exception.Message)"
 }
 
+# Commit the track record. Everything above refreshes files git ignores, bar
+# two: the prediction log and the drift report. Nothing committed them on its
+# own -- the "automated daily settlement" commits in the history were typed by
+# hand, and by 2026-10-18 the copy in git was 19 days behind the one on disk --
+# so the helper does it here. The drift report goes in every run (a few KB, and
+# its verdict moves every morning); the prediction log only when a new round
+# arrives, because it is 14 MB and a daily commit would pay that delta for a
+# handful of appended rows. It commits and stops -- nothing in this project
+# pushes to a remote unattended. Skipped after exit 1, which rolled the data
+# back and left nothing new to record.
+if ($code -eq 0 -or $code -eq 2) {
+    try {
+        & $python (Join-Path $root 'scripts\commit_track_record.py')
+        if ($LASTEXITCODE -ne 0) { Write-Warning "track record commit exited $LASTEXITCODE" }
+    } catch {
+        Write-Warning "track record not committed: $($_.Exception.Message)"
+    }
+}
+
 # Say it out loud when something failed. A failed step used to be visible only
 # to someone who opened last_run.json; a lost matchday of predictions cannot be
 # recovered later, so it has to reach a person the same day. A Windows toast
