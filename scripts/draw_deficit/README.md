@@ -1,8 +1,8 @@
 # The draw mass the 1X2 sharpening takes out of the grid (2026-10-18)
 
-Experiment scripts. **The engine is untouched**: nothing here is wired into
-production, and `DEPLOYED_CLUB_ENGINE_KWARGS` is unchanged. Run from the repo
-root.
+Experiment scripts. The candidate below **was deployed in v0.63.0** as
+`sharpen_contrast_only` (default False; the deployed config turns it on); every
+other form here stays research-only. Run from the repo root.
 
 ```
 python scripts/draw_deficit/score_trio_forms.py all      # ~6 min
@@ -245,9 +245,14 @@ short), fitting α (worse out of sample than fixing it at 1), `vector` (overfits
 on short windows), `decouple` in any form (dominated, and it costs the
 invariant), and touching ρ in the same change.
 
-**This is a recommendation, not a deployment.** Per the protect-the-baseline
-rule nothing here is wired in: `DEPLOYED_CLUB_ENGINE_KWARGS` is untouched and
-the forms live in this file.
+**DEPLOYED in v0.63.0** (2026-10-18), after this measurement, as
+`sharpen_contrast_only` in `DEPLOYED_CLUB_ENGINE_KWARGS`. The flag defaults to
+**False**, so everything scored before that date stays reproducible; the
+mechanism is `prediction_engine.sharpen_trio` and the tests are
+`tests/test_sharpen_contrast_only.py`. On the published walk-forward figures it
+moved 1X2 RPS 0.1999 → 0.1998, log loss 0.9857 → 0.9846 and coverage of the
+base-rates-to-closing-line span 85% → 86%. The other forms in this file stay
+research-only.
 
 ## What is worth keeping from this
 
