@@ -216,7 +216,9 @@ Transfermarkt ───────────── squad market value ──�
   also draining draw mass the model had got right, and since the matrix is
   reweighted onto the published 1X2 that deficit reached every goal market too.
   Splitting the two axes fixed it in 6 of 6 seasons on 1X2 log loss, exact
-  score, HT/FT and 1X2 RPS alike (`scripts/draw_deficit/README.md`). The matrix
+  score, HT/FT and 1X2 RPS alike — and 5 of 6 once the exponent itself is
+  re-scanned to the value the current ρ wants, which is about half of that
+  headline (`scripts/draw_deficit/README.md`). The matrix
   is reweighted so each outcome region carries exactly that 1X2, so no page can
   show a 1X2 its own scoreline grid contradicts. Scored out of sample before it was switched
   on: no market got worse, and exact score and HT/FT improved in 5 of 6 and 6

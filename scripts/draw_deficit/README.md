@@ -167,7 +167,9 @@ its log loss, 0.98688, beats both (0.98827 and 0.98754) and beats the best γ
 anywhere in the family (0.98754 at 1.20). It gives the draw back *while keeping
 the full contrast sharpening*, which is exactly what no single exponent can do:
 γ = 1.1 would have to give up most of the home/away correction to get the same
-draw mass. That is the difference between two knobs and one.
+draw mass. That is the difference between two knobs and one. **On the
+in-sample mean; by season it is 4 of 6 against the best γ at β = 1.3 and 5 of 6
+at β = 1.20 — see the correction below.**
 
 **Fitting α costs more than it buys.** `two_axis [loso]` fits α ∈ [0.870, 0.970]
 and β ∈ [1.250, 1.301] — tight, and bracketing the fixed point — yet scores
@@ -177,6 +179,57 @@ three parameters, is the clear warning: it has the best in-sample log loss of
 any family (0.98673) and under the strict expanding window it is **worse than
 the deployed chain** (+0.00044, 1 of 5 on RPS). Two parameters is where this
 family stops paying, and one of the two should not be fitted.
+
+### Correction: half of that headline was the stale γ, not the second axis
+
+**Everything above is scored against γ = 1.3, and γ = 1.3 is the thing this
+same archaeology showed to be stale.** A parallel session reproduced this
+experiment independently, re-scanned γ at the ρ actually served and deployed
+**γ = 1.20** on master (`52d94c7`), crediting `scripts/bivariate_goals` for the
+deficit. Their harness matches this one to the fourth decimal, their
+parameterisation is bit-identical to `f_two_axis` (checked: max difference
+0.0e+00), and they were right to ask for a re-measurement. So, against
+power(1.20) instead of power(1.3) — `score_trio_forms.py rebase`:
+
+| arm | 1X2 RPS | 1X2 ll | O/U 2.5 | BTTS | exact score | HT/FT | O/E draw |
+|---|---|---|---|---|---|---|---|
+| power 1.30 (the old baseline) | +0.00004 (2/6) | +0.00062 (1/6) | +0.00003 (3/6) | +0.00002 (2/6) | +0.00062 (1/6) | +0.00062 (1/6) | 1.0957 |
+| **two_axis (1.0, 1.20)** | **−0.00002 (5/6)** | **−0.00048 (5/6)** | +0.00000 (3/6) | −0.00002 (4/6) | **−0.00048 (5/6)** | **−0.00048 (5/6)** | **1.0160** |
+| two_axis (1.0, 1.25) | −0.00010 (6/6) | −0.00069 (6/6) | −0.00002 (3/6) | −0.00003 (5/6) | −0.00069 (6/6) | −0.00069 (6/6) | 1.0224 |
+| two_axis (1.0, 1.30) | −0.00011 (5/6) | −0.00066 (4/6) | −0.00003 (3/6) | −0.00004 (4/6) | −0.00066 (4/6) | −0.00066 (4/6) | 1.0291 |
+| two_axis [expanding] | −0.00005 (5/5) | −0.00069 (5/5) | −0.00006 (3/5) | +0.00004 (3/5) | −0.00069 (5/5) | −0.00069 (5/5) | 1.0086 |
+| two_axis [loso] | −0.00010 (5/6) | −0.00058 (4/6) | −0.00003 (3/6) | −0.00004 (5/6) | −0.00058 (4/6) | −0.00058 (4/6) | 1.0055 |
+
+Baseline power(1.20): 1X2 RPS 0.20041, 1X2 ll 0.98754, O/U 2.5 0.67893,
+BTTS 0.68438, exact score 2.90816, HT/FT 1.87685.
+
+What this changes, and what it does not:
+
+* **The −0.00128 headline double-counts the γ re-scan.** About 46% of it is
+  γ 1.3 → 1.20, which master now does on its own. The second axis is worth
+  roughly **−0.0005 on top of it**, not −0.0013.
+* **The 4-of-6 is about the exponent, not the form.** Pairing the contrast-only
+  map with the *stale* 1.3 is 4 of 6 on log loss. Pairing it with the exponent
+  that is actually deployed — which is what the rule "reuse the deployed
+  constant, change only the axis it acts on" has always meant — gives
+  **two_axis (1.0, 1.20), which is 5 of 6 on log loss, exact score, HT/FT and
+  the 1X2 RPS guard alike**, with BTTS 4/6 and over/under flat. The single fold
+  it loses, 2024/25, is +0.00003: flat, not a reversal. And a strictly temporal
+  fit that picks the exponent itself (`expanding`, nothing from the test fold)
+  is 5 of 5 at −0.00069.
+* **That pairing is also what merging the two branches produces**, so the end
+  state needs no third decision: take master's 1.20, keep `sharpen_contrast_only`.
+* **The mean and the fold count disagree about β.** two_axis (1.0, 1.30) has the
+  better aggregate (−0.00066 against −0.00048) and the worse fold record (4/6
+  against 5/6). This repo decides on folds, so 1.20 is the pairing to run. β =
+  1.25 is better than both on every count, and is not proposed: it was read off
+  this table.
+* **The claim "beats the best γ anywhere in the family" needs its fold count.**
+  It is true on the in-sample mean (0.98688 against 0.98754) and it is 4 of 6
+  by season at β = 1.3, 5 of 6 at β = 1.20. The original write-up gave the mean
+  and not the folds.
+* Nothing changes in the diagnosis, the identity, the `decouple` result or the
+  negative arms: those never depended on the baseline γ.
 
 ### `decouple` is strictly dominated
 
@@ -229,12 +282,18 @@ on its own, through the reweighting.
 ## Recommendation
 
 **Deploy the candidate: apply `sharpen_gamma_1x2` to the home-vs-away contrast
-only, not to the draw axis.** The numbers that carry it:
+only, not to the draw axis — paired with the re-scanned γ = 1.20, not the stale
+1.3.** The numbers that carry it:
 
-* 6 of 6 folds on 1X2 log loss, exact score and HT/FT (−0.00128 each) and 6 of 6
-  on the 1X2 RPS guard (−0.00015), out of sample, with nothing fitted;
+* against the γ that was deployed when this was measured: 6 of 6 folds on 1X2
+  log loss, exact score and HT/FT (−0.00128 each) and 6 of 6 on the 1X2 RPS
+  guard (−0.00015), out of sample, with nothing fitted;
+* against γ re-scanned to 1.20, which is the honest baseline and what master now
+  runs: **−0.00048 on log loss, exact score and HT/FT and −0.00002 on RPS, 5 of
+  6 folds each** (the correction section has the full table). Roughly 46% of the
+  original headline was the γ re-scan, which master does on its own;
 * the draw deficit that motivated it goes from z = +5.4 and O/E 1.096 to
-  O/E 1.029;
+  O/E 1.016 with the two changes together;
 * the coherence invariant holds exactly, so no page shows a 1X2 its own grid
   contradicts;
 * over/under and BTTS are flat (−0.00006 each), which the identity says is all
@@ -246,7 +305,10 @@ on short windows), `decouple` in any form (dominated, and it costs the
 invariant), and touching ρ in the same change.
 
 **DEPLOYED in v0.63.0** (2026-10-18), after this measurement, as
-`sharpen_contrast_only` in `DEPLOYED_CLUB_ENGINE_KWARGS`. The flag defaults to
+`sharpen_contrast_only` in `DEPLOYED_CLUB_ENGINE_KWARGS`. It is deployed on
+this branch beside γ = 1.3; master has since re-scanned γ to 1.20 (`52d94c7`),
+and the two belong together — merging takes master's 1.20 and keeps this flag,
+which is the 5-of-6 pairing in the correction section. The flag defaults to
 **False**, so everything scored before that date stays reproducible; the
 mechanism is `prediction_engine.sharpen_trio` and the tests are
 `tests/test_sharpen_contrast_only.py`. On the published walk-forward figures it

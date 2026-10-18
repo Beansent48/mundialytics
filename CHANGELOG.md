@@ -26,6 +26,17 @@
   (0.2468 against 0.2489, with 0.2529 happening), where it was 1.7 points below
   it. `scripts/draw_deficit/README.md`, `tests/test_sharpen_contrast_only.py`.
 
+  **Scored against γ = 1.3, which this same archaeology showed to be stale.**
+  Master has since re-scanned γ to **1.20** at the ρ actually served (`52d94c7`),
+  and roughly **46% of the −0.00128 is that re-scan**, not the second axis.
+  Re-based on power(1.20), the contrast-only map paired with the same exponent —
+  `two_axis (1.0, 1.20)`, which is exactly what merging the two branches gives —
+  is **−0.00048 on 1X2 log loss, exact score and HT/FT and −0.00002 on RPS, 5 of
+  6 folds each**, BTTS 4/6, over/under flat, draw O/E 1.0593 → 1.0160. Paired
+  with the stale 1.3 instead it is 4 of 6 on log loss: the fold count is about
+  the exponent, not the form. Raised and independently reproduced by a parallel
+  session; re-derived here with `score_trio_forms.py rebase`.
+
   Why it was stale rather than wrong: `prediction_engine.py` records that
   gamma = 1.3 came from a **joint gamma/rho scan that picked it together with
   rho = −0.17**. rho was later smoothed to −0.06 and gamma was never
