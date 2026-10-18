@@ -239,6 +239,35 @@ What this changes, and what it does not:
   the draw calibration are solid, the fold count against a re-scanned power
   baseline is knife-edge, and "6 of 6" is a stronger claim than this form can
   carry against a corrected baseline.**
+* **Is β worth FITTING, then?** This is the question that decides between the
+  deployed 1.30 and the LOSO value 1.268, and it is the one already settled for
+  α (fitting α cost more than fixing it at 1). Same test, α pinned to 1:
+
+  | arm | vs power(1.20) | vs power(1.30) |
+  |---|---|---|
+  | contrast @1.30 (deployed here) | −0.00066 (4/6), RPS −0.00011 (5/6) | −0.00128 (6/6), RPS −0.00015 (6/6) |
+  | contrast @1.268 (the all-six fit) | **−0.00071 (6/6)**, RPS −0.00011 (6/6) | **−0.00133 (6/6)**, RPS −0.00015 (5/6) |
+  | contrast [β fitted, expanding] | −0.00068 (5/5), RPS −0.00005 (5/5) | −0.00115 (5/5), RPS −0.00007 (3/5) |
+  | contrast [β fitted, loso] | −0.00059 (4/6), RPS −0.00009 (5/6) | −0.00121 (6/6), RPS −0.00012 (5/6) |
+
+  **The honest temporal fit is worse than either fixed value.** Fitted on past
+  seasons only it picks 1.182, 1.206, 1.206, 1.246, 1.264 — systematically short,
+  because early windows have too little data and shrink toward the power form's
+  optimum — and it lands at −0.00068/−0.00115 with a notably worse RPS record
+  (3 of 5 against power(1.30)). The LOSO version is worse than the fixed 1.30 on
+  the mean. So "re-scan β" is not supported as a deployable rule, for the same
+  reason "fit α" was not: the estimation noise costs more than the bias.
+* **And 1.268 is an all-six-seasons fit.** It is the best fixed value in the
+  table and it was read off every season it is then scored against — the same
+  category as β = 1.25 below, which is declined for exactly that reason. The
+  difference between it and 1.30 is 5e-05 of mean log loss and two folds; which
+  of the two looks better also flips with the baseline (1.268 wins the folds
+  against power(1.20), 1.30 wins the RPS folds against power(1.30)).
+* **So the exponent is genuinely second-order and should not hold up the form.**
+  Against power(1.30), the baseline the flag actually displaces, every β in
+  1.18–1.37 clears the bar at −0.00085 to −0.00133. The decision in front of the
+  user is the FORM. 1.30 needs no new constant; 1.268 is defensible if someone
+  wants the fitted value and accepts that it was fitted on all six seasons.
 * β = 1.25–1.27 is better than 1.30 on both counts and is **not proposed here**:
   picking it off this grid is the cherry-pick the grid exists to expose. The
   LOSO fit lands at 1.268 and is the defensible value if anyone re-scans.
