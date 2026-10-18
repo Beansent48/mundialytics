@@ -60,7 +60,18 @@ FOUND = ROOT / "data/processed/foundation_big5_multi_season.csv"
 OUT = ROOT / "scripts/sharpening_draws"
 MAXG = 10
 EPS = 1e-12
-GAMMA = float(K["sharpen_gamma_1x2"])
+# THE LAMBDA CACHE BELOW IS A FROZEN ARTIFACT. Its stored ph/pd/pa were produced
+# with this exact triple and the POWER map -- verified: that combination
+# reproduces the stored trio to 3.3e-16, while gamma 1.20 is off by 2.7e-02, the
+# contrast map by 2.6e-02 and rho -0.03 by 1.1e-02. Pinned literally and NOT read
+# from K, so a later change to the deployed config cannot silently reinterpret
+# the file: `precompute` would build its raw matrices at the new rho while the
+# cache's trio came from the old one, shifting every arm at once and failing
+# `harness_checks` with a message that points at the harness instead of the
+# cache. The gamma 1.3 -> 1.20 question of 2026-10-18 would have done exactly
+# that, and 330f54a notes rho wants to move too.
+CACHE_GAMMA, CACHE_RHO, CACHE_TEMPER = 1.3, -0.06, 1.05
+GAMMA = CACHE_GAMMA  # what the cache's published trio was sharpened with
 LINES = (1.5, 2.5, 3.5)
 # the markets the engine actually publishes off the matrix (prediction_engine.py
 # L134-139). even/odd is NOT one of them; it is carried only as a diagnostic.
@@ -151,8 +162,8 @@ def precompute(wf: pd.DataFrame, htm: HalfTimeModel) -> dict:
 
     for t, r in enumerate(wf.itertuples(index=False)):
         m = scoreline_distribution(r.lh, r.la, max_goals=MAXG, normalize=True,
-                                   dixon_coles_rho=K["outcome_rho"],
-                                   temper=K["goal_temper"]).matrix.to_numpy(float)
+                                   dixon_coles_rho=CACHE_RHO,
+                                   temper=CACHE_TEMPER).matrix.to_numpy(float)
         for k in range(3):
             sel = region == k
             raw[t, k] = m[sel].sum()
@@ -219,9 +230,8 @@ def harness_checks(wf: pd.DataFrame, m: dict) -> None:
         # below stops matching, it is because the cache was regenerated under the
         # deployed (contrast) map; regenerate the arms, do not relax the check.
         probs, _ = markets_from_lambdas(
-            r.lh, r.la, rho=K["outcome_rho"], temper=K["goal_temper"],
-            sharpen_gamma=GAMMA, sharpen_contrast_only=False,
-            coherent=bool(K["coherent_markets"]))
+            r.lh, r.la, rho=CACHE_RHO, temper=CACHE_TEMPER,
+            sharpen_gamma=CACHE_GAMMA, sharpen_contrast_only=False, coherent=True)
         worst_trio = max(worst_trio, abs(probs["p_home_win"] - r.ph),
                          abs(probs["p_draw"] - r.pd), abs(probs["p_away_win"] - r.pa))
         ratio = pub[t] / m["raw"][t]
@@ -230,6 +240,27 @@ def harness_checks(wf: pd.DataFrame, m: dict) -> None:
             worst_mkt = max(worst_mkt, abs((m["mass"][key][t] * ratio).sum() - pk))
     print(f"harness: published trio reproduced to {worst_trio:.2e}; "
           f"region-mass markets match the engine to {worst_mkt:.2e}")
+    # Name the right cause. A mismatch here is almost never harness drift: it is
+    # the cache having been regenerated under a different config from the triple
+    # pinned at the top of this file.
+    if worst_trio > 1e-9:
+        live = (K.get("sharpen_gamma_1x2"), K.get("outcome_rho"),
+                K.get("goal_temper"), K.get("sharpen_contrast_only", False))
+        raise SystemExit(
+            chr(10).join([
+                "",
+                "The lambda cache no longer matches the constants this harness "
+                "is pinned to.",
+                f"  pinned here : gamma {CACHE_GAMMA}, rho {CACHE_RHO}, "
+                f"temper {CACHE_TEMPER}, power map",
+                f"  deployed now: gamma {live[0]}, rho {live[1]}, "
+                f"temper {live[2]}, contrast_only {live[3]}",
+                f"  worst trio disagreement: {worst_trio:.2e}",
+                f"{WF.name} was regenerated under a different config. Re-pin "
+                "the triple at the top of this file to whatever produced it and "
+                "re-run the arms. Do NOT relax this check, and do not read "
+                "those constants from K -- the cache is frozen and K is not.",
+            ]))
 
     # the structural identity: exact score == 1X2 + a term no trio can touch
     idx, reg = np.arange(m["n"]), m["obs_region"]
