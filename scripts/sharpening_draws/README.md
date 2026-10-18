@@ -137,12 +137,46 @@ Two further corrections to this file's reasoning, both from the same source:
   was never re-scanned. Scanned here at the current `rho`, the log-loss optimum
   is **1.20**, which matches `draw_deficit` independently.
 
-And one caveat on that supersession, measured here: against `power` re-scanned
-to its own optimum (1.20) rather than against the stale 1.3, the two-axis form
-is +0.00068 of log loss ahead in only **4 of 6** folds (RPS −0.00012, 5/6). So
-roughly half the headline 0.00126 is the stale `gamma`, recoverable by
-re-scanning one number at 5/6, and the structural half sits just below this
-project's own 5-of-6 bar. Worth separating before either is deployed.
+## Correction (same day): the contrast form wins, and gamma 1.20 is not its value
+
+An earlier version of this section said the two-axis form sat "just below the
+5-of-6 bar" once measured against `power` re-scanned to 1.20. That was measured
+with the forms paired to different exponents, and it was the wrong conclusion.
+Re-run with `draw_deficit`'s own `sharpen_trio` loaded off its branch — which
+is **identical to the `two_axis` here to 0.00e+00**, so the two experiments were
+always measuring one form:
+
+| arm | 1X2 RPS | 1X2 log loss | draw O/E |
+|---|---|---|---|
+| `power` @ 1.3 (served until 2026-10-18) | 0.20033 | 0.98769 | 1.0955 |
+| `power` @ 1.20 (this experiment's change) | 0.20030 | 0.98711 | 1.0591 |
+| contrast @ 1.3 (`draw_deficit` v0.63.0) | **0.20019** | 0.98643 | 1.0289 |
+| contrast @ 1.28 (the contrast form's own LOSO optimum) | **0.20019** | **0.98639** | **1.0262** |
+| contrast @ 1.20 (what merging the two branches gives) | 0.20029 | 0.98664 | 1.0158 |
+
+Against `power` @ 1.20, contrast @ 1.28 is **−0.00012 RPS (5/6)** and
+**−0.00072 log loss (5/6)**, nothing worse anywhere. Two things follow:
+
+* **1.20 is the right exponent for the `power` form and the wrong one for the
+  contrast form,** which wants 1.28 — LOSO picks 1.28 in five folds of six.
+  Once it stops draining the draw it can afford more sharpening. This is the
+  gamma/rho lesson again: change the form, re-scan the parameter.
+* **The two commits are not additive.** Merging them naively gives contrast
+  @ 1.20, which is +0.00021 of log loss *worse* than contrast @ 1.3 and the
+  weakest of the three good arms. Take one or the other, not both.
+
+Contrast @ 1.28 and contrast @ 1.3 are the same within noise (−0.000033 log
+loss, 4/6), so v0.63.0's 1.3 is already at that form's optimum and does not
+need re-scanning. One honest limit on all of this: the log-loss fold count
+flips between 4/6 and 5/6 on a 3e-05 change in gamma, so it is knife-edge and
+"5 of 6" should not be read as solid there. What is robust is the mean
+(~0.0007 of log loss), the RPS count (5/6 throughout), and the monotone draw
+calibration across the four arms.
+
+So the `power` @ 1.20 change this file documents is superseded rather than
+wrong: it is the best value for the form that was deployed, and the contrast
+form is a better form than that. Both the experiment and the comparison above
+were run against `draw_deficit`'s code, not a description of it.
 
 ## Caveats
 
