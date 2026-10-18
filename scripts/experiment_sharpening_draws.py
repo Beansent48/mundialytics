@@ -211,9 +211,17 @@ def harness_checks(wf: pd.DataFrame, m: dict) -> None:
     pub = wf[["ph", "pd", "pa"]].to_numpy(float)
     worst_trio = worst_mkt = 0.0
     for t, r in enumerate(wf.head(300).itertuples(index=False)):
+        # sharpen_contrast_only=False ON PURPOSE: this harness measures the POWER
+        # form against alternatives, and `power` is the arm it has to reproduce.
+        # Since v0.63.0 that is no longer what the engine serves, so this is a
+        # deliberate snapshot, not a read of the deployed config -- which is why
+        # it is spelled out instead of left to the default. If the cached trio
+        # below stops matching, it is because the cache was regenerated under the
+        # deployed (contrast) map; regenerate the arms, do not relax the check.
         probs, _ = markets_from_lambdas(
             r.lh, r.la, rho=K["outcome_rho"], temper=K["goal_temper"],
-            sharpen_gamma=GAMMA, coherent=bool(K["coherent_markets"]))
+            sharpen_gamma=GAMMA, sharpen_contrast_only=False,
+            coherent=bool(K["coherent_markets"]))
         worst_trio = max(worst_trio, abs(probs["p_home_win"] - r.ph),
                          abs(probs["p_draw"] - r.pd), abs(probs["p_away_win"] - r.pa))
         ratio = pub[t] / m["raw"][t]

@@ -44,8 +44,12 @@ def test_goal_markets_are_read_from_that_matrix(lh, la):
 
 def test_coherence_does_not_move_the_1x2():
     k = DEPLOYED_CLUB_ENGINE_KWARGS
+    # every serving constant read off K, including the trio map: a
+    # reconstruction that takes a default for one of them stops testing what we
+    # serve the moment that one changes (it happened in v0.63.0).
     args = dict(rho=k["outcome_rho"], temper=k["goal_temper"],
-                sharpen_gamma=k["sharpen_gamma_1x2"])
+                sharpen_gamma=k["sharpen_gamma_1x2"],
+                sharpen_contrast_only=k.get("sharpen_contrast_only", False))
     raw, _ = markets_from_lambdas(2.4, 0.7, coherent=False, **args)
     coh, _ = markets_from_lambdas(2.4, 0.7, coherent=True, **args)
     for key in ("p_home_win", "p_draw", "p_away_win"):
