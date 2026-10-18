@@ -488,9 +488,11 @@ def cmd_corr(df: pd.DataFrame, data_root: Path) -> None:
 
     print("\n  what the DEPLOYED chain already implies (sampled 1 in 13 matches):")
     idx = np.arange(0, len(df), 13)
-    for label, kw in (("published matrix (rho -0.06, temper 1.05, coherent)",
+    for label, kw in (("power-map matrix (rho -0.06, temper 1.05, coherent) -- what was "
+                       "published when this ran; v0.63.0 serves the contrast map",
                        dict(rho=K["outcome_rho"], temper=K["goal_temper"],
-                            sharpen_gamma=K["sharpen_gamma_1x2"], coherent=True)),
+                            sharpen_gamma=K["sharpen_gamma_1x2"],
+                            sharpen_contrast_only=False, coherent=True)),
                       ("Dixon-Coles + temper only, no 1X2 sharpening",
                        dict(rho=K["outcome_rho"], temper=K["goal_temper"],
                             sharpen_gamma=1.0, coherent=False)),
@@ -683,7 +685,16 @@ def deployed_scores(df: pd.DataFrame) -> dict[str, np.ndarray]:
 
 
 def verify_against_engine(df: pd.DataFrame, n: int = 200) -> tuple[float, float]:
-    """The vectorised baseline must equal the engine's own output."""
+    """The vectorised baseline must equal the engine's POWER-map output.
+
+    `sharpen_contrast_only=False` is pinned on purpose below. This experiment's
+    baseline is the chain as it was served while it ran -- Dixon-Coles plus
+    `p^gamma` -- and v0.63.0 has since moved the engine to the contrast map, so
+    reading the flag off K here would silently re-point the baseline and change
+    what every delta in this file means. A deliberate snapshot, spelled out
+    rather than left to a default, because the default is what let the same hole
+    open in two other harnesses.
+    """
     rng = np.random.default_rng(7)
     idx = rng.choice(len(df), size=min(n, len(df)), replace=False)
     sub = df.iloc[idx]
@@ -694,7 +705,8 @@ def verify_against_engine(df: pd.DataFrame, n: int = 200) -> tuple[float, float]
     err_m = 0.0
     for k, (h, a) in enumerate(zip(lh, la)):
         _, dist = markets_from_lambdas(h, a, rho=K["outcome_rho"], temper=K["goal_temper"],
-                                       sharpen_gamma=K["sharpen_gamma_1x2"], coherent=True)
+                                       sharpen_gamma=K["sharpen_gamma_1x2"],
+                                       sharpen_contrast_only=False, coherent=True)
         err_m = max(err_m, float(np.abs(mine[k] - dist.matrix.to_numpy()).max()))
     htm = HT.HalfTimeModel()
     mine_p = htft_paths(lh, la, "independent", 0.0, sub[["ph", "pd", "pa"]].to_numpy(float))
