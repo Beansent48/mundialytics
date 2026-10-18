@@ -249,6 +249,18 @@ Recorded because negative results are the expensive part of the project:
   without handing over part of the model's own strength gap: −0.00004 at best,
   2 of 6 seasons. The engine already holds what a results-based rating knows
   (`scripts/elo_blend/`).
+- **Modelling the goals correlation properly.** A Karlis-Ntzoufras bivariate
+  Poisson and Frank and Gaussian copulas, against the Dixon-Coles patch, on the
+  markets that read the scoreline matrix. The dependence is not there to model:
+  the observed −0.053 correlation between home and away goals is almost all
+  *mismatch* (strong sides face weak ones, corr(λ_h, λ_a) = −0.57), and
+  conditional on the λ actually served the covariance is +0.0138 at t = 1.10,
+  negative in two of six seasons, while the deployed matrix already implies
+  +0.0152. Out of sample no market clears 5 of 6 folds in any arm, BTTS is
+  worse in 5 of 6 in every arm, and no family prices the 1X2 better than the
+  patch in **zero** of six folds. Fitted on the same data with the same single
+  parameter, Dixon-Coles takes 2–5× the exact-score likelihood gain of any of
+  them. `scripts/bivariate_goals/README.md`.
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
 - **Shrinking per-competition parameters.** `AttackDefenseModel` fits μ and home
@@ -276,8 +288,9 @@ Recorded because negative results are the expensive part of the project:
 ## Known limitations
 
 - Goals are modelled as **independent** Poisson with the Dixon-Coles correction
-  applied to the low-score cells only. That is a patch, not a correlation model;
-  a true bivariate Poisson or a copula would be the next step.
+  applied to the low-score cells only. That is a patch, not a correlation model
+  — but it is no longer an open item: a bivariate Poisson and two copulas were
+  measured against it and none of them pays (see What didn't work).
 - **Little injury news before the lineups.** Until the squads are announced the
   model only knows who missed the previous match; a player injured in training
   this week, or back from injury, is invisible until the lineup pass.
@@ -510,7 +523,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  363 tests green on a clean checkout; 109 more
+tests/                  420 tests green on a clean checkout; 109 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
