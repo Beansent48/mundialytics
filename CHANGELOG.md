@@ -29,13 +29,18 @@
   **Scored against γ = 1.3, which this same archaeology showed to be stale.**
   Master has since re-scanned γ to **1.20** at the ρ actually served (`52d94c7`),
   and roughly **46% of the −0.00128 is that re-scan**, not the second axis.
-  Re-based on power(1.20), the contrast-only map paired with the same exponent —
-  `two_axis (1.0, 1.20)`, which is exactly what merging the two branches gives —
-  is **−0.00048 on 1X2 log loss, exact score and HT/FT and −0.00002 on RPS, 5 of
-  6 folds each**, BTTS 4/6, over/under flat, draw O/E 1.0593 → 1.0160. Paired
-  with the stale 1.3 instead it is 4 of 6 on log loss: the fold count is about
-  the exponent, not the form. Raised and independently reproduced by a parallel
-  session; re-derived here with `score_trio_forms.py rebase`.
+  Re-based on power(1.20), this map is **−0.00066 on 1X2 log loss, exact score
+  and HT/FT (4 of 6) and −0.00011 on RPS (5 of 6)**, rising to −0.00071 at its
+  own optimum. **The two commits are NOT additive**: 1.20 is the optimum of the
+  *power* form, while this form's own LOSO optimum is **1.268** (1.246–1.287
+  across folds), so pairing it with 1.20 gives −0.00048 — the weakest of the
+  three configurations — and γ = 1.3 is already within 5e-05 of what it wants.
+  Change the form, re-scan the parameter: the γ/ρ lesson again. Swept 1.18–1.37
+  the mean gain holds everywhere (−0.00023 to −0.00071) but the fold count moves
+  5/6 → 6/6 → 5/6 → 4/6 → 3/6, so 3e-05 of log loss flips two folds; against
+  power(1.30), the baseline this displaced, it is 5/6 or 6/6 across the whole
+  range. Raised and independently reproduced by a parallel session, which then
+  reversed its own verdict; re-derived here with `score_trio_forms.py rebase`.
 
   Why it was stale rather than wrong: `prediction_engine.py` records that
   gamma = 1.3 came from a **joint gamma/rho scan that picked it together with

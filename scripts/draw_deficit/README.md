@@ -208,22 +208,40 @@ What this changes, and what it does not:
 * **The −0.00128 headline double-counts the γ re-scan.** About 46% of it is
   γ 1.3 → 1.20, which master now does on its own. The second axis is worth
   roughly **−0.0005 on top of it**, not −0.0013.
-* **The 4-of-6 is about the exponent, not the form.** Pairing the contrast-only
-  map with the *stale* 1.3 is 4 of 6 on log loss. Pairing it with the exponent
-  that is actually deployed — which is what the rule "reuse the deployed
-  constant, change only the axis it acts on" has always meant — gives
-  **two_axis (1.0, 1.20), which is 5 of 6 on log loss, exact score, HT/FT and
-  the 1X2 RPS guard alike**, with BTTS 4/6 and over/under flat. The single fold
-  it loses, 2024/25, is +0.00003: flat, not a reversal. And a strictly temporal
-  fit that picks the exponent itself (`expanding`, nothing from the test fold)
-  is 5 of 5 at −0.00069.
-* **That pairing is also what merging the two branches produces**, so the end
-  state needs no third decision: take master's 1.20, keep `sharpen_contrast_only`.
-* **The mean and the fold count disagree about β.** two_axis (1.0, 1.30) has the
-  better aggregate (−0.00066 against −0.00048) and the worse fold record (4/6
-  against 5/6). This repo decides on folds, so 1.20 is the pairing to run. β =
-  1.25 is better than both on every count, and is not proposed: it was read off
-  this table.
+* **The 4-of-6 is about the exponent, not the form** — but the fix is NOT to
+  pair the contrast map with master's 1.20. **The two forms want different
+  exponents**, fitted on 1X2 log loss on past seasons only:
+
+  | window | power γ* | contrast β* |
+  |---|---|---|
+  | LOSO, six folds | 1.190 – 1.215 | **1.246 – 1.287** |
+  | expanding, five folds | 1.148 – 1.199 | 1.182 – 1.264 |
+  | all six | 1.2032 | **1.2682** |
+
+  1.20 is the optimum **of the power form**. Handing it to the contrast form
+  repeats exactly the mistake this whole investigation uncovered — γ = 1.3 was
+  stale because it belonged to ρ = −0.17. **Change the form, re-scan the
+  parameter.**
+* **So merging master's γ into this branch would make it worse, not better.**
+  `two_axis (1.0, 1.20)` is −0.00048 against power(1.20) where
+  `two_axis (1.0, 1.30)` is −0.00066 and the form's own optimum
+  `two_axis (1.0, 1.27)` is −0.00071: the naive merge is the weakest of the
+  three. The deployed 1.3 is within 5e-05 of this form's own LOSO optimum, i.e.
+  already right for it. Raised by the parallel session, which reversed its own
+  verdict on seeing it.
+* **What is robust, and what is not.** Swept 1.18 → 1.37 against power(1.20),
+  the contrast form wins on the mean *everywhere*, −0.00023 to −0.00071, with a
+  flat optimum around 1.26. The **fold count is the fragile part**: 5/6 at
+  1.18–1.20, 6/6 at 1.21–1.26, 5/6 at 1.27–1.28, 4/6 at 1.29–1.34, 3/6 above —
+  so 3e-05 of mean log loss moves two folds. Against power(1.30), the baseline
+  this actually displaced, it is 5/6 or 6/6 across that entire range and the
+  mean gain is −0.00085 to −0.00133. The honest summary is: **the mean gain and
+  the draw calibration are solid, the fold count against a re-scanned power
+  baseline is knife-edge, and "6 of 6" is a stronger claim than this form can
+  carry against a corrected baseline.**
+* β = 1.25–1.27 is better than 1.30 on both counts and is **not proposed here**:
+  picking it off this grid is the cherry-pick the grid exists to expose. The
+  LOSO fit lands at 1.268 and is the defensible value if anyone re-scans.
 * **The claim "beats the best γ anywhere in the family" needs its fold count.**
   It is true on the in-sample mean (0.98688 against 0.98754) and it is 4 of 6
   by season at β = 1.3, 5 of 6 at β = 1.20. The original write-up gave the mean
@@ -282,16 +300,19 @@ on its own, through the reweighting.
 ## Recommendation
 
 **Deploy the candidate: apply `sharpen_gamma_1x2` to the home-vs-away contrast
-only, not to the draw axis — paired with the re-scanned γ = 1.20, not the stale
-1.3.** The numbers that carry it:
+only, not to the draw axis — keeping the exponent at 1.3, which is within
+5e-05 of this form's own LOSO optimum of 1.268. Do NOT pair it with the power
+form's 1.20.** The numbers that carry it:
 
 * against the γ that was deployed when this was measured: 6 of 6 folds on 1X2
   log loss, exact score and HT/FT (−0.00128 each) and 6 of 6 on the 1X2 RPS
   guard (−0.00015), out of sample, with nothing fitted;
-* against γ re-scanned to 1.20, which is the honest baseline and what master now
-  runs: **−0.00048 on log loss, exact score and HT/FT and −0.00002 on RPS, 5 of
-  6 folds each** (the correction section has the full table). Roughly 46% of the
-  original headline was the γ re-scan, which master does on its own;
+* against power(1.20), the honest baseline and what master now runs:
+  **−0.00066 on log loss, exact score and HT/FT (4 of 6) and −0.00011 on RPS
+  (5 of 6)**, rising to −0.00071 at this form's own optimum of 1.27. Roughly
+  46% of the original headline was the γ re-scan, which master does on its own;
+  the structural half is worth about −0.0007 on top of it, with the fold count
+  knife-edge in β (see the correction section);
 * the draw deficit that motivated it goes from z = +5.4 and O/E 1.096 to
   O/E 1.016 with the two changes together;
 * the coherence invariant holds exactly, so no page shows a 1X2 its own grid
@@ -306,9 +327,11 @@ invariant), and touching ρ in the same change.
 
 **DEPLOYED in v0.63.0** (2026-10-18), after this measurement, as
 `sharpen_contrast_only` in `DEPLOYED_CLUB_ENGINE_KWARGS`. It is deployed on
-this branch beside γ = 1.3; master has since re-scanned γ to 1.20 (`52d94c7`),
-and the two belong together — merging takes master's 1.20 and keeps this flag,
-which is the 5-of-6 pairing in the correction section. The flag defaults to
+this branch beside γ = 1.3; master has since re-scanned γ to **1.20** for the
+power form (`52d94c7`, `9021b0b`). **The two commits are not additive**: 1.20
+is the power form's optimum and this form's is 1.268, so merging them is the
+weakest of the three configurations. If this branch lands, the γ commit should
+be dropped rather than merged. The flag defaults to
 **False**, so everything scored before that date stays reproducible; the
 mechanism is `prediction_engine.sharpen_trio` and the tests are
 `tests/test_sharpen_contrast_only.py`. On the published walk-forward figures it
