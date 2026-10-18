@@ -48,6 +48,18 @@ from mundialytics.statistical_core.schemas import canonical_name
 #     PredictionEngine(**{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": w})
 # PredictionEngine copies xg_rate_kwargs internally, so sharing this dict is safe.
 #
+# sharpen_gamma_1x2 (2026-10-18): back to 1.20, the value it was LOFO-validated
+# at on its own. It had been 1.3 since a joint gamma/rho scan picked that pair at
+# rho = -0.17; rho was smoothed to -0.06 on 2026-09-14 and gamma was never
+# re-scanned, so the deployed pair was never jointly validated. Re-scanned at the
+# current rho over the same six walk-forward seasons: the LOSO optimum is 1.20 in
+# four folds and 1.22 in two, 1X2 log loss -0.00058 (5/6) and ECE 0.0131 -> 0.0085
+# against 1.3, with the draw's O/E 1.096 -> 1.059 -- it was short in 6 of 6 at 1.3.
+# RPS improves too but only -0.00003 in 4 of 6: RPS is nearly blind to this
+# parameter, because the draw is the middle category of a cumulative metric, which
+# is why a drop this stale survived. Nothing gets worse: BTTS -0.00003 (4/6),
+# O/U 2.5 -0.00003 (3/6). See scripts/sharpening_draws/README.md, and
+# scripts/draw_deficit/ for the two-axis form that is NOT deployed.
 # coherent_markets (2026-09-23): the sharpened 1X2 used to sit next to a raw
 # scoreline matrix -- 84% home win on the page, 75% summing its own grid. The
 # matrix is now reweighted so each outcome region carries the published 1X2, and
@@ -58,7 +70,7 @@ from mundialytics.statistical_core.schemas import canonical_name
 DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     "blend_weight_gl": 0.30,
     "ad_rho": -0.07,
-    "sharpen_gamma_1x2": 1.3,
+    "sharpen_gamma_1x2": 1.20,
     "rescale_lambda_to_goals": True,
     "outcome_rho": -0.06,
     "goal_temper": 1.05,
@@ -299,6 +311,12 @@ class PredictionEngine:
         # rho: a joint gamma/rho LOFO scan (all 6 folds picking gamma=1.3, rho=-0.17,
         # interior optimum, -0.00025 RPS) showed the matrix wants a stronger low-score
         # correction than the fit. None = legacy behavior (use ad_rho everywhere).
+        # That pair no longer holds: rho was smoothed to -0.06 (2026-09-14) and gamma
+        # re-scanned at that rho to 1.20 (2026-10-18). They were co-fitted once, so a
+        # change to either should re-scan the other -- and several scripts under
+        # scripts/ still pin the old pair (gamma 1.3, rho -0.17) inline instead of
+        # reading DEPLOYED_CLUB_ENGINE_KWARGS. Consistent as snapshots, no longer
+        # "the deployed config" whatever their variables are called.
         self.outcome_rho = float(outcome_rho) if outcome_rho is not None else None
         # Understat xG runs hot vs actual goals and the gap is DRIFTING (goals/xG
         # ratio ~0.99 in 2021 -> ~0.92 in 2025/26), so the xG-rate lambda over-states
