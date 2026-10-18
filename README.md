@@ -411,6 +411,17 @@ open, kept because the benchmark above depends on it.
 
 Listed because half-finished work is normal and hiding it helps nobody.
 
+- **The 1X2 sharpening drains the draw — measured, validated, not yet
+  deployed.** `sharpen_gamma_1x2 = 1.3` raises both log-odds against the draw,
+  so the published trio prices draws at 0.2318 where 0.2540 happen (z = +5.4,
+  short in 6 of 6 seasons, and the 27-season rate is 0.2587). Since coherent
+  markets that deficit is subtracted from every exact score, BTTS and HT/FT
+  number too. Applying the same exponent to the home-vs-away contrast *only* —
+  no new constant, nothing fitted — improves 1X2 log loss, exact score and
+  HT/FT by 0.00128 and 1X2 RPS by 0.00015, each in **6 of 6** walk-forward
+  seasons, and takes the draw to O/E 1.03. Decoupling the grid from the
+  published 1X2 instead is strictly dominated. Awaiting a decision; the engine's
+  defaults are untouched (`scripts/draw_deficit/README.md`).
 - **SquadLab** — now a playable draft, not just a simulator. Open tiered packs,
   draft an eleven from ACTUAL / PRIME / ICON player cards, pick a formation, and
   play the **real Champions League** with your side dropped into an actual
@@ -523,7 +534,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  420 tests green on a clean checkout; 109 more
+tests/                  441 tests green on a clean checkout; 109 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
