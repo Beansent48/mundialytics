@@ -437,6 +437,50 @@ def main() -> None:
         run_step("7f/8 current squads (big-5 + los 108 de Europa)",
                  [PY, "scripts/build_current_squads.py"],
                  optional=True, timeout=1200)
+
+        # Everything the player layer is built FROM, once a week. These read the
+        # squads refreshed just above and rewrite the ratings and the SquadLab
+        # cards on top of them. Leaving them out of the run froze every player's
+        # role and career level while the data underneath them refreshed daily:
+        # on 2026-10-18 the squads were hours old, the cards 34 days and the
+        # ratings 41, because nothing in the pipeline called any of this -- the
+        # only mentions of these scripts in src/ and api/ are comments.
+        #
+        # Behind --full, so weekly rather than daily. The chain costs up to 100
+        # minutes and none of it moves day to day: Kaggle publishes once a
+        # season, and a player's rating turns on a month of football, not on one
+        # matchday. All optional -- a failure leaves the previous ratings in
+        # place, which is the right outcome, since stale ratings beat none.
+        if args.full:
+            # FBref's published season tables, via Kaggle's open endpoint: the
+            # only real defensive measurement most players have.
+            run_step("7i/8 FBref (Kaggle) + calidad medida",
+                     [PY, "scripts/download_fbref_kaggle.py"],
+                     optional=True, timeout=900)
+            run_step("7i2/8 defensa medida por jugador",
+                     [PY, "scripts/build_player_defense_fbref.py"],
+                     optional=True, timeout=300)
+            # Its attacking twin, and the one whose weights survived an
+            # out-of-sample test. Also emits the creation score.
+            run_step("7i3/8 ataque y creacion medidos por jugador",
+                     [PY, "scripts/build_player_attack_fbref.py"],
+                     optional=True, timeout=300)
+            # Before anything is rebuilt on top of them: duplicate keys, broken
+            # joins, placeholder columns. Every serious defect in this pipeline
+            # has been silent, and this is the thing that looks.
+            run_step("7i4/8 auditoria de datos de jugador",
+                     [PY, "scripts/audit_player_data.py"],
+                     optional=True, timeout=300)
+            # The ratings CONSUME the measurements above: the defensive blocks
+            # read duel and aerial quality, the build-up blocks read passing.
+            run_step("7i5/8 ratings unificados (roles + nivel de carrera)",
+                     [PY, "scripts/build_unified_player_ratings.py"],
+                     optional=True, timeout=1800)
+            # The draft deals from these. Rebuilt last, so a signing gets a card
+            # the same week he gets a squad place.
+            run_step("7i6/8 cartas de SquadLab",
+                     [PY, "scripts/build_squadlab_cards.py"],
+                     optional=True, timeout=900)
     else:
         print("\n=== 7d/8 player stats SKIPPED ===", flush=True)
 
@@ -530,6 +574,10 @@ def main() -> None:
         ("team xG", TEAM_MATCH, "date"),
         ("player-match", PLAYER_CSV, None),
         ("shots", SHOTS_CSV, None),
+        # The weekly chain above writes these two. They are in the summary
+        # precisely because they are the ones that went stale unnoticed.
+        ("plantillas", ROOT / "data/processed/current_squads.csv", None),
+        ("cartas", ROOT / "data/processed/squadlab_cards.csv", None),
     ]:
         if p.exists():
             df = pd.read_csv(p, low_memory=False)
