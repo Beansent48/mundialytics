@@ -103,109 +103,82 @@ seasons (−0.00022), and it lands the draw rate within 0.0006 of observed. It
 pays for that with about a fifth of the 1X2 gain (−0.00086 against −0.00104,
 5/6 rather than 6/6). Noted, not pursued: 0.0002 of BTTS against 0.0002 of 1X2
 RPS is not a trade this project makes on the headline market.
+## Superseded, and what the two experiments jointly concluded
 
-## Superseded — `pair` is the wrong candidate
+This file's `pair` was the wrong candidate, and its `power` @ 1.20 is the right
+exponent for the wrong form. `scripts/draw_deficit` found the form; this file
+found the stale exponent; the two then disagreed twice about how to pair them,
+and converged. What follows replaces three rounds of correction with the joint
+result. Every arm below was run against `draw_deficit`'s own `sharpen_trio`,
+loaded off its branch and verified **identical to the `two_axis` in this
+experiment to 0.00e+00, in both directions** -- the two experiments were always
+measuring one form, and only the baseline ever differed.
 
-`scripts/draw_deficit` (commit 330f54a) found the better form, and this
-experiment's own harness confirms it. `p ** gamma` is the map
-`(u, v) -> (gamma u, gamma v)` on the two log-odds against the draw; splitting
-that into an exponent on the **home-vs-away contrast** and one on the
-**draw-vs-rest** axis, and applying the deployed gamma to the contrast only
-(nothing fitted), dominates `pair` on every count:
+### The form is settled
 
-| arm | 1X2 log loss vs deployed | folds | 1X2 RPS | folds | draw O/E |
-|---|---|---|---|---|---|
-| `power` @ 1.3 (deployed) | — | — | — | — | 1.0951 |
-| `pair` @ 1.3 (this file) | −0.00055 | 3/6 | −0.00009 | 4/6 | 0.9915 |
-| two-axis (gamma on contrast) | **−0.00126** | **6/6** | **−0.00015** | **6/6** | 1.0285 |
+`p ** gamma` renormalized is exactly `(u, v) -> (gamma*u, gamma*v)` on the two
+log-odds against the draw. One exponent therefore cannot correct the model's
+under-confidence on the home-vs-away CONTRAST without draining the draw, which
+needed nothing: the raw trio prices draws at 0.2560 against 0.2540 happening.
+Scaling the contrast axis alone (`sharpen_contrast_only`) fixes that, and the
+gain is robust -- against the baseline it actually displaced, `power` @ 1.3, it
+is 5 of 6 or 6 of 6 across the whole range beta 1.18-1.37, worth -0.00085 to
+-0.00133 of 1X2 log loss, with the draw's O/E monotonically better. `pair`,
+this file's candidate, holds the draw *probability* rather than the *axis*,
+which over-corrects, and manages only 3 of 6.
 
-`pair` holds the draw exactly, which **over**-corrects: it gives up the part of
-the sharpening that the draw-vs-rest axis legitimately earns, which is why it
-only manages 3 of 6 on log loss. Holding the *axis* rather than the probability
-keeps that part and still removes most of the deficit.
+### The exponent is not settled, and each of us got it wrong once
 
-Two further corrections to this file's reasoning, both from the same source:
+| form | its own fitted optimum |
+|---|---|
+| `power` | gamma* = 1.2032 (LOSO 1.190-1.215, expanding 1.148-1.199) |
+| contrast | beta* = 1.2682 (LOSO 1.246-1.287, expanding 1.182-1.264) |
 
-* **The objective should have been log loss, not RPS.** The identity proved
-  above says exact score and HT/FT move with the 1X2's log loss, so that is
-  what a trio map is for. Fitting on RPS — as the runs here do — is nearly
-  blind to a draw miscalibration, because the draw is the middle category of a
-  cumulative metric. It is why this experiment read a tie where there was a
-  6-of-6 gain.
-* **`gamma` = 1.3 is stale.** It came from a joint `gamma`/`rho` scan that
-  picked it with `rho` = −0.17; `rho` was later smoothed to −0.06 and `gamma`
-  was never re-scanned. Scanned here at the current `rho`, the log-loss optimum
-  is **1.20**, which matches `draw_deficit` independently.
+1.20 belongs to the `power` form. Handing it to the contrast form is the same
+error this investigation uncovered in the first place -- gamma 1.3 was stale
+because it belonged to rho = -0.17. **Change the form, re-scan the parameter.**
+This file proposed exactly that mistake, on the grounds that contrast @ 1.20
+scores 5 of 6 against `power` @ 1.20 where contrast @ 1.3 scores 4 of 6.
 
-## Correction (same day): the contrast form wins, and gamma 1.20 is not its value
+That fold count will not bear the weight either. Swept against `power` @ 1.20,
+the mean gain is flat from 1.18 to 1.37 (-0.00023 to -0.00071, optimum near
+1.26) while the fold counts move two folds on 3e-05 of mean log loss:
 
-An earlier version of this section said the two-axis form sat "just below the
-5-of-6 bar" once measured against `power` re-scanned to 1.20. That was measured
-with the forms paired to different exponents, and it was the wrong conclusion.
-Re-run with `draw_deficit`'s own `sharpen_trio` loaded off its branch — which
-is **identical to the `two_axis` here to 0.00e+00**, so the two experiments were
-always measuring one form:
+| beta | log-loss folds | RPS folds |
+|---|---|---|
+| 1.18-1.20 | 5/6 | 2/6 at 1.18, 3/6 at 1.19, 5/6 at 1.20 |
+| **1.21-1.26** | **6/6** | 5/6 at 1.21, **6/6 from 1.22** |
+| 1.27-1.28 | 5/6 | 6/6 to 1.27, 5/6 at 1.28 |
+| 1.29-1.34 | 4/6 | 5/6 to 1.31, 4/6 below |
 
-| arm | 1X2 RPS | 1X2 log loss | draw O/E |
-|---|---|---|---|
-| `power` @ 1.3 (served until 2026-10-18) | 0.20033 | 0.98769 | 1.0955 |
-| `power` @ 1.20 (this experiment's change) | 0.20030 | 0.98711 | 1.0591 |
-| contrast @ 1.3 (`draw_deficit` v0.63.0) | **0.20019** | 0.98643 | 1.0289 |
-| contrast @ 1.28 (the contrast form's own LOSO optimum) | **0.20019** | **0.98639** | **1.0262** |
-| contrast @ 1.20 (what merging the two branches gives) | 0.20029 | 0.98664 | 1.0158 |
+So neither 1.20 nor 1.30 is the fold-count optimum -- and the region that is,
+1.21-1.26, must NOT be picked for that reason. Selecting a parameter because
+the held-out folds liked it is the cherry-pick this grid exists to expose, and
+both experiments refuse it on that ground.
 
-Against `power` @ 1.20, contrast @ 1.28 is **−0.00012 RPS (5/6)** and
-**−0.00072 log loss (5/6)**, nothing worse anywhere. Two things follow:
+### What that leaves
 
-* **1.20 is the right exponent for the `power` form and the wrong one for the
-  contrast form,** which wants 1.28 — LOSO picks 1.28 in five folds of six.
-  Once it stops draining the draw it can afford more sharpening. This is the
-  gamma/rho lesson again: change the form, re-scan the parameter.
-* **The two commits ARE additive, and the mean says otherwise than the folds.**
-  See the second correction below — this bullet first read "not additive" off
-  the mean, which is not how this repo decides.
+The defensible value is the one fitted on training folds only, which is this
+project's standard practice for a deployed constant: **beta = 1.268**. It lands
+in the high-fold-count region without having been chosen for it.
+`draw_deficit` ships 1.3, on the argument that it is within 5e-05 of 1.268 --
+true of the mean, but 1.268 sits at 5/6-6/6 on log loss where 1.30 sits at
+4/6. That is the mean-versus-folds conflation again, in the opposite direction
+to this file's.
 
-### Second correction: the folds and the mean disagree, and the folds decide
+Either way, the form is the decision and the exponent is second-order: against
+what was actually deployed, every beta in range clears the bar comfortably.
 
-The bullet above judged contrast @ 1.20 by its mean (+0.00021 of log loss worse
-than contrast @ 1.3) and called the merge of the two branches the weakest good
-arm. That is the wrong criterion, and the table this experiment had already
-printed says so:
+### Two caveats on reading any of these numbers
 
-| comparison (vs `power` @ 1.20) | 1X2 log loss | folds | 1X2 RPS | folds |
-|---|---|---|---|---|
-| contrast @ 1.3 | **−0.00068** | 4/6 | −0.00012 | 5/6 |
-| contrast @ 1.20 | −0.00047 | **5/6** | −0.00002 | **5/6** |
-
-1.3 has the better aggregate and the worse record; 1.20 has the worse aggregate
-and the better record. **This project decides on fold counts, not means** — the
-5-of-6 bar is the whole standard — so contrast @ 1.20 is the pairing that
-clears it, on log loss, exact score, HT/FT and the RPS guard alike. Its one
-losing fold (2024/25) is +0.00003, flat rather than a reversal.
-
-That pairing is exactly what merging the two branches produces, so there is no
-third decision: take the `sharpen_contrast_only` flag and the 1.20 exponent
-together. `draw_deficit` re-derived these counts independently (−0.00066 at 4/6
-and −0.00011 at 5/6 against the figures here) and reports a strictly temporal
-expanding-window fit at 5 of 5, −0.00069.
-
-Also recorded, and deliberately not proposed: the contrast form at 1.25 beats
-both on every count (−0.00069 log loss, 6/6). It was read off the table that
-would justify it, so proposing it would be selecting a parameter on the test
-folds — the one thing this repo's validation discipline exists to prevent.
-
-Contrast @ 1.28 and contrast @ 1.3 are the same within noise (−0.000033 log
-loss, 4/6), so v0.63.0's 1.3 is already at that form's optimum and does not
-need re-scanning. One honest limit on all of this: the log-loss fold count
-flips between 4/6 and 5/6 on a 3e-05 change in gamma, so it is knife-edge and
-"5 of 6" should not be read as solid there. What is robust is the mean
-(~0.0007 of log loss), the RPS count (5/6 throughout), and the monotone draw
-calibration across the four arms.
-
-So the `power` @ 1.20 change this file documents is superseded rather than
-wrong: it is the best value for the form that was deployed, and the contrast
-form is a better form than that. Both the experiment and the comparison above
-were run against `draw_deficit`'s code, not a description of it.
+* **Absolute levels do not transfer between the two write-ups.** This file's
+  `power` @ 1.3 log loss is 0.98769; `draw_deficit`'s is 0.98817, a gap of
+  ~5e-04, most likely a different lambda subset or `max_goals`. The deltas
+  agree to ~3e-05 and every conclusion rests on deltas and fold counts, so
+  compare those and never mix absolute levels across the two files.
+* **"5 of 6 on RPS throughout", in an earlier version of this section,
+  overstates it.** Against `power` @ 1.20 the RPS count is 5-of-6-or-better
+  only inside roughly 1.20-1.31, and falls to 2/6 at beta 1.18.
 
 ## Caveats
 
