@@ -340,7 +340,9 @@ worth (−0.0032 on exact score).
   number on the page. **No dependence model can touch it** — reweighting pins
   the draw region by construction, which is exactly why every arm above is
   flat. If there is a real 0.002-scale gain left in the matrix markets, it is
-  in that interaction and not in the correlation.
+  in that interaction and not in the correlation. **Followed up the same day and
+  it was: `scripts/draw_deficit/README.md` measures it at 0.00128 on exact score
+  and HT/FT in 6 of 6 seasons, three times anything in this experiment.**
 * **Nothing is wrong with the halves.** Conditional covariance at half-time is
   −0.0018, and every arm that added dependence to the halves made HT/FT worse,
   0 of 6 folds.
