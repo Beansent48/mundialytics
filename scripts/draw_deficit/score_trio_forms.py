@@ -448,6 +448,60 @@ def cmd_validate(df: pd.DataFrame) -> dict:
     return {"coherent": res, "decouple": res_d}
 
 
+# ── 5b. against a RE-SCANNED one-parameter baseline ───────────────────────────
+
+def cmd_rebase(df: pd.DataFrame, baseline_gamma: float = 1.20) -> dict:
+    """How much of the two-axis gain survives once gamma itself is corrected?
+
+    The candidate was scored against the gamma that was deployed at the time,
+    1.3 -- which this same archaeology showed to be stale (it belonged to
+    rho = -0.17). Re-scanned at the rho actually served, the one-parameter
+    optimum is 1.20, and a fair reading of the STRUCTURAL half of the change has
+    to use that as the baseline. Raised by a parallel session that reproduced
+    the whole thing independently; this re-derives it rather than taking the
+    fold counts on trust.
+
+    The row that matters for anyone merging both changes is
+    `two_axis (1.0, 1.20)`: taking the re-scanned gamma AND the contrast-only
+    map together is a third configuration that neither measurement covered.
+    """
+    print("\n" + "=" * 78)
+    print(f"5b. RE-BASED ON power(gamma = {baseline_gamma:.2f}), NOT THE STALE 1.3")
+    print("=" * 78)
+    M = raw_matrix(df)
+    raw = X.trio_of(M)
+    seasons = sorted(df.season.unique())
+    base = score_trio(df, M, f_gamma(raw, [baseline_gamma]))
+
+    arms: dict[str, dict] = {}
+    g_dep = K["sharpen_gamma_1x2"]
+    arms[f"power {g_dep:.2f} (what 1.3 was)"] = score_trio(df, M, f_gamma(raw, [g_dep]))
+    for b in (1.20, 1.25, 1.30, 1.35):
+        arms[f"two_axis (1.0, {b:.2f})"] = score_trio(df, M, f_two_axis(raw, [1.0, b]))
+    nan3 = np.full(3, np.nan)
+    for form in ("gamma", "two_axis"):
+        for regime in ("expanding", "loso"):
+            fits = fit_per_fold(df, raw, form, regime)
+            t = np.empty((len(df), 3))
+            for s, g in df.groupby("season"):
+                i = g.index.to_numpy()
+                t[i] = nan3 if fits[s] is None else FORMS[form][0](raw[i], fits[s])
+            sc = score_trio(df, M, np.nan_to_num(t, nan=1 / 3))
+            sc["pdraw"] = t[:, 1]
+            arms[f"{form} [{regime}]"] = sc
+    res = fold_table(df, base, arms, f"deltas vs power({baseline_gamma:.2f}):")
+
+    y = df.outcome.to_numpy(int)
+    obs = float((y == 1).mean())
+    print("\n  draw calibration (observed / published), same arms:")
+    print(f"    {f'power {baseline_gamma:.2f} (baseline)':34s} {obs / base['pdraw'].mean():.4f}")
+    for name, sc in arms.items():
+        keep = ~np.isnan(sc["pdraw"])
+        print(f"    {name:34s} {float((y[keep] == 1).mean()) / sc['pdraw'][keep].mean():.4f}")
+    print(f"\n  observed draw rate {obs:.4f} over {len(df):,} matches")
+    return res
+
+
 # ── 6. does rho move with it? ─────────────────────────────────────────────────
 
 def cmd_rho(df: pd.DataFrame) -> None:
@@ -516,8 +570,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", nargs="?", default="all",
-                    choices=["gap", "live", "identity", "scan", "validate", "rho",
-                             "coherence", "all"])
+                    choices=["gap", "live", "identity", "scan", "validate", "rebase",
+                             "rho", "coherence", "all"])
+    ap.add_argument("--baseline-gamma", type=float, default=1.20,
+                    help="the one-parameter baseline `rebase` scores against "
+                         "(default 1.20, the value re-scanned at the deployed rho)")
     ap.add_argument("--data-root", default=str(ROOT),
                     help="where data/ lives (default: the repo root; a worktree's is "
                          "gitignored and therefore empty)")
@@ -534,6 +591,8 @@ def main() -> None:
         cmd_scan(df)
     if a.cmd in ("validate", "all"):
         cmd_validate(df)
+    if a.cmd in ("rebase", "all"):
+        cmd_rebase(df, a.baseline_gamma)
     if a.cmd in ("rho", "all"):
         cmd_rho(df)
     if a.cmd in ("coherence", "all"):
