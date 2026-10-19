@@ -17,6 +17,10 @@ Playing time and season tallies come from the match rosters already downloaded
 by fetch_espn_match_events.py — the roster endpoint knows who is at the club,
 only the match data knows who actually plays.
 
+That endpoint answers with the club's whole REGISTERED POOL, reserves included,
+and how much of it comes back depends on which competition you ask under — see
+first_team, which keeps the squad and drops the rest.
+
 The match rosters cannot supply the position on their own: ESPN lists every
 substitute as "SUB", so a squad built from them turns two thirds of the league
 into defenders.
@@ -179,6 +183,79 @@ def match_tallies(src: Path) -> pd.DataFrame:
         last_date=("date", "max"),
     )
     return g.merge(team_matches, on="team", how="left")
+
+
+def played_this_season(*sources: Path) -> set[tuple[str, str]]:
+    """Every (club, player) that appears in a match roster of the newest season.
+
+    The appeal against `first_team` below: a squad number is ESPN's own squad
+    list, but a player who has actually been named in a match is on the squad
+    whatever the feed says about his shirt.
+    """
+    seen: set[tuple[str, str]] = set()
+    for src in sources:
+        if src is None or not src.exists():
+            continue
+        df = pd.read_csv(src, usecols=lambda c: c in {"team", "player", "season"},
+                         low_memory=False)
+        if {"team", "player"} - set(df.columns):
+            continue
+        # the same newest-season rule as match_tallies, for the same reason
+        if "season" in df.columns and df["season"].notna().any():
+            newest = str(df["season"].dropna().astype(str).max())
+            df = df[df["season"].astype(str) == newest]
+        seen |= set(zip(df["team"].astype(str), df["player"].astype(str)))
+    return seen
+
+
+def first_team(rosters: pd.DataFrame,
+               played: set[tuple[str, str]] | None = None) -> pd.DataFrame:
+    """ESPN's roster is the club's REGISTERED POOL, not its first-team squad.
+
+    WHAT IT LOOKED LIKE. Measured on the production file on 2026-10-19:
+    Stuttgart was the only club of 166 filed under two competitions, and the
+    two sets of players were disjoint -- 31 first-teamers under "Bundesliga"
+    (Stiller, Undav, Mittelstaedt...) and 27 others under "Champions League"
+    who are the VfB Stuttgart II side (Groiss, Schramm, Preu, Von Der
+    Felsen...). It cost the club 58 SquadLab cards instead of 31, and the
+    draft could deal the reserves.
+
+    WHY, AND WHY NOT THE OBVIOUS SUSPECTS. Not the team id and not the name
+    folding: both paths list the club as id 134, displayName "VfB Stuttgart",
+    and every extra athlete carries `defaultTeam` 134 and `defaultLeague`
+    ger.1. The roster endpoint itself answers with 58 athletes under
+    `uefa.champions` and 31 under `ger.1`, and the European half unions its
+    extra 27 into the same club key.
+
+    WHAT SEPARATES THEM. ESPN marks the squad itself: a registered player has
+    a `jersey`, and all 27 reserves have none. Across the feed that is 143 of
+    3,396 UEFA rows (41 clubs) and 16 of 2,865 big-five ones, and only 3 of
+    those 159 have been named in a match this season -- so the number is the
+    squad list and an appearance is the appeal against it. Stuttgart is only
+    the loud case, caught because a big-five club shows up under two
+    competitions; a club outside the big five gets its reserves filed under
+    its own name and nothing looks wrong (riga fc +11, viking fk +7, slavia
+    prague +6).
+
+    Keeping them is not harmless. Each one becomes a card with no measured
+    axis -- these players exist in no stats source -- that the draft can deal
+    and the Champions simulator can field.
+    """
+    if rosters.empty or "jersey" not in rosters.columns:
+        return rosters           # a cache written without the column: no evidence
+    jersey = rosters["jersey"]
+    keep = jersey.notna() & (jersey.astype(str).str.strip() != "")
+    if played:
+        keep = keep | pd.Series(
+            [(t, p) in played for t, p in zip(rosters["team"], rosters["player"])],
+            index=rosters.index)
+    gone = rosters[~keep]
+    if len(gone):
+        by_club = gone.groupby("team").size().sort_values(ascending=False)
+        shown = ", ".join(f"{t} {n}" for t, n in by_club.head(5).items())
+        print(f"  fuera: {len(gone)} sin dorsal y sin jugar, en {len(by_club)} clubes"
+              f" ({shown}{', ...' if len(by_club) > 5 else ''})")
+    return rosters[keep].copy()
 
 
 POS_GROUPS = {"Goalkeeper", "Defender", "Midfielder", "Forward"}
@@ -365,6 +442,13 @@ def main() -> None:
     if not args.no_europe:
         euro_rosters = load_half(UEFA_LEAGUES, CACHE_ROSTER_UEFA, "UEFA")
 
+    # Both halves are pools, not squads -- see first_team. Applied to whatever
+    # we hold, fetched or cached, so an old cache is cleaned too.
+    euro_src = Path(args.europe_source)
+    played = played_this_season(src, euro_src)
+    rosters = first_team(rosters, played)
+    euro_rosters = first_team(euro_rosters, played)
+
     # A club in the big five keeps its league as its competition; only clubs
     # with no domestic coverage are filed under the tournament they were drawn
     # into. Getting this the other way round would take Vinicius out of every
@@ -373,11 +457,22 @@ def main() -> None:
     if not euro_rosters.empty:
         membership = pd.concat([rosters, euro_rosters], ignore_index=True)
         membership = membership.drop_duplicates(subset=["team", "player"], keep="first")
+        # The competition belongs to the CLUB, not to the roster the row came
+        # in on. Preferring the domestic row is not enough when there is none:
+        # Arsenal number Hashi and O'Neill 74 and 53 on the European list and
+        # not at all at home, and both used to arrive filed under "Champions
+        # League" -- out of every path keyed on the Premier League. One label
+        # per club is also what keeps a reserve side from hiding inside a
+        # first-team club under a second competition.
+        home = dict(zip(rosters["team"], rosters["competition"]))
+        membership["competition"] = [
+            home.get(t, c)
+            for t, c in zip(membership["team"], membership["competition"])]
 
     out = build(membership, match_tallies(src), match_positions(src))
     if out.empty:
         raise SystemExit("sin filas: ESPN no ha devuelto plantillas")
-    out = add_european(out, euro_rosters, Path(args.europe_source))
+    out = add_european(out, euro_rosters, euro_src)
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.out, index=False)

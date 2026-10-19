@@ -274,3 +274,62 @@ def test_season_tallies_ignore_rows_from_older_seasons():
     assert got["apps"] == 1, "older seasons must not be counted as this season's appearances"
     assert got["goals"] == 1
     assert got["squad_matches"] == 1
+
+
+# -- who is on the squad at all -----------------------------------------------
+def _bcs():
+    import sys
+    sys.path[:0] = [str(ROOT / "scripts")]
+    import build_current_squads as bcs
+    return bcs
+
+
+def test_the_reserve_pool_is_not_part_of_the_squad():
+    """ESPN's own marker: a registered player has a shirt number, a reserve
+    does not. All 27 of Stuttgart's extras had none."""
+    rosters = pd.DataFrame({
+        "competition": ["Champions League"] * 5,
+        "team": ["stuttgart"] * 5,
+        "player": ["Angelo Stiller", "Deniz Undav", "David Preu",
+                   "Veit Stange", "Kian Speidel"],
+        "jersey": ["6", "26", None, None, None],
+    })
+    kept = _bcs().first_team(rosters)
+    assert set(kept["player"]) == {"Angelo Stiller", "Deniz Undav"}
+
+
+def test_an_appearance_outranks_a_missing_shirt_number():
+    """The appeal against the rule. Of the 159 unnumbered players in the feed,
+    3 had been named in a match this season -- Slavia Prague's Rezek and
+    Kolisek among them -- and a player who has played is on the squad whatever
+    the feed says about his shirt."""
+    rosters = pd.DataFrame({
+        "competition": ["Europa League"] * 3,
+        "team": ["slavia prague"] * 3,
+        "player": ["Adam Rezek", "Jakub Kolisek", "Nobody At All"],
+        "jersey": [None, None, None],
+    })
+    played = {("slavia prague", "Adam Rezek"), ("slavia prague", "Jakub Kolisek")}
+    kept = _bcs().first_team(rosters, played=played)
+    assert set(kept["player"]) == {"Adam Rezek", "Jakub Kolisek"}
+
+
+def test_a_cache_without_shirt_numbers_is_left_alone():
+    """No column is no evidence, not an empty squad -- the same stance
+    match_positions takes on a file written without positions."""
+    rosters = pd.DataFrame({"competition": ["Champions League"] * 2,
+                            "team": ["sabah fk"] * 2,
+                            "player": ["One", "Two"]})
+    assert len(_bcs().first_team(rosters)) == 2
+
+
+def test_the_played_set_ignores_older_seasons(tmp_path):
+    """Same rule as match_tallies: a historical backfill left in these files
+    must not let a player who last appeared in 2024/25 keep a squad place
+    today."""
+    src = tmp_path / "rows.csv"
+    pd.DataFrame([
+        {"season": "2024-2025", "team": "stuttgart", "player": "Gone Long Ago"},
+        {"season": "2026-2027", "team": "stuttgart", "player": "Here Now"},
+    ]).to_csv(src, index=False)
+    assert _bcs().played_this_season(src) == {("stuttgart", "Here Now")}

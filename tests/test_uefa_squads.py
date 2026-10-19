@@ -119,3 +119,40 @@ def test_an_unmodelled_club_gets_no_prop_shortlist() -> None:
     model._apply_current_squads(cs)
     assert "sabah" not in model._rosters, "installed a squad for an unmodelled club"
     assert "sabah" in model._unmodelled_squads
+
+
+def test_a_club_is_filed_under_one_competition(squads: pd.DataFrame) -> None:
+    """The two-squads signature, and the one check that would have caught it.
+
+    Stuttgart shipped on 2026-10-19 with 58 rows: 31 first-teamers under
+    "Bundesliga" and 27 VfB Stuttgart II players under "Champions League",
+    because the UEFA roster endpoint answers with the club's whole registered
+    pool and the European half unioned its extra 27 in. Every row of this file
+    is a distinct (team, player) -- the duplicate check above pins that -- so
+    two competitions on one club means two DISJOINT sets of players under one
+    name, which is exactly the pathology. The design has no other reading of
+    the column: a big-five club carries its league, a club with no domestic
+    coverage carries the tournament it was drawn into, and neither carries
+    both.
+    """
+    split = squads.groupby("team")["competition"].nunique()
+    bad = split[split > 1]
+    detail = {
+        t: squads[squads["team"] == t].groupby("competition").size().to_dict()
+        for t in bad.index
+    }
+    assert bad.empty, f"clubs filed under two competitions: {detail}"
+
+
+def test_no_club_carries_a_second_squad(squads: pd.DataFrame) -> None:
+    """The other half of the same guard: too MANY players, not too few.
+
+    The build only ever warned about thin squads (`clubes con plantilla corta`,
+    and `clubes con menos de 16 cartas` downstream), so a club holding two
+    squads passed every check it had. A registered first-team list runs to
+    about 30 and tops out at 39 (Torreense, all 39 numbered); 46 is a reserve
+    side merged in, not a deep bench.
+    """
+    size = squads.groupby("team").size()
+    too_many = size[size > 45]
+    assert too_many.empty, f"squads too large to be one squad: {too_many.to_dict()}"
