@@ -1,0 +1,2003 @@
+{
+ "season": "2026-2027",
+ "as_of": "2026-10-12",
+ "windows": {
+  "season": {
+   "rows": [
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "all",
+     "n": 47,
+     "expected": 2.77,
+     "actual": 3.362,
+     "z": 2.45,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 3.251,
+     "actual": 3.889,
+     "z": 1.08,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 2.618,
+     "actual": 3.444,
+     "z": 1.04,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 2.755,
+     "actual": 3.222,
+     "z": 0.83,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 2.682,
+     "actual": 3.6,
+     "z": 2.2,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 2.577,
+     "actual": 2.7,
+     "z": 0.31,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "all",
+     "n": 47,
+     "expected": 26.097,
+     "actual": 28.745,
+     "z": 3.02,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 28.51,
+     "actual": 33.444,
+     "z": 2.02,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 24.607,
+     "actual": 28.778,
+     "z": 2.18,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 25.412,
+     "actual": 26.111,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 25.739,
+     "actual": 26.7,
+     "z": 0.51,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 26.241,
+     "actual": 28.9,
+     "z": 1.23,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "all",
+     "n": 47,
+     "expected": 9.138,
+     "actual": 10.17,
+     "z": 2.19,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 10.299,
+     "actual": 12.0,
+     "z": 1.42,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 8.701,
+     "actual": 9.889,
+     "z": 0.98,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 8.793,
+     "actual": 9.222,
+     "z": 0.34,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 9.082,
+     "actual": 10.3,
+     "z": 1.82,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 8.852,
+     "actual": 9.5,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "all",
+     "n": 47,
+     "expected": 9.898,
+     "actual": 9.894,
+     "z": -0.01,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 10.119,
+     "actual": 10.556,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 9.68,
+     "actual": 10.778,
+     "z": 1.26,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 9.571,
+     "actual": 9.778,
+     "z": 0.2,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 10.249,
+     "actual": 9.0,
+     "z": -1.29,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 9.836,
+     "actual": 9.5,
+     "z": -0.29,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "all",
+     "n": 47,
+     "expected": 23.53,
+     "actual": 22.872,
+     "z": -0.79,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 22.771,
+     "actual": 22.889,
+     "z": 0.1,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 24.968,
+     "actual": 25.667,
+     "z": 0.43,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 23.928,
+     "actual": 22.333,
+     "z": -0.81,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 21.886,
+     "actual": 23.8,
+     "z": 0.74,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 24.203,
+     "actual": 19.9,
+     "z": -3.76,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "all",
+     "n": 47,
+     "expected": 3.886,
+     "actual": 4.021,
+     "z": 0.47,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 3.706,
+     "actual": 2.778,
+     "z": -2.12,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 4.71,
+     "actual": 5.667,
+     "z": 1.46,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 3.51,
+     "actual": 3.778,
+     "z": 0.53,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 3.564,
+     "actual": 4.4,
+     "z": 1.19,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 3.967,
+     "actual": 3.5,
+     "z": -0.63,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Total",
+     "n": 187,
+     "expected": 0.502,
+     "actual": 0.626,
+     "z": 3.44,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "booking_pts 30.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.626,
+     "actual": 0.626,
+     "z": -0.0,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "booking_pts 40.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.465,
+     "actual": 0.451,
+     "z": -0.4,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "booking_pts 50.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.322,
+     "actual": 0.308,
+     "z": -0.43,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 3.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.708,
+     "actual": 0.687,
+     "z": -0.66,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 4.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.563,
+     "actual": 0.511,
+     "z": -1.46,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 5.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.427,
+     "actual": 0.418,
+     "z": -0.27,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 10.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.383,
+     "actual": 0.385,
+     "z": 0.05,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 11.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.279,
+     "actual": 0.297,
+     "z": 0.53,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 7.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.728,
+     "actual": 0.742,
+     "z": 0.43,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 8.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.617,
+     "actual": 0.582,
+     "z": -0.99,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 9.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.5,
+     "actual": 0.484,
+     "z": -0.46,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 3.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.582,
+     "actual": 0.604,
+     "z": 0.63,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 4.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.425,
+     "actual": 0.478,
+     "z": 1.5,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 5.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.296,
+     "actual": 0.291,
+     "z": -0.13,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 19.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.772,
+     "actual": 0.769,
+     "z": -0.1,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 21.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.644,
+     "actual": 0.61,
+     "z": -1.02,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 23.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.496,
+     "actual": 0.44,
+     "z": -1.65,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 25.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.356,
+     "actual": 0.302,
+     "z": -1.62,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "ht_goles 0.5",
+     "scope": "Total",
+     "n": 187,
+     "expected": 0.694,
+     "actual": 0.674,
+     "z": -0.61,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "ht_goles 1.5",
+     "scope": "Total",
+     "n": 187,
+     "expected": 0.335,
+     "actual": 0.385,
+     "z": 1.45,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "ht_goles 2.5",
+     "scope": "Total",
+     "n": 187,
+     "expected": 0.122,
+     "actual": 0.139,
+     "z": 0.74,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_2goles",
+     "scope": "players",
+     "n": 2016,
+     "expected": 0.006,
+     "actual": 0.008,
+     "z": 0.99,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_amarilla",
+     "scope": "players",
+     "n": 2187,
+     "expected": 0.137,
+     "actual": 0.127,
+     "z": -1.43,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_asistencia",
+     "scope": "players",
+     "n": 2187,
+     "expected": 0.061,
+     "actual": 0.065,
+     "z": 0.84,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_goleador",
+     "scope": "players",
+     "n": 2187,
+     "expected": 0.073,
+     "actual": 0.073,
+     "z": -0.02,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 1.5",
+     "scope": "players",
+     "n": 2187,
+     "expected": 0.189,
+     "actual": 0.225,
+     "z": 4.78,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 2.5",
+     "scope": "players",
+     "n": 2016,
+     "expected": 0.084,
+     "actual": 0.104,
+     "z": 3.64,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 11.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.683,
+     "actual": 0.736,
+     "z": 1.64,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 13.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.53,
+     "actual": 0.566,
+     "z": 1.05,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 9.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.822,
+     "actual": 0.879,
+     "z": 2.11,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 20.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.821,
+     "actual": 0.918,
+     "z": 3.47,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 22.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.716,
+     "actual": 0.852,
+     "z": 4.17,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 24.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.585,
+     "actual": 0.731,
+     "z": 4.1,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 26.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.443,
+     "actual": 0.571,
+     "z": 3.59,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 11.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.488,
+     "actual": 0.582,
+     "z": 2.71,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 13.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.332,
+     "actual": 0.423,
+     "z": 2.76,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 9.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.661,
+     "actual": 0.747,
+     "z": 2.59,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 6.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.76,
+     "actual": 0.841,
+     "z": 2.58,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 7.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.642,
+     "actual": 0.725,
+     "z": 2.39,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 8.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.513,
+     "actual": 0.626,
+     "z": 3.11,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 9.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.389,
+     "actual": 0.544,
+     "z": 4.38,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 1.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.577,
+     "actual": 0.538,
+     "z": -1.06,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 2.5",
+     "scope": "Local",
+     "n": 182,
+     "expected": 0.292,
+     "actual": 0.28,
+     "z": -0.35,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 2.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.737,
+     "actual": 0.692,
+     "z": -1.38,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 3.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.55,
+     "actual": 0.549,
+     "z": -0.0,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 4.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.369,
+     "actual": 0.357,
+     "z": -0.35,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 5.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.226,
+     "actual": 0.203,
+     "z": -0.73,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 6.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.126,
+     "actual": 0.066,
+     "z": -2.48,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 1.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.644,
+     "actual": 0.544,
+     "z": -2.87,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 2.5",
+     "scope": "Visitante",
+     "n": 182,
+     "expected": 0.357,
+     "actual": 0.291,
+     "z": -1.89,
+     "alert": false
+    }
+   ],
+   "alerts": [
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 1.5",
+     "scope": "players",
+     "n": 2187,
+     "expected": 0.189,
+     "actual": 0.225,
+     "z": 4.78,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 9.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.389,
+     "actual": 0.544,
+     "z": 4.38,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 22.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.716,
+     "actual": 0.852,
+     "z": 4.17,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 24.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.585,
+     "actual": 0.731,
+     "z": 4.1,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 2.5",
+     "scope": "players",
+     "n": 2016,
+     "expected": 0.084,
+     "actual": 0.104,
+     "z": 3.64,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 26.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.443,
+     "actual": 0.571,
+     "z": 3.59,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 20.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.821,
+     "actual": 0.918,
+     "z": 3.47,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Total",
+     "n": 187,
+     "expected": 0.502,
+     "actual": 0.626,
+     "z": 3.44,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 8.5",
+     "scope": "Total",
+     "n": 182,
+     "expected": 0.513,
+     "actual": 0.626,
+     "z": 3.11,
+     "alert": true
+    }
+   ]
+  },
+  "last_28_days": {
+   "rows": [
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "all",
+     "n": 47,
+     "expected": 2.77,
+     "actual": 3.362,
+     "z": 2.45,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 3.251,
+     "actual": 3.889,
+     "z": 1.08,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 2.618,
+     "actual": 3.444,
+     "z": 1.04,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 2.755,
+     "actual": 3.222,
+     "z": 0.83,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 2.682,
+     "actual": 3.6,
+     "z": 2.2,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "goals",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 2.577,
+     "actual": 2.7,
+     "z": 0.31,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "all",
+     "n": 47,
+     "expected": 26.097,
+     "actual": 28.745,
+     "z": 3.02,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 28.51,
+     "actual": 33.444,
+     "z": 2.02,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 24.607,
+     "actual": 28.778,
+     "z": 2.18,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 25.412,
+     "actual": 26.111,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 25.739,
+     "actual": 26.7,
+     "z": 0.51,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "shots",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 26.241,
+     "actual": 28.9,
+     "z": 1.23,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "all",
+     "n": 47,
+     "expected": 9.138,
+     "actual": 10.17,
+     "z": 2.19,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 10.299,
+     "actual": 12.0,
+     "z": 1.42,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 8.701,
+     "actual": 9.889,
+     "z": 0.98,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 8.793,
+     "actual": 9.222,
+     "z": 0.34,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 9.082,
+     "actual": 10.3,
+     "z": 1.82,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "sot",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 8.852,
+     "actual": 9.5,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "all",
+     "n": 47,
+     "expected": 9.898,
+     "actual": 9.894,
+     "z": -0.01,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 10.119,
+     "actual": 10.556,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 9.68,
+     "actual": 10.778,
+     "z": 1.26,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 9.571,
+     "actual": 9.778,
+     "z": 0.2,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 10.249,
+     "actual": 9.0,
+     "z": -1.29,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "corners",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 9.836,
+     "actual": 9.5,
+     "z": -0.29,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "all",
+     "n": 47,
+     "expected": 23.53,
+     "actual": 22.872,
+     "z": -0.79,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 22.771,
+     "actual": 22.889,
+     "z": 0.1,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 24.968,
+     "actual": 25.667,
+     "z": 0.43,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 23.928,
+     "actual": 22.333,
+     "z": -0.81,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 21.886,
+     "actual": 23.8,
+     "z": 0.74,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "fouls",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 24.203,
+     "actual": 19.9,
+     "z": -3.76,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "all",
+     "n": 47,
+     "expected": 3.886,
+     "actual": 4.021,
+     "z": 0.47,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Bundesliga",
+     "n": 9,
+     "expected": 3.706,
+     "actual": 2.778,
+     "z": -2.12,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "LaLiga",
+     "n": 9,
+     "expected": 4.71,
+     "actual": 5.667,
+     "z": 1.46,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Ligue 1",
+     "n": 9,
+     "expected": 3.51,
+     "actual": 3.778,
+     "z": 0.53,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Premier League",
+     "n": 10,
+     "expected": 3.564,
+     "actual": 4.4,
+     "z": 1.19,
+     "alert": false
+    },
+    {
+     "kind": "count",
+     "market": "yellows",
+     "scope": "Serie A",
+     "n": 10,
+     "expected": 3.967,
+     "actual": 3.5,
+     "z": -0.63,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.499,
+     "actual": 0.66,
+     "z": 3.32,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "booking_pts 30.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.628,
+     "actual": 0.68,
+     "z": 1.1,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "booking_pts 40.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.467,
+     "actual": 0.524,
+     "z": 1.19,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "booking_pts 50.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.324,
+     "actual": 0.33,
+     "z": 0.14,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 3.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.712,
+     "actual": 0.66,
+     "z": -1.19,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 4.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.566,
+     "actual": 0.476,
+     "z": -1.92,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 5.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.431,
+     "actual": 0.398,
+     "z": -0.69,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 10.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.387,
+     "actual": 0.388,
+     "z": 0.04,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 11.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.283,
+     "actual": 0.282,
+     "z": -0.03,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 7.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.731,
+     "actual": 0.738,
+     "z": 0.17,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 8.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.621,
+     "actual": 0.563,
+     "z": -1.23,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 9.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.504,
+     "actual": 0.485,
+     "z": -0.38,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 3.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.583,
+     "actual": 0.602,
+     "z": 0.4,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 4.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.426,
+     "actual": 0.476,
+     "z": 1.05,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "corners 5.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.297,
+     "actual": 0.282,
+     "z": -0.34,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 19.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.783,
+     "actual": 0.806,
+     "z": 0.58,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 21.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.654,
+     "actual": 0.602,
+     "z": -1.16,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 23.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.503,
+     "actual": 0.466,
+     "z": -0.78,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "fouls 25.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.358,
+     "actual": 0.291,
+     "z": -1.48,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "ht_goles 0.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.695,
+     "actual": 0.699,
+     "z": 0.1,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "ht_goles 1.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.336,
+     "actual": 0.398,
+     "z": 1.34,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "ht_goles 2.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.122,
+     "actual": 0.117,
+     "z": -0.17,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_2goles",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.006,
+     "actual": 0.004,
+     "z": -1.16,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_amarilla",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.137,
+     "actual": 0.135,
+     "z": -0.28,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_asistencia",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.06,
+     "actual": 0.062,
+     "z": 0.34,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_goleador",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.073,
+     "actual": 0.071,
+     "z": -0.3,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 1.5",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.189,
+     "actual": 0.225,
+     "z": 3.77,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 2.5",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.083,
+     "actual": 0.095,
+     "z": 1.7,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 11.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.691,
+     "actual": 0.738,
+     "z": 1.09,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 13.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.542,
+     "actual": 0.544,
+     "z": 0.04,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 9.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.827,
+     "actual": 0.883,
+     "z": 1.6,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 20.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.835,
+     "actual": 0.913,
+     "z": 2.17,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 22.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.735,
+     "actual": 0.845,
+     "z": 2.59,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 24.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.608,
+     "actual": 0.757,
+     "z": 3.21,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 26.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.466,
+     "actual": 0.621,
+     "z": 3.27,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 11.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.503,
+     "actual": 0.592,
+     "z": 1.92,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 13.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.347,
+     "actual": 0.427,
+     "z": 1.82,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 9.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.675,
+     "actual": 0.748,
+     "z": 1.67,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 6.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.767,
+     "actual": 0.835,
+     "z": 1.65,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 7.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.65,
+     "actual": 0.718,
+     "z": 1.48,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 8.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.522,
+     "actual": 0.612,
+     "z": 1.85,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "sot 9.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.398,
+     "actual": 0.524,
+     "z": 2.68,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 1.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.579,
+     "actual": 0.592,
+     "z": 0.28,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 2.5",
+     "scope": "Local",
+     "n": 103,
+     "expected": 0.295,
+     "actual": 0.311,
+     "z": 0.36,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 2.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.738,
+     "actual": 0.738,
+     "z": 0.01,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 3.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.55,
+     "actual": 0.573,
+     "z": 0.46,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 4.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.37,
+     "actual": 0.398,
+     "z": 0.59,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 5.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.226,
+     "actual": 0.223,
+     "z": -0.07,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 6.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.127,
+     "actual": 0.087,
+     "z": -1.21,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 1.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.643,
+     "actual": 0.563,
+     "z": -1.73,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "yellows 2.5",
+     "scope": "Visitante",
+     "n": 103,
+     "expected": 0.356,
+     "actual": 0.32,
+     "z": -0.76,
+     "alert": false
+    }
+   ],
+   "alerts": [
+    {
+     "kind": "calibration",
+     "market": "jug_tiros 1.5",
+     "scope": "players",
+     "n": 1345,
+     "expected": 0.189,
+     "actual": 0.225,
+     "z": 3.77,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.499,
+     "actual": 0.66,
+     "z": 3.32,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 26.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.466,
+     "actual": 0.621,
+     "z": 3.27,
+     "alert": true
+    },
+    {
+     "kind": "calibration",
+     "market": "shots 24.5",
+     "scope": "Total",
+     "n": 103,
+     "expected": 0.608,
+     "actual": 0.757,
+     "z": 3.21,
+     "alert": true
+    }
+   ]
+  }
+ },
+ "verdict": [
+  {
+   "kind": "calibration",
+   "market": "jug_tiros 1.5",
+   "scope": "players",
+   "pooled_n": 2187,
+   "pooled_z": 4.78,
+   "era": "03c5a85aea75",
+   "n": 667,
+   "z": 2.83,
+   "status": "fixed"
+  },
+  {
+   "kind": "calibration",
+   "market": "sot 9.5",
+   "scope": "Total",
+   "pooled_n": 182,
+   "pooled_z": 4.38,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 2.98,
+   "status": "undecided"
+  },
+  {
+   "kind": "calibration",
+   "market": "shots 22.5",
+   "scope": "Total",
+   "pooled_n": 182,
+   "pooled_z": 4.17,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 1.53,
+   "status": "undecided"
+  },
+  {
+   "kind": "calibration",
+   "market": "shots 24.5",
+   "scope": "Total",
+   "pooled_n": 182,
+   "pooled_z": 4.1,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 1.01,
+   "status": "undecided"
+  },
+  {
+   "kind": "calibration",
+   "market": "jug_tiros 2.5",
+   "scope": "players",
+   "pooled_n": 2016,
+   "pooled_z": 3.64,
+   "era": "03c5a85aea75",
+   "n": 667,
+   "z": 1.4,
+   "status": "fixed"
+  },
+  {
+   "kind": "calibration",
+   "market": "shots 26.5",
+   "scope": "Total",
+   "pooled_n": 182,
+   "pooled_z": 3.59,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 1.47,
+   "status": "undecided"
+  },
+  {
+   "kind": "calibration",
+   "market": "shots 20.5",
+   "scope": "Total",
+   "pooled_n": 182,
+   "pooled_z": 3.47,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 1.25,
+   "status": "undecided"
+  },
+  {
+   "kind": "calibration",
+   "market": "Goles 2.5",
+   "scope": "Total",
+   "pooled_n": 187,
+   "pooled_z": 3.44,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 2.88,
+   "status": "undecided"
+  },
+  {
+   "kind": "calibration",
+   "market": "sot 8.5",
+   "scope": "Total",
+   "pooled_n": 182,
+   "pooled_z": 3.11,
+   "era": "03c5a85aea75",
+   "n": 47,
+   "z": 2.07,
+   "status": "undecided"
+  }
+ ],
+ "eras": [
+  {
+   "era": "03c5a85aea75",
+   "n": 6258,
+   "partidos": 47,
+   "logged_last": "2026-09-25T11:06:38"
+  },
+  {
+   "era": "pre-huella",
+   "n": 15293,
+   "partidos": 147,
+   "logged_last": "2026-09-18T16:23:18"
+  }
+ ]
+}
