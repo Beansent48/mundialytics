@@ -48,18 +48,21 @@ from mundialytics.statistical_core.schemas import canonical_name
 #     PredictionEngine(**{**DEPLOYED_CLUB_ENGINE_KWARGS, "blend_weight_gl": w})
 # PredictionEngine copies xg_rate_kwargs internally, so sharing this dict is safe.
 #
-# sharpen_gamma_1x2 (2026-10-18): back to 1.20, the value it was LOFO-validated
-# at on its own. It had been 1.3 since a joint gamma/rho scan picked that pair at
-# rho = -0.17; rho was smoothed to -0.06 on 2026-09-14 and gamma was never
-# re-scanned, so the deployed pair was never jointly validated. Re-scanned at the
-# current rho over the same six walk-forward seasons: the LOSO optimum is 1.20 in
-# four folds and 1.22 in two, 1X2 log loss -0.00058 (5/6) and ECE 0.0131 -> 0.0085
-# against 1.3, with the draw's O/E 1.096 -> 1.059 -- it was short in 6 of 6 at 1.3.
-# RPS improves too but only -0.00003 in 4 of 6: RPS is nearly blind to this
-# parameter, because the draw is the middle category of a cumulative metric, which
-# is why a drop this stale survived. Nothing gets worse: BTTS -0.00003 (4/6),
-# O/U 2.5 -0.00003 (3/6). See scripts/sharpening_draws/README.md, and
-# scripts/draw_deficit/ for the two-axis form that is NOT deployed.
+# sharpen_gamma_1x2 STAYS AT 1.3 (2026-10-19), and the reason is the whole point
+# of sharpen_contrast_only below. 1.3 came from a joint gamma/rho scan that picked
+# that PAIR at rho = -0.17; rho was smoothed to -0.06 on 2026-09-14 and gamma was
+# never re-scanned, so for the POWER form (p^gamma) the deployed pair had indeed
+# gone stale -- re-scanned at the current rho its LOSO optimum is 1.20, worth 1X2
+# log loss -0.00058 (5/6) and ECE 0.0131 -> 0.0085 (scripts/sharpening_draws/).
+# But the deployed form is no longer p^gamma. The CONTRAST form's own LOSO optimum
+# is 1.268 (1.246-1.287 across folds), so 1.20 belongs to a map we do not serve and
+# handing it over would repeat the very error above: change the form, re-scan the
+# parameter. 1.3 sits 5e-05 of mean log loss from 1.268 -- two folds on the count,
+# below the resolution of the measurement either way -- and fitting the exponent
+# per fold scores WORSE than fixing it, exactly as fitting the second axis did.
+# scripts/draw_deficit/README.md has the grid; both forms were measured twice, in
+# two independent harnesses, whose deltas agree to ~3e-05 (their absolute levels
+# differ by ~5e-04, so never mix absolutes between the two write-ups).
 # coherent_markets (2026-09-23): the sharpened 1X2 used to sit next to a raw
 # scoreline matrix -- 84% home win on the page, 75% summing its own grid. The
 # matrix is now reweighted so each outcome region carries the published 1X2, and
@@ -70,7 +73,21 @@ from mundialytics.statistical_core.schemas import canonical_name
 DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
     "blend_weight_gl": 0.30,
     "ad_rho": -0.07,
-    "sharpen_gamma_1x2": 1.20,
+    "sharpen_gamma_1x2": 1.3,
+    # sharpen_contrast_only (2026-10-18): gamma 1.3 was draining the draw. p^gamma
+    # scales BOTH log-odds against the draw, so correcting the model's
+    # under-confidence on the home-vs-away contrast also took draw mass that was
+    # already calibrated (raw trio O/E 0.992) -- the published trio priced draws at
+    # 0.2318 where 0.2540 happen, z = +5.4, short in 6 of 6 seasons, and coherent
+    # markets then subtracted that deficit from every exact score, BTTS and HT/FT
+    # number too. Applying the SAME exponent to the contrast alone adds no constant
+    # and fits nothing, so all six walk-forward seasons are out of sample: 1X2 log
+    # loss, exact score and HT/FT -0.00128 each and 1X2 RPS -0.00015, every one in
+    # 6/6, draw O/E 1.096 -> 1.029, over/under and BTTS flat (-0.00006). Decoupling
+    # the grid from the published 1X2 instead was strictly dominated, and fitting a
+    # second exponent scored worse out of sample than fixing it.
+    # See scripts/draw_deficit/README.md.
+    "sharpen_contrast_only": True,
     "rescale_lambda_to_goals": True,
     "outcome_rho": -0.06,
     "goal_temper": 1.05,
@@ -107,14 +124,56 @@ DEPLOYED_CLUB_ENGINE_KWARGS: dict[str, Any] = {
 }
 
 
+def sharpen_trio(trio, gamma: float, contrast_only: bool = False) -> np.ndarray:
+    """Sharpen (home, draw, away) probabilities; returns a normalized trio.
+
+    Takes one trio or an (N, 3) array of them, so a vectorized backtest can call
+    this instead of copying it -- a reimplementation drifting from what we serve
+    is the bug the 2026-09 audit kept finding.
+
+    `p_i^gamma` renormalized is exactly (u, v) -> (gamma*u, gamma*v) on the two
+    log-odds against the draw, u = log(p_h/p_d) and v = log(p_a/p_d). Writing
+    those as s = (u+v)/2 (how much both sides beat the draw) and d = (u-v)/2
+    (the home-vs-away contrast) shows what the one exponent does: correcting
+    under-confidence on the CONTRAST also drains the draw, whether the draw
+    needed it or not.
+
+    It does not. `contrast_only=True` scales d alone and leaves s untouched,
+    i.e. it holds sqrt(p_h*p_a)/p_d fixed. Measured on six walk-forward seasons:
+    the draw went from 0.2318 priced against 0.2540 happening (z = +5.4, short
+    in 6 of 6 seasons) to O/E 1.029, while 1X2 log loss, exact score and HT/FT
+    all improved by 0.00128 and 1X2 RPS by 0.00015 -- each in 6 of 6 seasons,
+    with no new constant and nothing fitted. See scripts/draw_deficit/README.md.
+    """
+    t = np.clip(np.asarray(trio, dtype=float), 1e-9, 1.0)
+    one_d = t.ndim == 1
+    t = np.atleast_2d(t)
+    g = float(gamma)
+    if abs(g - 1.0) <= 1e-9:
+        out = t
+    elif not contrast_only:
+        out = t ** g
+    else:
+        u, v = np.log(t[:, 0] / t[:, 1]), np.log(t[:, 2] / t[:, 1])
+        s, d = (u + v) / 2.0, (u - v) / 2.0
+        out = np.stack([np.exp(s + g * d), np.ones_like(s), np.exp(s - g * d)], axis=1)
+    out = out / out.sum(axis=1, keepdims=True)
+    return out[0] if one_d else out
+
+
 def markets_from_lambdas(lh: float, la: float, *, max_goals: int = 10, rho: float = 0.0,
                          temper: float = 1.0, sharpen_gamma: float = 1.0,
+                         sharpen_contrast_only: bool = False,
                          coherent: bool = False):
     """(market probabilities, scoreline distribution) for one pair of lambdas.
 
     `coherent` reweights the matrix so its outcome regions sum to the sharpened
     1X2, and reads every goal market from that matrix, so the page never shows
     a 1X2 its own scoreline grid contradicts.
+
+    `sharpen_contrast_only` applies `sharpen_gamma` to the home-vs-away contrast
+    alone, leaving the draw-vs-rest log-odds alone -- see `sharpen_trio`. It
+    defaults to False, which is the behaviour this function has always had.
     """
     # Probabilities from score matrix
     probs = outcome_probabilities(lh, la, max_goals=max_goals, dixon_coles_rho=rho,
@@ -122,9 +181,8 @@ def markets_from_lambdas(lh: float, la: float, *, max_goals: int = 10, rho: floa
     # Post-hoc 1X2 sharpening (see PredictionEngine.__init__): trio only,
     # renormalized. Other markets and the scoreline matrix stay raw.
     if abs(sharpen_gamma - 1.0) > 1e-9:
-        trio = np.clip(np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]], dtype=float), 1e-9, 1.0)
-        trio = trio ** sharpen_gamma
-        trio = trio / trio.sum()
+        trio = sharpen_trio([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]],
+                            sharpen_gamma, sharpen_contrast_only)
         probs = {**probs, "p_home_win": float(trio[0]), "p_draw": float(trio[1]), "p_away_win": float(trio[2])}
     dist = scoreline_distribution(lh, la, max_goals=max_goals, normalize=True,
                                   dixon_coles_rho=rho, temper=temper)
@@ -162,6 +220,7 @@ def deployed_markets_from_lambdas(lh: float, la: float):
         lh, la, rho=k.get("outcome_rho", k.get("ad_rho", 0.0)),
         temper=k.get("goal_temper", 1.0),
         sharpen_gamma=float(np.clip(k.get("sharpen_gamma_1x2", 1.0), 0.5, 2.0)),
+        sharpen_contrast_only=bool(k.get("sharpen_contrast_only", False)),
         coherent=bool(k.get("coherent_markets", False)),
     )
 
@@ -274,6 +333,7 @@ class PredictionEngine:
         use_xg_rate: bool = True,        # use the dedicated xG-rate predictor when xG is available
         xg_rate_weight: float = 0.60,    # its blend weight vs goals-AD when active (backtest-optimal)
         sharpen_gamma_1x2: float = 1.0,  # 1X2 sharpening exponent (1.0 = off; 1.2 = LOFO-validated)
+        sharpen_contrast_only: bool = False,  # apply it to the home-vs-away contrast only
         outcome_rho: float | None = None,  # DC rho for the OUTCOME matrix (None = ad_rho). LOFO-optimal -0.17 with gamma 1.3
         rescale_lambda_to_goals: bool = False,  # convert the xG-hot lambda level to goals units
         market_level_shift: dict | None = None,  # {"k": shrinkage}; see features/market_level.py
@@ -307,13 +367,20 @@ class PredictionEngine:
         # trio; the scoreline matrix / O-U / BTTS and the competition-layer Monte
         # Carlo (which samples from lambdas and was already calibrated) are untouched.
         self.sharpen_gamma_1x2 = float(np.clip(sharpen_gamma_1x2, 0.5, 2.0))
+        # ...and only to the home-vs-away contrast, not to the draw axis: one
+        # exponent on a trio is two corrections wearing one hat, and the draw did
+        # not need one. `sharpen_trio` has the mechanism, scripts/draw_deficit/
+        # the numbers (6/6 seasons on 1X2 log loss, exact score, HT/FT and RPS).
+        self.sharpen_contrast_only = bool(sharpen_contrast_only)
         # outcome_rho decouples the probability-matrix Dixon-Coles rho from the AD fit
         # rho: a joint gamma/rho LOFO scan (all 6 folds picking gamma=1.3, rho=-0.17,
         # interior optimum, -0.00025 RPS) showed the matrix wants a stronger low-score
         # correction than the fit. None = legacy behavior (use ad_rho everywhere).
-        # That pair no longer holds: rho was smoothed to -0.06 (2026-09-14) and gamma
-        # re-scanned at that rho to 1.20 (2026-10-18). They were co-fitted once, so a
-        # change to either should re-scan the other -- and several scripts under
+        # That pair no longer holds: rho was smoothed to -0.06 (2026-09-14), which
+        # leaves gamma = 1.3 stale FOR THE POWER FORM (its optimum at this rho is
+        # 1.20) but not for the contrast form actually served, whose own optimum is
+        # 1.268. They were co-fitted once, so a change to either should re-scan the
+        # other -- and several scripts under
         # scripts/ still pin the old pair (gamma 1.3, rho -0.17) inline instead of
         # reading DEPLOYED_CLUB_ENGINE_KWARGS. Consistent as snapshots, no longer
         # "the deployed config" whatever their variables are called.
@@ -794,7 +861,8 @@ class PredictionEngine:
             rho=self.outcome_rho if self.outcome_rho is not None else self.ad_rho,
             temper=self.goal_temper if self.goal_temper is not None else 1.0,
             sharpen_gamma=self.sharpen_gamma_1x2,
-            # getattr: engines pickled before the flag existed load without it
+            # getattr: engines pickled before either flag existed load without it
+            sharpen_contrast_only=getattr(self, "sharpen_contrast_only", False),
             coherent=getattr(self, "coherent_markets", False),
         )
 

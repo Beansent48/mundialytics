@@ -1,5 +1,15 @@
 # The draw deficit in the published 1X2: what it costs, and whether it is fixable
 
+> **Status, 2026-10-19.** Where this file says "the deployed form", it means
+> `p_i ** gamma` with gamma = 1.3, which is what was deployed while it was
+> written. The deployed map is now the CONTRAST form — `sharpen_contrast_only`,
+> v0.63.0 — and gamma stays at **1.3**, not the 1.20 this analysis recommended
+> for the power form: 1.20 is that form's optimum, while the contrast form's own
+> LOSO optimum is 1.268, and handing one form's constant to another is the error
+> the whole investigation is about. The measurements below are unchanged and
+> still correct for the form they describe. `scripts/draw_deficit/README.md` has
+> the two forms side by side and the grid that decided it.
+
 Run: `.venv/Scripts/python.exe scripts/experiment_sharpening_draws.py`
 (~3 min, writes `folds.csv`). Measured 2026-10-18 on the deployed walk-forward
 cache, 10,403 matches across six seasons (2020/21–2025/26).
