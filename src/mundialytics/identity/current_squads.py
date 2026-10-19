@@ -257,7 +257,14 @@ class NameIndex:
             self._short.setdefault(sk, []).append((rank, n, value, birth))
         parts = name_parts(name)
         if len(parts) >= MIN_SHARED_TOKENS:
-            for t in set(parts):
+            # `dict.fromkeys` rather than a set: it dedupes a repeated token the
+            # same way while keeping the order the name is written in, so the
+            # token table is built identically from run to run. Each list gets
+            # one append per name either way, so this cannot reorder a posting
+            # list — it only pins the order the KEYS appear in, which is what a
+            # future reader of `_by_token` would otherwise inherit from the
+            # string hash seed.
+            for t in dict.fromkeys(parts):
                 self._by_token.setdefault(t, []).append((parts, rank, value))
 
     def lookup(self, name: object, confirm=None, birth: float | None = None):
@@ -313,6 +320,43 @@ class NameIndex:
                 return hit, "confirmed"
         return None, ""
 
+    def _rarest_postings(self, q: tuple) -> list:
+        """The records worth scanning for query `q`: every token's list that is
+        as short as the shortest one.
+
+        A containment test only has to look at the people who share a token
+        with the query, and the rarest token brings the fewest of them, so that
+        is the list to walk. The subtlety is the TIE. "Tiago Dias Freitas" has
+        two tokens carrying two records each — `dias` holds Tiago Dias himself,
+        `freitas` holds two other men — and taking one list meant taking a
+        single candidate set at random: this method used to pick the shortest
+        with `min` over `set(q)`, and when two tokens tied, the winner came out
+        of the set's iteration order, which is the string hash seed. Two
+        rebuilds of the card catalogue off identical inputs therefore dealt
+        different cards: 207 of them, and one — Tiago Dias Freitas — gained or
+        lost all three of its measured axes depending on the seed (attack 65.3
+        against 48.0), with the rest moving 0.1 on a raw axis behind him.
+
+        Both halves of that are wrong, not just the instability. In all nine
+        queries where the tied tokens disagreed, the LOSING token's list held
+        no admissible record at all: dropping it threw away the only list with
+        the real player in it, so the match was decided by a coin flip between
+        the right answer and no answer. Equal length means equally rare means
+        no evidence to prefer either, so scan them all — two short lists
+        instead of one, and the rank margin below still arbitrates if more than
+        one person turns out to admit the name.
+
+        `q` is an ordered tuple and dict keys keep first-appearance order, so
+        the result is a function of the name alone.
+        """
+        lists = {t: self._by_token.get(t, []) for t in q}
+        n = min((len(v) for v in lists.values()), default=0)
+        out: list = []
+        for v in lists.values():
+            if len(v) == n:
+                out.extend(v)
+        return out
+
     def _contained(self, name: object, confirm=None, max_drop: int | None = None):
         """One spelling of a name that is a SHORTENING of another.
 
@@ -329,7 +373,7 @@ class NameIndex:
         q = name_parts(name)
         if len(q) < MIN_SHARED_TOKENS:
             return None
-        posts = min((self._by_token.get(t, []) for t in set(q)), key=len, default=[])
+        posts = self._rarest_postings(q)
         best: dict[tuple, tuple[float, object]] = {}
         for parts, rank, value in posts:
             short, long = (q, parts) if len(q) <= len(parts) else (parts, q)

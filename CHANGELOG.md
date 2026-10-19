@@ -1,5 +1,58 @@
 # Changelog
 
+## v0.63.1 — The card catalogue is reproducible (2026-10-19)
+
+### Fixed
+- **Two rebuilds of `squadlab_cards.csv` off identical inputs dealt different
+  cards.** Measured by rebuilding twice with nothing changed in between:
+  **1,158 of 5,385 cards moved**, 228 of them in the overall (up to 2.1 points),
+  and one card flipped its three measured axes to role-derived estimates and
+  back (`att_source`/`def_source`/`crea_source` `fbref` ⇄ `rol`, attack 65.3 ⇄
+  48.0). With `PYTHONHASHSEED` fixed the two runs came out identical, which
+  named the mechanism — string hash order — but not the site. There were two,
+  and both are a `set` standing where an order was needed:
+
+  * `NameIndex._contained` chose which posting list to scan with
+    `min((self._by_token.get(t, []) for t in set(q)), key=len)`. A tie in
+    length was broken by the set's iteration order. Instrumented over a full
+    rebuild, **27,881 of 86,229 containment queries hit such a tie** and 31 of
+    them (13 names) had tied tokens that disagreed about the answer. In all
+    nine queries inspected, the LOSING token's list held no admissible record
+    at all: "Tiago Dias Freitas" resolves to Tiago Dias through `dias` and to
+    nobody through `freitas`, so the match was a coin flip between the right
+    answer and no answer — and in the constructed two-candidate case it is a
+    coin flip between two different men. Equal length means equally rare means
+    no evidence to prefer either, so `_rarest_postings` now reads every list
+    that ties for shortest and lets the existing rank margin arbitrate.
+  * `make_resolver` built its lookup table as `{normalize_club(n): n for n in
+    set(elo_names)}`. `normalize_club` deletes digits, so **"CSKA Sofia" (Elo
+    1355) and "CSKA 1948 Sofia" (1311) both key on "cskasofia"** — the only
+    such collision in the 619-club table — and the key went to whichever the
+    set iterated last. The Conference League's CSKA Sofia was priced off a club
+    44 Elo points away **on about half of all hash seeds** (4 of 8 seeds
+    tested), which moved its own 25 cards and, through the median club Elo the
+    projection falls back on, 227 overalls across 56 clubs. On a collision the
+    shorter spelling now wins — the bare name is what it spells, while the long
+    one only reaches the same key because normalisation threw away the token
+    that tells them apart — and a name the table lists verbatim resolves to
+    itself before any folding, so the other club stays reachable.
+
+  **Verified** by rebuilding the catalogue under hash seeds 0–7 and twice with
+  a random seed: all **ten runs byte-identical**. Against the catalogue in
+  production, 207 of 5,385 cards change and only one changes face — Tiago Dias
+  Freitas (Benfica, overall 76.3 → 74.2), who gains the measured axes; the
+  other 206 move 0.1 on a raw axis. The three bounded guardrails are untouched
+  (overall-vs-axes correlation 0.6342, 64.41% of big-5 attacking cards measured,
+  70.33% of defensive ones — identical to four decimals before and after).
+  `tests/test_current_squads.py`, `tests/test_club_resolver.py`.
+
+  Left open: the FBref row behind that one card is a 63-minute 2023/24 cameo
+  for Casa Pia and the squad member is a 2006-born Benfica player with no
+  appearances, so whether it is the same man is not something the name can
+  settle. `_contained` cannot use the birth-year filter `_prefer_birth` applies
+  in the other two tiers — `_by_token` does not store a birth year — and
+  neither source carries one here anyway.
+
 ## v0.63.0 — The sharpening stops draining the draw (2026-10-18)
 
 ### Changed

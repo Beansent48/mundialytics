@@ -57,3 +57,28 @@ def test_short_name_resolves_to_a_longer_name_by_whole_words():
     assert r("Porto") == "FC Porto"
     assert r("AEK") == "AEK Athens"
     assert r("Iberia") is None
+
+
+def test_two_clubs_that_normalise_alike_resolve_the_same_way_every_run():
+    """The collision `normalize_club` creates by deleting digits.
+
+    "CSKA Sofia" and "CSKA 1948 Sofia" are two Sofia clubs 44 Elo points apart,
+    and the normaliser strips everything that is not a letter, so both become
+    "cskasofia". The lookup table was built by a dict comprehension over a SET,
+    which means the key went to whichever name the set iterated last — the
+    string hash seed. The Conference League's CSKA Sofia was therefore priced
+    off the other club on roughly half of all runs, and the SquadLab catalogue
+    moved 227 cards from one rebuild to the next because of it.
+
+    The bare name is the short one, so the short one wins; the long name only
+    reaches the same key because the token telling them apart was deleted.
+    """
+    both = ["CSKA Sofia", "CSKA 1948 Sofia"]
+    for order in (both, both[::-1]):
+        r = make_resolver(order)
+        assert r("CSKA Sofia") == "CSKA Sofia"
+        assert r("cska sofia") == "CSKA Sofia"
+    # and the loser of the collision stays reachable under its own spelling:
+    # the normalised key can only lead to one of the two, so the full name has
+    # to be matched before any folding happens
+    assert make_resolver(both)("CSKA 1948 Sofia") == "CSKA 1948 Sofia"

@@ -180,11 +180,38 @@ def _word_runs(name: str) -> set[str]:
 def make_resolver(elo_names) -> "callable":
     """fixturedownload club name -> ClubElo name (aliases + normalized + substring)."""
     from mundialytics.statistical_core.competition.club_aliases import CLUB_ALIASES
-    names = set(elo_names)
-    by_norm = {normalize_club(n): n for n in names}
+    # `dict.fromkeys` rather than a set: two clubs can normalise onto the SAME
+    # key, and a dict comprehension over a set hands the key to whichever of
+    # them the set iterated last — the string hash seed. Exactly one pair in
+    # the ClubElo table does it, and it is a pair that matters: `normalize_club`
+    # deletes digits, so "CSKA Sofia" (Elo 1355) and "CSKA 1948 Sofia" (1311)
+    # both become "cskasofia", and the Conference League's CSKA Sofia was
+    # priced off a club 44 Elo points away on about half the hash seeds. In the
+    # SquadLab catalogue that moved 227 cards from rebuild to rebuild — its 25
+    # own cards outright, everyone else's through the median club Elo the
+    # projection falls back on.
+    #
+    # On a collision the SHORTER spelling wins, which is the rule rather than
+    # an accident of ordering: the query that collides is the one the short
+    # name spells exactly, while the long one only reaches the same key because
+    # normalisation threw away the very token that tells them apart. Equal
+    # lengths keep the first name the caller listed.
+    names = dict.fromkeys(elo_names)
+    by_norm: dict[str, str] = {}
+    for n in names:
+        k = normalize_club(n)
+        if k not in by_norm or len(str(n)) < len(str(by_norm[k])):
+            by_norm[k] = n
     word_runs = {n: _word_runs(n) for n in names}
 
     def resolver(name: str):
+        # A name the table lists verbatim is that club, before any folding gets
+        # a chance to send it somewhere else. It only decides anything for the
+        # colliding pair above — everywhere else the normalised key is unique
+        # and leads straight back here — and it is what keeps the loser of that
+        # collision reachable under its own full spelling.
+        if name in names:
+            return name
         low = str(name).lower().strip()
         alias = CLUB_ALIASES.get(low)
         # An alias is only useful if it names a club the table actually has.
