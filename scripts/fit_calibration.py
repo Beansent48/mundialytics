@@ -7,18 +7,26 @@ other seasons and applied to the held-out one. Reports ECE + RPS + log-loss
 before/after. Isolated: no engine changes.
 """
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
+    DEPLOYED_CLUB_ENGINE_KWARGS as K, sharpen_trio)
+
 CACHE = ROOT / "data/processed/enriched/understat_xg/walkforward_preds.csv"
+# Sweep the family we actually serve. Since 2026-10-18 the exponent goes on the
+# home-vs-away contrast only (scripts/draw_deficit/README.md), so fitting gamma
+# against `p ** gamma` would now be tuning a parameter for a map nobody uses.
+CONTRAST_ONLY = bool(K.get("sharpen_contrast_only", False))
 
 
 def sharpen(P: np.ndarray, gamma: float) -> np.ndarray:
-    Q = np.clip(P, 1e-9, 1.0) ** gamma
-    return Q / Q.sum(axis=1, keepdims=True)
+    return sharpen_trio(P, gamma, CONTRAST_ONLY)
 
 
 def metrics_1x2(P: np.ndarray, o: np.ndarray) -> dict:

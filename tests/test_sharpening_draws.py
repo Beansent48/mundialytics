@@ -32,7 +32,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from mundialytics.statistical_core.distributions import scoreline_distribution  # noqa: E402
 from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
-    DEPLOYED_CLUB_ENGINE_KWARGS as K, markets_from_lambdas)
+    DEPLOYED_CLUB_ENGINE_KWARGS as K, deployed_markets_from_lambdas,
+    markets_from_lambdas)
 
 # lambda pairs spanning what the engine actually serves: heavy favourite,
 # even game, low-scoring, away favourite.
@@ -131,12 +132,18 @@ def test_pair_draw_at_one_is_pair(exp, lh, la, gamma):
 @pytest.mark.parametrize("lh,la", CASES)
 def test_region_mass_shortcut_reproduces_the_engine(exp, lh, la):
     """The harness claim: markets as region-weighted masses ARE the engine's
-    coherent markets, so the arms differ only by the sharpening."""
+    coherent markets, so the arms differ only by the sharpening.
+
+    Asserted against `deployed_markets_from_lambdas` rather than a kwarg-by-kwarg
+    reconstruction. The reconstruction read four constants off K and silently
+    took the default for a fifth, so when `sharpen_contrast_only` was deployed
+    (v0.63.0) this test quietly narrowed from "what we serve" to "the power map",
+    while still looking like it tracked the config. Calling the deployed entry
+    point directly is the one form that cannot go stale. The shortcut itself is
+    a reweighting of the raw matrix and is agnostic to how the trio was made, so
+    it holds for whatever map is deployed next."""
     p, m = raw_trio(lh, la)
-    probs, _ = markets_from_lambdas(
-        lh, la, rho=K["outcome_rho"], temper=K["goal_temper"],
-        sharpen_gamma=float(K["sharpen_gamma_1x2"]),
-        coherent=bool(K["coherent_markets"]))
+    probs, _ = deployed_markets_from_lambdas(lh, la)
     pub = np.array([probs["p_home_win"], probs["p_draw"], probs["p_away_win"]])
     i, j = np.indices(m.shape)
     region = np.where(i > j, 0, np.where(i == j, 1, 2))

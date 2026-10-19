@@ -33,23 +33,23 @@ Where the engine sits, in ranked probability score (lower is better):
 |---|---|
 | Uniform 1/3 — no information at all | 0.2356 |
 | League base rates — home advantage only | 0.2308 |
-| **This engine** | **0.1999** |
+| **This engine** | **0.1998** |
 | Bet365 closing odds | 0.1946 |
 
 Between knowing nothing and the best-informed price on the market there is
-0.0362 of RPS. **The engine covers 85% of it.**
+0.0362 of RPS. **The engine covers 86% of it.**
 
 Head to head with the closing line:
 
 | | RPS (1X2) | Log loss (1X2) | Log loss (O/U 2.5) |
 |---|---|---|---|
-| This engine | 0.1999 | 0.9857 | 0.6794 |
+| This engine | 0.1998 | 0.9846 | 0.6793 |
 | Bet365 closing | **0.1946** | **0.9680** | **0.6710** |
-| gap | +0.0053 | +0.0177 | +0.0083 |
+| gap | +0.0052 | +0.0166 | +0.0083 |
 
 It does **not** beat the closing line — about 2.7% behind, and the gap holds in
 every season and every league (worst Premier League +0.0064, best LaLiga
-+0.0042), which is what makes it a ceiling rather than noise. Bet365's
++0.0041), which is what makes it a ceiling rather than noise. Bet365's
 closing price carries injury news, confirmed lineups and the weight of informed
 money; this engine has public data and nothing else.
 
@@ -80,15 +80,19 @@ the time is another. It is:
 
 ![1X2 reliability diagram](docs/img/calibration_1x2.png)
 
-Home and away curves track the diagonal. Before squad values went in, the home
+All three curves track the diagonal. Before squad values went in, the home
 curve sat below it and the away curve above it through the 30–60% band; both now
-sit on it. The one visible miss is the top away bin (~83% said, 75% seen,
-about 60 matches). It is not statistically significant, Bet365 was less
-confident than us on those same matches, and every recalibration tried for it lost out of
+sit on it. The draw curve joined them on 2026-10-18, when the 1X2 sharpening
+stopped being applied to the draw axis: it used to run about two points low
+everywhere (0.2318 priced against 0.2540 happening), and now prices draws at
+0.2468 — within 0.2 points of Bet365's own 0.2489 on the same matches. The one
+visible miss is the top away bin (~83% said, 73% seen, 44 matches). It is not
+statistically significant (z = −1.75), Bet365 was less confident than us on
+those same matches (74%), and every recalibration tried for it lost out of
 sample, so it is left alone. Draws never get
 predicted above ~35% — a known property of the sport, not a defect: draws are
 genuinely rarely the favourite. The figure scores all 10,403 walk-forward
-predictions, so its RPS reads 0.2004; the benchmark above uses the 10,080 of them
+predictions, so its RPS reads 0.2003; the benchmark above uses the 10,080 of them
 that have Bet365 odds attached. Regenerate with
 `python scripts/plot_calibration.py`.
 
@@ -207,9 +211,16 @@ Transfermarkt ───────────── squad market value ──�
   quietly corrupt both.
 - **Markets** — the score matrix is derived once and every market (totals,
   BTTS, half-time, correct score) is read off it. The 1X2 is sharpened after
-  the fact (the raw model is under-confident), and the matrix is reweighted so
-  each outcome region carries exactly that 1X2, so no page can show a 1X2 its
-  own scoreline grid contradicts. Scored out of sample before it was switched
+  the fact (the raw model is under-confident), **on the home-vs-away contrast
+  only**: `p^gamma` scales both log-odds against the draw, so one exponent was
+  also draining draw mass the model had got right, and since the matrix is
+  reweighted onto the published 1X2 that deficit reached every goal market too.
+  Splitting the two axes fixed it in 6 of 6 seasons on 1X2 log loss, exact
+  score, HT/FT and 1X2 RPS alike; against a power baseline whose exponent is
+  itself re-scanned, about half that gain remains and the fold count is
+  knife-edge (`scripts/draw_deficit/README.md`). The matrix
+  is reweighted so each outcome region carries exactly that 1X2, so no page can
+  show a 1X2 its own scoreline grid contradicts. Scored out of sample before it was switched
   on: no market got worse, and exact score and HT/FT improved in 5 of 6 and 6
   of 6 seasons (`scripts/experiment_market_coherence.py`). The headline "likely
   score" is reported *per outcome* (most likely home win, draw, away win),
@@ -249,6 +260,18 @@ Recorded because negative results are the expensive part of the project:
   without handing over part of the model's own strength gap: −0.00004 at best,
   2 of 6 seasons. The engine already holds what a results-based rating knows
   (`scripts/elo_blend/`).
+- **Modelling the goals correlation properly.** A Karlis-Ntzoufras bivariate
+  Poisson and Frank and Gaussian copulas, against the Dixon-Coles patch, on the
+  markets that read the scoreline matrix. The dependence is not there to model:
+  the observed −0.053 correlation between home and away goals is almost all
+  *mismatch* (strong sides face weak ones, corr(λ_h, λ_a) = −0.57), and
+  conditional on the λ actually served the covariance is +0.0138 at t = 1.10,
+  negative in two of six seasons, while the deployed matrix already implies
+  +0.0152. Out of sample no market clears 5 of 6 folds in any arm, BTTS is
+  worse in 5 of 6 in every arm, and no family prices the 1X2 better than the
+  patch in **zero** of six folds. Fitted on the same data with the same single
+  parameter, Dixon-Coles takes 2–5× the exact-score likelihood gain of any of
+  them. `scripts/bivariate_goals/README.md`.
 - **Per-team first-half share.** Measured correlation r = −0.118 — noise. The
   half-time markets use a global scaling instead.
 - **Shrinking per-competition parameters.** `AttackDefenseModel` fits μ and home
@@ -264,7 +287,7 @@ Recorded because negative results are the expensive part of the project:
 
 ## Conclusions
 
-- **The club engine works.** Calibrated 1X2 probabilities, 85% of the way from
+- **The club engine works.** Calibrated 1X2 probabilities, 86% of the way from
   an uninformed baseline to the closing line, validated out-of-sample in time.
   That is the part with an external yardstick behind it.
 - **As a betting edge, it does not.** That question was asked properly and the
@@ -276,8 +299,9 @@ Recorded because negative results are the expensive part of the project:
 ## Known limitations
 
 - Goals are modelled as **independent** Poisson with the Dixon-Coles correction
-  applied to the low-score cells only. That is a patch, not a correlation model;
-  a true bivariate Poisson or a copula would be the next step.
+  applied to the low-score cells only. That is a patch, not a correlation model
+  — but it is no longer an open item: a bivariate Poisson and two copulas were
+  measured against it and none of them pays (see What didn't work).
 - **Little injury news before the lineups.** Until the squads are announced the
   model only knows who missed the previous match; a player injured in training
   this week, or back from injury, is invisible until the lineup pass.
@@ -510,7 +534,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  363 tests green on a clean checkout; 109 more
+tests/                  605 tests green on a clean checkout; 109 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```

@@ -140,6 +140,7 @@ def _implied_scale(lh: np.ndarray, la: np.ndarray, p_book: np.ndarray,
     kw = dict(rho=K.get("outcome_rho", K.get("ad_rho", 0.0)),
               temper=K.get("goal_temper", 1.0),
               sharpen_gamma=float(np.clip(K.get("sharpen_gamma_1x2", 1.0), 0.5, 2.0)),
+              sharpen_contrast_only=bool(K.get("sharpen_contrast_only", False)),
               coherent=bool(K.get("coherent_markets", False)))
 
     def p_over(s):
