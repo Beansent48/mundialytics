@@ -30,6 +30,24 @@ def _cards() -> pd.DataFrame:
     return df
 
 
+def _measurable(df: pd.DataFrame) -> pd.DataFrame:
+    """The cards whose axes the FBref import can actually measure.
+
+    Not a convenience filter — the catalogue holds two populations and the
+    source only reaches one of them. Since 2026-09-18 it also deals the 108
+    clubs of the European draw, 70 of which play in leagues the free Kaggle
+    mirrors never publish (Greek, Turkish, Scottish, Swiss, Scandinavian,
+    Cypriot, Croatian, Baltic, Slovak). A share measured over the pool of both
+    moves when the LEAGUE MIX changes, which is not what these guardrails were
+    written to catch: the catalogue was rebuilt for the first time in six weeks
+    on 2026-10-19 and the attacking share read 44% where it had read 64% on the
+    same measurement, purely because 2,263 unreachable players had joined the
+    denominator. See CURRENT_SEASON_SOURCE_LEAGUES and the test below, which
+    pins the other population instead of hiding it.
+    """
+    return df[df["league"].isin(C_BUILD.CURRENT_SEASON_SOURCE_LEAGUES)]
+
+
 # ── the catalogue ──────────────────────────────────────────────────────────────
 def test_every_club_can_field_an_eleven():
     """The Elo scale is fitted on every club's own best eleven, so a club that
@@ -110,8 +128,15 @@ def test_the_overall_agrees_with_its_own_axes():
     """A card is one object: the role weights the axes and the overall is what
     that weighting comes to. The two used to be computed by independent routes
     and could contradict each other on the same card — Haaland read 92.1 overall
-    beside 84.2 in attack."""
-    df = _cards()
+    beside 84.2 in attack.
+
+    Scoped to the measurable population. Where neither the overall nor the axes
+    are measured the agreement is not a defect but arithmetic on two
+    projections: pooled over the whole catalogue this reads 0.553, and the
+    1,985 European-draw outfield cards behind that — overall from a club-level
+    projection of R² 0.243 — carry 0.424 on their own. 0.633 on the cards the
+    source reaches, which is the claim the test makes."""
+    df = _measurable(_cards())
     a = df[(df["kind"] == "actual") & (df["position"] != "Goalkeeper")]
     got = [(o, C_BUILD.overall_from_axes(str(rl), str(p),
                                          {"attack": at, "defense": de, "creation": cr}))
@@ -206,8 +231,12 @@ def test_the_attacking_axis_is_measured_too():
     if "att_source" not in df.columns:
         pytest.skip("catalogue predates the FBref attacking source")
     a = df[(df["kind"] == "actual") & (df["position"].isin(["Forward", "Midfielder"]))]
+    reach = _measurable(a)
+    r_meas = (reach["att_source"] == "fbref")
+    assert r_meas.mean() >= 0.45, f"solo {r_meas.mean():.0%} de atacantes medidos"
+    # the spread claim holds over the whole catalogue: a role baseline is a
+    # role baseline whatever league the club plays in.
     measured = (a["att_source"] == "fbref")
-    assert measured.mean() >= 0.45, f"solo {measured.mean():.0%} de atacantes medidos"
     assert a.loc[measured, "attack"].std() > a.loc[~measured, "attack"].std()
 
 
@@ -280,8 +309,10 @@ def test_the_defensive_axis_is_mostly_measured_now():
     if "def_source" not in df.columns:
         pytest.skip("catalogue predates the FBref defensive source")
     d = df[(df["kind"] == "actual") & (df["position"] == "Defender")]
+    reach = _measurable(d)
+    r_meas = (reach["def_source"] == "fbref")
+    assert r_meas.mean() >= 0.5, f"solo {r_meas.mean():.0%} de defensas medidos"
     measured = (d["def_source"] == "fbref")
-    assert measured.mean() >= 0.5, f"solo {measured.mean():.0%} de defensas medidos"
     # and it has to SAY something: the measured axis must carry a real spread,
     # not sit on a placeholder. It is percentile-mapped now (a controlled range),
     # so the old 'measured spreads wider than role-implied' no longer holds —
@@ -291,6 +322,81 @@ def test_the_defensive_axis_is_mostly_measured_now():
     md = d.loc[measured, "defense"]
     assert md.std() > 4.0, f"defensa medida casi plana (std {md.std():.1f})"
     assert md.quantile(0.9) - md.median() > 3.0
+
+
+def test_the_unmeasured_axes_are_the_sources_reach_not_a_name_mismatch():
+    """The other population, pinned rather than hidden.
+
+    The three guardrails above are scoped to the leagues the FBref import
+    measures every season. This one states what that leaves out, because the
+    honest reading of "44% of attacking cards are measured" is not "the match
+    is broken" but "most of the catalogue plays in leagues the free source
+    never publishes". Measured 2026-10-19 over 2,856 attacking cards:
+
+        big-5 clubs           1,582 cartas   64.4% medidas
+        European draw         1,274 cartas   19.2% medidas
+
+    and of the 1,593 unmeasured, 1,464 (91.9%) have no FBref row under ANY
+    spelling, while 11 (0.7%) have one at the same club under another — so
+    name resolution is not the lever, and the aliases that would move it are
+    worth about 0.4 points of share.
+
+    The assertion that matters is the last one: it fails if a real matching
+    regression ever appears, which is the failure this test exists to separate
+    from the source's reach. It will not fail as the source ages — that shows
+    up in the scoped guardrails above, and ageing is what is expected, since
+    the newest FBref season on offer is 2025/26 against a live 2026/27.
+    """
+    from mundialytics.identity.current_squads import _fold
+
+    df = _cards()
+    if "att_source" not in df.columns:
+        pytest.skip("catalogue predates the FBref attacking source")
+    a = df[(df["kind"] == "actual") & (df["position"].isin(["Forward", "Midfielder"]))]
+    reach = _measurable(a)
+    rest = a[~a.index.isin(reach.index)]
+    if rest.empty:
+        pytest.skip("catalogue holds only the leagues the source covers")
+    r_share = float((reach["att_source"] == "fbref").mean())
+    o_share = float((rest["att_source"] == "fbref").mean())
+    assert r_share > 2 * o_share, (
+        f"el agujero ya no sigue el alcance de la fuente: big-5 {r_share:.1%} "
+        f"vs resto {o_share:.1%}")
+
+    src = ROOT / "data/processed/player_attack_fbref.csv"
+    if not src.exists():
+        pytest.skip("FBref attacking source not built")
+    fb = pd.read_csv(src, usecols=["player", "club"])
+    by_club: dict[str, list[tuple]] = {}
+    for name, club in zip(fb["player"].astype(str), fb["club"].astype(str)):
+        parts = tuple(_fold(name).split())
+        for tok in set(_fold(club).split()):
+            by_club.setdefault(tok, []).append(parts)
+
+    def suspect(player: object, club: object) -> bool:
+        """An FBref row at the same club that could be this man misspelt.
+
+        Two shared name parts, or a shared surname plus a shared first initial
+        — the shape of "Emi Buendía" against "Emiliano Buendía". Deliberately
+        generous, because it is counting SUSPECTS and the claim is that there
+        are almost none.
+        """
+        q = tuple(_fold(player).split())
+        if not q:
+            return False
+        for tok in set(_fold(club).split()):
+            for c in by_club.get(tok, ()):
+                shared = len(set(q) & set(c))
+                if shared >= 2 or (shared and q[-1] == c[-1] and q[0][:1] == c[0][:1]):
+                    return True
+        return False
+
+    miss = a[a["att_source"] != "fbref"]
+    same_club = sum(suspect(p, c) for p, c in zip(miss["player"], miss["club"]))
+    share = same_club / max(len(miss), 1)
+    assert share < 0.05, (
+        f"{same_club} de {len(miss)} cartas sin medir tienen fila FBref en el "
+        f"mismo club ({share:.1%}) — eso ya es un fallo de nombres, no alcance")
 
 
 def test_an_unmeasured_defender_falls_back_to_his_role():

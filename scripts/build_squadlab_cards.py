@@ -637,6 +637,33 @@ def _season_label(code: object) -> str:
     return s
 
 
+# WHAT THE FBREF IMPORT CAN REACH, AND WHAT IT CANNOT. The free Kaggle mirrors
+# behind the measured axes are not one source but two shapes of source, and the
+# difference decides which cards can carry a measured axis at all:
+#
+#   big five, every season   2023/24 + 2024/25 + 2025/26 season tables
+#   twelve more leagues      2023/24 ONLY (EFL, Segunda, Serie B, Ligue 2,
+#                            2. Bundesliga, Eredivisie, Primeira Liga, Pro
+#                            League, MLS, Liga MX, Brasileirão, Primera División)
+#   everyone else            nothing, ever
+#
+# So a card's axis is measurable when his CLUB plays in the big five, and
+# otherwise only incidentally — because his league happened to be in the single
+# 2023/24 dump, or because he once played in a covered one. Since 2026-09-18
+# the catalogue also deals the 108 clubs of the European draw (commit 8f40121),
+# and 70 of those play in leagues from the third row: Greek, Turkish, Scottish,
+# Swiss, Scandinavian, Cypriot, Croatian, Baltic, Slovak. Their cards fall back
+# to what the role implies and no name matching will change that — measured
+# 2026-10-19, of 1,593 unmeasured attacking cards only 11 had an FBref row at
+# the same club under another spelling, 0.7%.
+#
+# The name is "current season" because that is the claim: these are the leagues
+# the import measures AGAIN each season. The rest are a frozen 2023/24 snapshot
+# that the live season walks away from.
+CURRENT_SEASON_SOURCE_LEAGUES = {"Premier League", "LaLiga", "Bundesliga",
+                                 "Serie A", "Ligue 1"}
+
+
 # ── sources ────────────────────────────────────────────────────────────────────
 def axis_samples() -> dict[str, tuple[float, float]]:
     """player -> (attacking sample, defensive/creative sample).
@@ -2057,6 +2084,18 @@ def main() -> None:
         sub = cards[cards["position"] == pos]
         if len(sub):
             print(f"     {pos:11} {(sub['att_source'] == 'fbref').mean():.1%}")
+    # The share above pools two populations the source treats differently, so
+    # it drifts whenever the catalogue's league mix changes rather than when
+    # the measurement does — which is exactly what happened on 2026-09-18.
+    # Print both halves so the number is readable.
+    act = cards[cards["kind"] == "actual"]
+    in_b5 = act["league"].isin(CURRENT_SEASON_SOURCE_LEAGUES)
+    for lbl, sub in (("big-5", act[in_b5]), ("resto de Europa", act[~in_b5])):
+        if not len(sub):
+            continue
+        print(f"     {lbl:16} {len(sub):5d} cartas · ataque "
+              f"{(sub['att_source'] == 'fbref').mean():5.1%} · defensa "
+              f"{(sub['def_source'] == 'fbref').mean():5.1%}")
     fw = cards[cards["position"] == "Forward"]
     print(f"  tope de defensa en delanteros: max {fw['defense'].max():.1f} "
           f"(limite {POSITION_DEF_CAP['Forward']:.0f}, afecta a "
