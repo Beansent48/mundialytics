@@ -74,10 +74,22 @@ be independent of one laptop.
 
 | Service | Image | Notes |
 |---|---|---|
-| `api` | `python:3.12-slim` + `requirements-lock.txt` | `data/` mounted read-only. Healthcheck on `/health`; meaningful only once A1 makes startup mean "models loaded". |
+| `api` | `python:3.12-slim` + `requirements-lock.txt` | `data/` mounted read-only. Healthcheck on `/health` — **with a `start_period` of at least 3 minutes**, see below. |
 | `web` | `node:22-alpine`, multi-stage | Needs `output: "standalone"` in `next.config.ts` (A1 adds it) or the image carries all of `node_modules`. **`next build`, never `next dev`.** |
 | `postgres` | `postgres:17-alpine` | Named volume. Exists from **B1**; this is why B1 comes before A2. |
 | `caddy` | `caddy:2` | Reverse proxy and automatic TLS. Routes `/` to `web`; the API is **not** exposed publicly unless something needs it directly. |
+
+**The healthcheck needs a `start_period`, and no amount of API work removes
+that.** Measured by A1 on 2026-10-21: uvicorn runs the lifespan *before* it
+binds the socket, and the lifespan loads the models, so during a cold fit the
+probe gets a refused connection — not a slow answer, not a 503, nothing to
+answer with. With the joblib cache cold that fit is about two minutes. A
+healthcheck without `start_period` therefore marks the container unhealthy,
+restarts it, and the restart begins the fit again: it never comes up. `/health`
+was made a pure process-state probe in the same PR (200 whenever the process is
+up, with a `ready` flag), which covers every *live* case — a reload triggered by
+the daily refresh, a request arriving while another holds the load, a start whose
+warm-up failed — but it cannot cover a port that is not listening yet.
 
 Notes that will save an afternoon:
 
