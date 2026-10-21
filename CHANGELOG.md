@@ -76,6 +76,24 @@ decimals. Every number below was measured with the new
 - **The matchday screen retries by itself.** It fetches from the browser, so a
   cold or restarting API left the panel on "could not load" until the tab
   regained focus. Now every five seconds for two minutes.
+- **`/health` is a probe again.** Routing it through the readiness guard made
+  it answer 503 for as long as a load took and raise after a failed start,
+  which is the opposite of what the lifespan promises and useless as the
+  container HEALTHCHECK **A2** plans to point at it. It now answers from
+  process state and never triggers a load: 200 whenever the process is up,
+  `ready` for whether the models are in, `matches`/`dataThrough` only once they
+  are. `web/scripts/require-api.mjs` therefore checks `ready` rather than
+  merely that something answered — a loading API now returns 200, and a build
+  against one is exactly what that guard exists to prevent.
+- **One definition of the season the serving path asks for.** The daily pass
+  wrote calendar snapshots for `current_season` (the foundation's newest) while
+  `_predict` asked for the season the date implies. The two agree for eleven
+  months and diverge in July and August — when the serving path would have
+  found no snapshot, fallen back to a blocking provider fetch once per window,
+  and the daily log would have reported every calendar fine. `cat.serving_season()`
+  is now the single definition, `cat.seasons_to_snapshot()` plans both seasons
+  when they differ, and the pass distinguishes "could not refresh, still serving
+  yesterday's" from "nothing on disk".
 
 ### Added
 - `scripts/measure_cold_start.py` — five modes (`imports`, `cold`, `warm`,
@@ -85,12 +103,14 @@ decimals. Every number below was measured with the new
 - `output: "standalone"` in `web/next.config.ts`: 37 MB against ~500 MB of
   `node_modules`, for the A2 container image. Not free after all — the build
   goes from 25 s to 35 s for the file tracing — and serving is unaffected.
-- `tests/test_calendar_snapshot.py`, `tests/test_cold_start_warmup.py` (18
-  tests; the clean-checkout suite goes 605 to 622, all 733 green locally). What they pin is the part that could serve wrong football rather than
-  slow football: `completed` has to come back off the CSV as a **boolean**,
-  because read as the string `"False"` it passes the `astype(bool)` that
-  `trusted_calendar` and the Golden Boot race both ask, and a settled season
-  would read as 380 fixtures still to play; an empty provider answer must never
+- `tests/test_calendar_snapshot.py`, `tests/test_cold_start_warmup.py` (25
+  tests; the clean-checkout suite goes 605 to 629, and 737 pass with the
+  local dataset built). What they pin is the part that could serve wrong
+  football rather than slow football: `completed` has to come back off the CSV
+  as a **boolean**, because read as the string `"False"` it passes the
+  `astype(bool)` that `trusted_calendar` and the Golden Boot race both ask, and
+  a settled season would read as 380 fixtures still to play; an empty answer
+  from the provider must never
   replace a good snapshot; and the level memo must recompute on a new logged
   lambda, new foundation rows, a different `k` or a new odds file.
 

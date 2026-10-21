@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -135,6 +136,62 @@ def test_no_snapshot_and_a_dead_provider_is_an_empty_frame(snapshots, monkeypatc
     cal = cat.season_calendar("Serie A", "2026-2027")
     assert cal.empty
     assert list(cal.columns) == cat.CALENDAR_COLUMNS
+
+
+# ── the season the snapshot is written for ───────────────────────────────────
+def _foundation(last_season: str) -> pd.DataFrame:
+    """A foundation frame whose newest season is `last_season`, all five leagues."""
+    return pd.DataFrame([
+        {"competition": meta["id"], "season": s}
+        for meta in cat.COMPETITIONS.values()
+        for s in ("2025-2026", last_season)
+    ])
+
+
+def test_the_serving_season_follows_the_date_not_the_foundation():
+    """July starts the new season: the foundation still holds none of it, and
+    the new season's clubs are what a price is about."""
+    assert cat.serving_season(date(2027, 6, 30)) == "2026-2027"
+    assert cat.serving_season(date(2027, 7, 1)) == "2027-2028"
+    assert cat.serving_season(date(2027, 12, 31)) == "2027-2028"
+    assert cat.serving_season(date(2028, 1, 1)) == "2027-2028"
+
+
+def test_the_daily_pass_writes_the_season_the_serving_path_asks_for(monkeypatch):
+    """The bug this pins: the pass wrote `current_season` (the foundation's
+    newest) while `_predict` asked for `serving_season` (the date's). In July
+    they differ, the snapshot the serving path wanted did not exist, and the
+    site fell back to a blocking provider fetch while the daily log said every
+    calendar was fine."""
+    import api.main as m
+
+    df = _foundation("2026-2027")
+    july = date(2027, 7, 15)
+    pairs = cat.seasons_to_snapshot(df, today=july)
+
+    wanted = cat.serving_season(july)
+    assert wanted == "2027-2028"
+    for meta in cat.COMPETITIONS.values():
+        assert (meta["id"], wanted) in pairs, f"no snapshot planned for {meta['id']} {wanted}"
+        # and the foundation's own season is still written, for the endpoints
+        # that work from it (/fixtures, /match, /league, /awards)
+        assert (meta["id"], "2026-2027") in pairs
+
+    # the serving path really does ask for that season, and through this helper
+    asked = []
+    monkeypatch.setattr(cat, "serving_season", lambda today=None: "1999-2000")
+    monkeypatch.setattr(cat, "season_calendar",
+                        lambda comp, season: asked.append((comp, season)) or pd.DataFrame())
+    monkeypatch.setattr(m, "_models", lambda: (object(), [], df))
+    m._predict("valencia", "betis", "LaLiga")
+    assert asked == [("LaLiga", "1999-2000")]
+
+
+def test_one_season_is_planned_once(monkeypatch):
+    """In the eleven months when the two agree, no duplicate fetch."""
+    df = _foundation("2026-2027")
+    pairs = cat.seasons_to_snapshot(df, today=date(2027, 3, 1))
+    assert len(pairs) == len(set(pairs)) == len(cat.COMPETITIONS)
 
 
 def test_a_dead_provider_is_retried_at_most_once_per_window(snapshots, monkeypatch):

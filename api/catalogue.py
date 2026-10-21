@@ -142,15 +142,20 @@ def refresh_calendar(comp_id: str, season: str, block: bool = True,
         lock.release()
 
 
-def refresh_calendars(seasons: dict[str, str]) -> dict[str, bool]:
+def refresh_calendars(pairs) -> dict[tuple[str, str], bool]:
     """Write every snapshot, blocking, however fresh the last one is.
 
-    `{competition id: season}`. What the daily refresh calls: that pass talks to
-    ESPN anyway, so it is the right place to pay for this, and the serving path
-    then only ever reads.
+    Takes (competition id, season) pairs — `seasons_to_snapshot` builds them.
+    What the daily refresh calls: that pass talks to ESPN anyway, so it is the
+    right place to pay for this, and the serving path then only ever reads.
     """
-    return {comp: refresh_calendar(comp, season, max_age=0.0)
-            for comp, season in seasons.items()}
+    return {(comp, season): refresh_calendar(comp, season, max_age=0.0)
+            for comp, season in pairs}
+
+
+def has_snapshot(comp_id: str, season: str) -> bool:
+    """Whether a calendar can be served for this league-season without a fetch."""
+    return _snapshot_path(comp_id, season).exists()
 
 
 @lru_cache(maxsize=32)
@@ -202,9 +207,46 @@ def season_calendar(comp_id: str, season: str) -> pd.DataFrame:
     return _read_snapshot(comp_id, season, stamp)
 
 
+def serving_season(today: date | None = None) -> str:
+    """The season the serving path asks for, read off the calendar date.
+
+    Deliberately not `current_season`, which is the newest season in the
+    foundation. On matchday one the foundation holds no match of the new season
+    at all, and the new season's clubs are what a price is about — so `_predict`
+    asks for the season the date implies. The two agree for eleven months of the
+    year and disagree in July and August, which is exactly when it matters.
+
+    This is the one definition: anything that has to agree with what the serving
+    path requests — above all whatever writes the calendar snapshots it reads —
+    must call this rather than repeat the arithmetic.
+    """
+    d = today or date.today()
+    y = d.year if d.month >= 7 else d.year - 1
+    return f"{y}-{y + 1}"
+
+
 def current_season(df: pd.DataFrame, comp_id: str) -> str:
     seasons = df.loc[df["competition"] == comp_id, "season"]
     return str(sorted(seasons.unique())[-1]) if len(seasons) else ""
+
+
+def seasons_to_snapshot(df: pd.DataFrame, today: date | None = None) -> list[tuple[str, str]]:
+    """Every (competition, season) pair the serving path can ask for.
+
+    Both seasons, when they differ. `/fixtures`, `/match`, `/league` and
+    `/awards` work from `current_season` (the foundation's newest), while
+    `_predict` works from `serving_season` (the date's). Writing only the first
+    left the second with no snapshot every July and August: the site would fall
+    back to a blocking provider fetch once per window, and the daily log would
+    report that everything went fine.
+    """
+    serving = serving_season(today)
+    pairs: list[tuple[str, str]] = []
+    for meta in COMPETITIONS.values():
+        comp = meta["id"]
+        for season in dict.fromkeys(s for s in (current_season(df, comp), serving) if s):
+            pairs.append((comp, season))
+    return pairs
 
 
 def seasons_for(df: pd.DataFrame, comp_id: str) -> list[str]:

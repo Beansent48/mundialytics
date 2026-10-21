@@ -227,7 +227,8 @@ def mode_warm(logdir: Path) -> list[dict]:
     """One process, every endpoint twice: the per-endpoint work, model load aside."""
     rows = []
     with Server(log=logdir / "warm.log") as srv:
-        _get("/health")                      # pay the model load once, up front
+        # /catalogue, not /health: the probe deliberately never loads anything
+        _get("/catalogue")                   # pay the model load once, up front
         match_path = _match_path()
         print(f"  (boot {srv.boot:.2f}s, warmed)")
         for name, path in endpoints():
@@ -334,7 +335,7 @@ def mode_web(logdir: Path, prod: bool) -> list[dict]:
            else [_npm(), "run", "dev", "--", "--port", str(WEB_PORT)])
     base = f"http://127.0.0.1:{WEB_PORT}"
     with Server(log=logdir / "web_api.log") as api_srv:
-        _get("/health")                      # the API is warm; we are timing Next
+        _get("/catalogue")                   # the API is warm; we are timing Next
         print(f"  (api boot {api_srv.boot:.2f}s + warm)")
         if prod:
             # The build has to run with the API UP. Every data page is SSG

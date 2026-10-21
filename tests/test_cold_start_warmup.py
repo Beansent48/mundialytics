@@ -119,10 +119,13 @@ def ready(monkeypatch):
     import api.main as m
 
     loads = []
+    frame = pd.DataFrame({"date": pd.to_datetime(["2026-10-18", "2026-10-19"])})
     monkeypatch.setattr(m, "_READY", None, raising=False)
+    monkeypatch.setattr(m, "_READY_INFO", {}, raising=False)
     monkeypatch.setattr(m, "_LOAD", threading.Lock())
     monkeypatch.setattr(m, "data_version", lambda: 1.0)
-    monkeypatch.setattr(m, "club_engine", lambda: loads.append("engine") or (1, 2, 3))
+    monkeypatch.setattr(m, "club_engine",
+                        lambda: loads.append("engine") or (1, 2, frame))
     monkeypatch.setattr(m, "props_models", lambda: loads.append("props") or (4, 5))
     return m, loads
 
@@ -173,6 +176,57 @@ def test_the_lifespan_loads_the_models_before_it_yields(monkeypatch):
     asyncio.run(run())
     assert order[0] == "ready", "the port opened before the models were loaded"
     assert "serving" in order
+
+
+# ── /health is a probe, not a loader ─────────────────────────────────────────
+def test_health_answers_while_the_models_are_loading(ready):
+    """It must not go through `_models()`. That made the probe do the loading:
+    503 for the two minutes of a cache-miss fit, and a container HEALTHCHECK on
+    this route would kill the container mid-fit and restart the fit from zero."""
+    m, loads = ready
+    m._LOAD.acquire()
+    try:
+        out = m.health()
+    finally:
+        m._LOAD.release()
+    assert out["status"] == "loading"
+    assert out["ready"] is False
+    assert loads == [], "/health triggered a model load"
+    assert "matches" not in out, "it described models it has not loaded"
+
+
+def test_health_answers_after_a_failed_start(ready, monkeypatch):
+    """The lifespan swallows a warm-up failure so the server still starts; the
+    probe has to survive it too, or there is no way to see what is wrong."""
+    m, _ = ready
+
+    def boom():
+        raise RuntimeError("no foundation on disk")
+
+    monkeypatch.setattr(m, "club_engine", boom)
+    with pytest.raises(RuntimeError):
+        m._ready()
+    out = m.health()                       # must not raise
+    assert out["status"] == "loading"
+    assert out["ready"] is False
+
+
+def test_health_describes_the_models_once_they_are_loaded(ready):
+    m, _ = ready
+    m._ready()
+    out = m.health()
+    assert out["status"] == "ok"
+    assert out["ready"] is True
+    assert out["matches"] == 2
+    assert out["dataThrough"] == "2026-10-19"
+
+
+def test_health_never_loads_even_when_it_could(ready):
+    """A probe that loads is a probe that times out."""
+    m, loads = ready
+    for _ in range(3):
+        m.health()
+    assert loads == []
 
 
 def test_a_failed_warm_up_still_lets_the_server_start(monkeypatch):
