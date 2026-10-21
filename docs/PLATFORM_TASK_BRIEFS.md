@@ -182,7 +182,12 @@ whether the site is to be indexed, and the provider.
 2. **Data is a volume, never an image layer.** An image with a CSV inside would
    have to be rebuilt by the daily refresh.
 3. **Two images**: `api` on `python:3.12-slim` with `requirements-lock.txt` and a
-   healthcheck on `/health`; `web` multi-stage on `node:22-alpine` with
+   healthcheck on `/health` — **with a `start_period` of at least 3 minutes**,
+   because uvicorn loads the models in its lifespan before it binds the socket,
+   so a cold fit answers the probe with a refused connection and a healthcheck
+   without `start_period` restarts the container into the same fit for ever
+   (measured by A1, 2026-10-21; the deployment plan has the detail); `web`
+   multi-stage on `node:22-alpine` with
    `output: "standalone"`, built with `next build` and never `next dev`.
 4. **The full compose**: `api`, `web`, `postgres` (from B1) and `caddy` for
    reverse proxy and automatic TLS. Decide early whether the browser keeps
