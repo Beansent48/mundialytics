@@ -14,6 +14,29 @@ Order is a dependency order. B2 needs B1 merged. A2 needs B1 merged and A1
 merged. Running two of them at once means two sessions writing the same files
 under `web/`.
 
+## Before you start, if you work in a git worktree
+
+Learned the hard way on 2026-10-21, during A1. Read this first; it cost that
+session an hour and cost the main checkout a 119-second refit.
+
+- **`data/` is gitignored (2.7 GB), so a new worktree has none of it** and the
+  API will not start. Link it from the main checkout
+  (`C:\Users\Vicente\Desktop\BetBot\mundialytics_betting_engine`) with a
+  directory junction, or per-subfolder junctions plus hardlinks.
+- **Except `data/processed/cache`, which must be the worktree's own real
+  directory.** Git for Windows sets `core.autocrlf=true` system-wide and this
+  repo's blobs already carry CRLF, so `git worktree add` writes CR-CR-LF: the
+  engine sources then differ byte for byte from the main checkout,
+  `engine_code_fingerprint()` returns a different hash, the joblib key misses —
+  **and the cleanup glob in `api/engine.py` deletes the other checkout's warm
+  fit**, because it removes every `engine_<tag>_*.joblib` that is not the one it
+  just wrote. A shared cache directory between two checkouts with different
+  fingerprints is a mutual-destruction pact.
+- **`.claude/` is gitignored too**, so launch configurations cannot travel in a
+  PR; put the snippet in the README and let the user paste it.
+- The main checkout and every worktree share one `.git`. Stage by file name,
+  never `git add .`.
+
 ---
 
 ## B1 — Accounts: authentication + Postgres
