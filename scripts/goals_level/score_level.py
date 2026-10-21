@@ -35,12 +35,13 @@ from scipy.stats import poisson
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
-    DEPLOYED_CLUB_ENGINE_KWARGS as K, deployed_markets_from_lambdas)
+    DEPLOYED_CLUB_ENGINE_KWARGS as K, deployed_markets_from_lambdas, sharpen_trio)
 
 DUMPS = sorted((ROOT / "outputs/goals_level").glob("wf_*.csv"))
 RHO = K.get("outcome_rho", K.get("ad_rho", 0.0))
 TEMP = K.get("goal_temper", 1.0)
 GAM = float(np.clip(K.get("sharpen_gamma_1x2", 1.0), 0.5, 2.0))
+CONTRAST_ONLY = bool(K.get("sharpen_contrast_only", False))
 COH = bool(K.get("coherent_markets", False))
 G = np.arange(11)
 MG = np.add.outer(G, G)
@@ -71,8 +72,8 @@ def chain(lh, la):
     regions = [I > J, I == J, I < J]
     P = np.stack([(M * m).sum((1, 2)) for m in regions], 1)
     if abs(GAM - 1.0) > 1e-9:
-        P = np.clip(P, 1e-9, 1.0) ** GAM
-        P /= P.sum(1, keepdims=True)
+        # the engine's own map, not a copy of it -- it takes (N, 3) for exactly this
+        P = sharpen_trio(P, GAM, CONTRAST_ONLY)
     if COH and abs(GAM - 1.0) > 1e-9:
         # reweight each outcome region to carry the sharpened 1X2, then read the
         # totals off that matrix -- what the deployed config serves

@@ -25,7 +25,7 @@ The naming is systematic, so the prefix tells you what a script is:
 | `build_` | 32 | Dataset construction: foundation, features, xG, squads, ratings, SquadLab cards and card rates. |
 | `train_` `fit_` `calibrate_` | 13 | Model fitting and calibration. |
 | `evaluate_` `validate_` `backtest_` `measure_` | 29 | Offline evaluation. Always temporal out-of-sample. |
-| `experiment_` | 31 | Research runs. **Several of these are negative results** kept on purpose — see the "What didn't work" section of the main README. |
+| `experiment_` | 32 | Research runs. **Several of these are negative results** kept on purpose — see the "What didn't work" section of the main README. |
 | `diagnose_` | 6 | Investigations into a specific failure or gap, e.g. `diagnose_market_gap.py`. |
 | `audit_` `quality_gate` `run_data_audit` | 7 | Data-quality gates. |
 | `oddspapi_` | 15 | Odds-provider adapter from the betting phase (dormant): fixtures, historical odds, market mapping. |

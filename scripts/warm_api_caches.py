@@ -7,6 +7,10 @@ first visitor after it paid for the recomputation — and the web client aborts
 an API call after 20 s, so for that visitor the league page rendered as a 404
 and the awards page as an error.
 
+It also writes the five league calendars to disk (`api.catalogue`). That is the
+right place for it: this pass already talks to ESPN, and the serving path then
+only ever reads a snapshot instead of making ten HTTP calls on every cold start.
+
 This calls the same endpoint functions the web calls, in-process, so the cache
 files, keys and shapes are exactly the ones the API reads back.
 
@@ -25,9 +29,30 @@ sys.path.insert(0, str(ROOT / "src"))
 
 def main() -> int:
     from api import catalogue as cat
+    from api.engine import club_engine
     from api.main import awards, league
 
     failures = 0
+
+    # The calendars first: everything below reads them, and a snapshot written
+    # here is one the API never has to fetch. `seasons_to_snapshot` decides
+    # WHICH -- both the foundation's newest season and the one the date implies,
+    # when they differ. Writing only the first left `_predict` with no snapshot
+    # every July and August, which is the one window the whole thing is for.
+    _, _, df = club_engine()
+    t0 = time.time()
+    written = cat.refresh_calendars(cat.seasons_to_snapshot(df))
+    for (comp, season), ok in sorted(written.items()):
+        # A refresh that fails over a snapshot we already hold is a warning; a
+        # league-season with nothing on disk is what breaks the serving path.
+        have = cat.has_snapshot(comp, season)
+        if not have:
+            failures += 1
+        state = "OK" if ok else ("SIN REFRESCO (sirve el anterior)" if have
+                                 else "FALLO (sin snapshot)")
+        print(f"  {comp:15s} {season:10s} calendario {state}", flush=True)
+    print(f"  calendarios en {time.time() - t0:.0f}s", flush=True)
+
     for slug in cat.COMPETITIONS:
         for name, endpoint in (("liga", league), ("bota de oro", awards)):
             t0 = time.time()
