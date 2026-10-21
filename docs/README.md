@@ -8,6 +8,11 @@ lives next to its code, in module docstrings.
 | File | What it is |
 |---|---|
 | [EUROPEAN_ELO_COVERAGE.md](EUROPEAN_ELO_COVERAGE.md) | Why 16% of UEFA fixtures can't be priced yet, and why fuzzy name matching is not the fix |
+| [FOOTBALL_SEMANTICS_AUDIT_2026_10_17.md](FOOTBALL_SEMANTICS_AUDIT_2026_10_17.md) | Where the code is right and the football is wrong — findings, each with how to test it |
+| [PLATFORM_ROADMAP.md](PLATFORM_ROADMAP.md) | The product-platform plan: cold start, user accounts, deployment — decisions taken, tasks, order |
+| [COLD_START_DIAGNOSIS.md](COLD_START_DIAGNOSIS.md) | Where the startup time actually goes (measured), and the shortlist of fixes |
+| [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) | Login, schema, migration off `localStorage`, and the room left for gamification |
+| [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) | What a Docker deployment has to solve first — the 2.2 GB of data, and where the daily refresh runs |
 | [img/](img/) | Figures used by the README |
 | [archive/](archive/) | Historical material, kept for the record — see below |
 
