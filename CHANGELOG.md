@@ -110,8 +110,8 @@ decimals. Every number below was measured with the new
   as a **boolean**, because read as the string `"False"` it passes the
   `astype(bool)` that `trusted_calendar` and the Golden Boot race both ask, and
   a settled season would read as 380 fixtures still to play; an empty answer
-  from the provider must never
-  replace a good snapshot; and the level memo must recompute on a new logged
+  from the provider must never replace a good snapshot; and the level memo must
+  recompute on a new logged
   lambda, new foundation rows, a different `k` or a new odds file.
 
 ### Rejected
