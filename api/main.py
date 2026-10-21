@@ -8,7 +8,7 @@ Run it:
     .venv/Scripts/python.exe -m uvicorn api.main:app --port 8000 --reload
 
 The models are loaded in the lifespan below, before uvicorn reports ready, so
-no page load pays for them: about eight seconds with the joblib fit cache warm
+no page load pays for them: about five seconds with the joblib fit cache warm
 and about two minutes when a change to the engine code has invalidated it. The
 cache key folds in the data size, its last date and a hash of the engine code,
 so it survives restarts and invalidates itself on either change.
