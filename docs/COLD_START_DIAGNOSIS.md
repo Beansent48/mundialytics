@@ -199,7 +199,7 @@ the "~3 min" the docstrings claimed.
 
 | Endpoint | Before `cold` | After `cold` | After `boot` | After `first` |
 |---|---|---|---|---|
-| `/health` | 39.0 s | **5.4 s** | 5.3 | 0.05 |
+| `/health` | 39.0 s | **3.8 s** | 3.7 | 0.04 |
 | `/catalogue` | 33.2 s | **5.3 s** | 5.3 | 0.05 |
 | `/fixtures/day` | 55.1 s | **14.0 s** | 6.4 | 7.7 |
 | `/fixtures/calendar?days_back=14&days_forward=21` | 53.4 s | **11.8 s** | 7.9 | 3.9 |
@@ -213,6 +213,9 @@ the "~3 min" the docstrings claimed.
 | `/competitions` | 3.8 s | 5.9 s | 5.8 | 0.05 |
 | `/squadlab/pool` | 3.7 s | 5.4 s | 4.8 | 0.61 |
 | `/health`, **joblib cache deleted** | 118.9 s | 123.3 s | **123.2** | **0.06** |
+
+`/health` was re-measured on its own after it stopped going through the model
+load (see below); every other row comes from one sweep.
 
 Read the last row first: it is the point of the whole exercise. The two-minute
 refit did not get faster — it moved. Before, `boot` was 3.7 s and the first
@@ -374,6 +377,46 @@ In the order the measurement justified, not the order the candidate list had.
   already describes.
 - **Making the fit cache stickier.** Explicitly out of bounds, and unnecessary:
   the 119 s refit is correct behaviour and moving it into `boot` was enough.
+
+### Two things the review caught afterwards
+
+Both found by a review of the branch, both fixed here with tests.
+
+**`/health` had stopped being a probe.** It went through `_models()`, so it
+answered 503 for as long as a load took and raised outright after a failed
+start — the opposite of what the lifespan's own comment promises, and a
+container HEALTHCHECK on that route (planned for **A2**) would have been
+pointed at the one endpoint that could not answer. It now reports from process
+state alone and never triggers a load: 200 whenever the process is up, with
+`ready` saying whether the models are in, and `matches`/`dataThrough` only once
+they are.
+
+One correction to the reasoning, from checking it: during a *startup* fit the
+port is not bound at all — uvicorn runs the lifespan first — so a healthcheck
+then gets a refused connection rather than a 503, and A2 still needs a
+`start_period` on the healthcheck to cover it. What the fix really protects is
+the live cases: a reload triggered by the daily refresh, a request arriving
+while another holds the load, and a start whose warm-up failed. Verified
+against a running server with the fit cache deleted.
+
+Knock-on: `web/scripts/require-api.mjs` checked only that `/health` answered.
+Now that a loading API answers 200, "alive" stopped meaning "will serve real
+data", so the guard checks `ready` — otherwise it would have waved through
+exactly the build it exists to stop. Checked both ways against a running API
+and against a stub answering `ready: false`.
+
+**The snapshots were written for one season and read for another.** The daily
+pass wrote `cat.current_season` — the newest season in the foundation — while
+`_predict` asks for the season the date implies, which is the whole point of
+the comment next to it ("on matchday one it holds no match of the new season").
+They agree for eleven months and diverge in July and August: the serving path
+would find no snapshot, fall back to a blocking provider fetch once per window,
+and the daily log would report every calendar fine. The arithmetic now lives in
+one place, `cat.serving_season()`, which both call, and `cat.seasons_to_snapshot()`
+plans both seasons when they differ. The daily pass also distinguishes "could
+not refresh, still serving yesterday's" from "nothing on disk", and only counts
+the second as a failure — a new season the provider has not published yet is
+normal in July, not a fault.
 
 ### What was not fixed
 

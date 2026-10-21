@@ -43,6 +43,8 @@ from mundialytics.props.player_props import likely_xi  # noqa: E402
 # at 20 s and renders the timeout as a 404.
 _LOAD = threading.Lock()
 _READY: float | None = None
+# what /health reports without touching a model function; set when a load lands
+_READY_INFO: dict = {}
 
 
 def _ready() -> None:
@@ -53,7 +55,7 @@ def _ready() -> None:
     behaviour queued them all behind the same lru_cache lock, and a browser
     with four tabs open waited four times for nothing.
     """
-    global _READY
+    global _READY, _READY_INFO
     version = data_version()
     if _READY == version:
         return
@@ -63,8 +65,10 @@ def _ready() -> None:
             headers={"Retry-After": "5"},
         )
     try:
-        club_engine()
+        _, _, df = club_engine()
         props_models()
+        # kept so /health can describe the load without triggering one
+        _READY_INFO = {"matches": int(len(df)), "dataThrough": str(df["date"].max())[:10]}
         _READY = version
     finally:
         _LOAD.release()
@@ -169,10 +173,11 @@ def _predict(home: str, away: str, competition: str):
     engine, teams, df = _models()
     try:
         # by the date, not the foundation: on matchday one it holds no match of
-        # the new season, and the new season's clubs are what matters here
-        today = date.today()
-        y = today.year if today.month >= 7 else today.year - 1
-        season = f"{y}-{y + 1}"
+        # the new season, and the new season's clubs are what matters here.
+        # `cat.serving_season` is the only definition of that, and whatever
+        # writes the calendar snapshots reads it too -- this arithmetic used to
+        # live here, where nothing else could agree with it.
+        season = cat.serving_season()
         cal = cat.season_calendar(competition, season)
         current = (set(cal["home_team"]) | set(cal["away_team"])) if len(cal) else set()
         pred, _ = predict_match_or_proxy(engine, df, home, away, competition, season,
@@ -221,12 +226,32 @@ def _fixture_payload(row, comp_slug: str, season: str, with_probs: bool) -> dict
 
 @app.get("/health")
 def health() -> dict:
-    _, _, df = _models()
+    """Is this process alive, and are its models loaded?
+
+    Answered from process state alone. It must never call `_models()`: that
+    made the probe do the loading, so it answered 503 for as long as a load
+    took and raised outright after a failed start — the opposite of what the
+    lifespan promises ("a broken start must still serve /health"), and useless
+    to the container HEALTHCHECK A2 plans to point here.
+
+    The cases this really covers are the live ones, since during a *startup*
+    fit the port is not bound at all (uvicorn runs the lifespan first, so a
+    probe then gets a refused connection and A2 needs a healthcheck
+    `start_period` regardless): a reload triggered by the daily refresh, a
+    request arriving while another caller holds the load, and a start whose
+    warm-up failed.
+
+    So: 200 whenever the process is up. `ready` says whether the models are
+    loaded, and `matches`/`dataThrough` describe them only once they are.
+    Anything that needs real data out of this API — the web build guard in
+    `web/scripts/require-api.mjs` — has to check `ready`, not just the status.
+    """
+    ready = _READY is not None
     return {
-        "status": "ok",
-        "matches": int(len(df)),
-        "dataThrough": str(df["date"].max())[:10],
+        "status": "ok" if ready else "loading",
+        "ready": ready,
         "today": date.today().isoformat(),
+        **_READY_INFO,
     }
 
 

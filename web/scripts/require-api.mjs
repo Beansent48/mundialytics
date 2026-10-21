@@ -20,12 +20,19 @@ try {
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body = await res.json();
-  console.log(`api ok: ${body.matches} matches through ${body.dataThrough}`);
+  // Alive is not enough. /health answers 200 while the models are still
+  // loading — it has to, or a container healthcheck would kill the process
+  // mid-fit — and an API in that state serves the "model is warming up" box,
+  // which is precisely what this guard exists to keep out of the build.
+  if (!body.ready) throw new Error("the models are still loading");
+  console.log(`api ready: ${body.matches} matches through ${body.dataThrough}`);
 } catch (err) {
-  console.error(`\n  The API is not answering at ${url} (${err.message}).`);
+  console.error(`\n  The API is not ready at ${url} (${err.message}).`);
   console.error("  A production build prerenders the data pages, so building");
   console.error("  now would bake the \"model is warming up\" box into them.\n");
   console.error("  Start it first:  .venv/Scripts/python.exe -m uvicorn api.main:app --port 8000");
-  console.error("  Then:            npm --prefix web run prod\n");
+  console.error("  and wait for its \"models ready\" line (about five seconds, or");
+  console.error("  about two minutes after an engine change), then:");
+  console.error("                   npm --prefix web run prod\n");
   process.exit(1);
 }

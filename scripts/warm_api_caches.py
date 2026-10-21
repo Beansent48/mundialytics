@@ -35,17 +35,22 @@ def main() -> int:
     failures = 0
 
     # The calendars first: everything below reads them, and a snapshot written
-    # here is one the API never has to fetch.
+    # here is one the API never has to fetch. `seasons_to_snapshot` decides
+    # WHICH -- both the foundation's newest season and the one the date implies,
+    # when they differ. Writing only the first left `_predict` with no snapshot
+    # every July and August, which is the one window the whole thing is for.
     _, _, df = club_engine()
-    seasons = {meta["id"]: cat.current_season(df, meta["id"])
-               for meta in cat.COMPETITIONS.values()}
     t0 = time.time()
-    written = cat.refresh_calendars({c: s for c, s in seasons.items() if s})
-    for comp, ok in sorted(written.items()):
-        if not ok:
+    written = cat.refresh_calendars(cat.seasons_to_snapshot(df))
+    for (comp, season), ok in sorted(written.items()):
+        # A refresh that fails over a snapshot we already hold is a warning; a
+        # league-season with nothing on disk is what breaks the serving path.
+        have = cat.has_snapshot(comp, season)
+        if not have:
             failures += 1
-        print(f"  {comp:15s} {'calendario':12s} {'OK' if ok else 'FALLO (sin snapshot nuevo)'}",
-              flush=True)
+        state = "OK" if ok else ("SIN REFRESCO (sirve el anterior)" if have
+                                 else "FALLO (sin snapshot)")
+        print(f"  {comp:15s} {season:10s} calendario {state}", flush=True)
     print(f"  calendarios en {time.time() - t0:.0f}s", flush=True)
 
     for slug in cat.COMPETITIONS:
