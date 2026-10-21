@@ -7,13 +7,18 @@ render fixtures and match analysis without importing pandas.
 Run it:
     .venv/Scripts/python.exe -m uvicorn api.main:app --port 8000 --reload
 
-The first request pays the model fit (~3 min) unless the joblib cache is warm;
-the cache key folds in the data size, its last date and a hash of the engine
-code, so it survives restarts and invalidates itself on either change.
+The models are loaded in the lifespan below, before uvicorn reports ready, so
+no page load pays for them: about eight seconds with the joblib fit cache warm
+and about two minutes when a change to the engine code has invalidated it. The
+cache key folds in the data size, its last date and a hash of the engine code,
+so it survives restarts and invalidates itself on either change.
 """
 from __future__ import annotations
 
 import sys
+import threading
+import time
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
@@ -26,13 +31,106 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from api import catalogue as cat  # noqa: E402
-from api.engine import club_engine, props_models  # noqa: E402
+from api.engine import club_engine, data_version, props_models  # noqa: E402
 from mundialytics.props.player_props import likely_xi  # noqa: E402
+
+# ── Model readiness ───────────────────────────────────────────────────────────
+# `club_engine()` and `props_models()` are lru_cached on `data_version()` -- the
+# foundation's mtime -- so the daily refresh reaches a running API without a
+# restart. That is deliberate and stays. What is new is WHO pays for the load:
+# it used to be the first request after a start or a refresh, measured at 25-55 s
+# with the fit cache warm and 119 s without it, against a web client that aborts
+# at 20 s and renders the timeout as a 404.
+_LOAD = threading.Lock()
+_READY: float | None = None
+
+
+def _ready() -> None:
+    """Make sure the models for the data on disk are loaded. 503 if busy.
+
+    Only one caller does the loading. Everyone who arrives while it is working
+    gets a 503 with a Retry-After instead of a held connection: the old
+    behaviour queued them all behind the same lru_cache lock, and a browser
+    with four tabs open waited four times for nothing.
+    """
+    global _READY
+    version = data_version()
+    if _READY == version:
+        return
+    if not _LOAD.acquire(blocking=False):
+        raise HTTPException(
+            503, "The model is still loading. Try again in a few seconds.",
+            headers={"Retry-After": "5"},
+        )
+    try:
+        club_engine()
+        props_models()
+        _READY = version
+    finally:
+        _LOAD.release()
+
+
+def _models():
+    """The club engine, teams and foundation — once the models are ready."""
+    _ready()
+    return club_engine()
+
+
+def _props():
+    """The team and player prop models — once the models are ready."""
+    _ready()
+    return props_models()
+
+
+def _warm_payloads() -> None:
+    """Prime the payload caches the matchday screen opens with.
+
+    Not a model load: this is the pricing of every fixture in the next three
+    weeks, the European Elo state and the track record — 12-15 s on a cold
+    process, and fetched from the BROWSER by the matchday screen, where the
+    client's 20 s abort applies. Runs in a thread once the server is ready, so
+    nothing waits for it, and a failure is shrugged off: a cold cache is slow,
+    not broken.
+    """
+    today = date.today().isoformat()
+    for name, call in (("calendar", lambda: fixtures_calendar(days_back=14, days_forward=21)),
+                       ("day", lambda: fixtures_day(day=today)),
+                       ("upcoming", lambda: upcoming(days=21)),
+                       ("track record", track_record)):
+        t0 = time.perf_counter()
+        try:
+            call()
+            print(f"warmed {name} in {time.perf_counter() - t0:.1f}s", flush=True)
+        except Exception as exc:
+            print(f"could not warm {name}: {type(exc).__name__}: {str(exc)[:120]}", flush=True)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Load the models before uvicorn binds its port.
+
+    Uvicorn runs the lifespan first and only then creates the listening socket,
+    so everything paid here is paid by whoever started the server instead of by
+    whoever opened the first page -- and on a joblib cache miss that is a
+    two-minute fit, which belongs in a startup log line rather than in a page
+    load the browser gives up on.
+    """
+    t0 = time.perf_counter()
+    try:
+        _ready()
+        print(f"models ready in {time.perf_counter() - t0:.1f}s", flush=True)
+    except Exception as exc:                 # a broken start must still serve /health
+        print(f"warm-up failed ({type(exc).__name__}: {str(exc)[:160]}); "
+              "the first request will pay it", flush=True)
+    threading.Thread(target=_warm_payloads, daemon=True, name="warm-payloads").start()
+    yield
+
 
 app = FastAPI(
     title="Mundialytics API",
     version="0.1.0",
     description="Probabilistic football markets for the Big Five leagues.",
+    lifespan=lifespan,
 )
 
 # The web front end runs on its own origin in development and will run on its
@@ -68,7 +166,7 @@ def _predict(home: str, away: str, competition: str):
     """
     from mundialytics.serving.debutants import predict_match_or_proxy
 
-    engine, teams, df = club_engine()
+    engine, teams, df = _models()
     try:
         # by the date, not the foundation: on matchday one it holds no match of
         # the new season, and the new season's clubs are what matters here
@@ -123,7 +221,7 @@ def _fixture_payload(row, comp_slug: str, season: str, with_probs: bool) -> dict
 
 @app.get("/health")
 def health() -> dict:
-    _, _, df = club_engine()
+    _, _, df = _models()
     return {
         "status": "ok",
         "matches": int(len(df)),
@@ -139,7 +237,7 @@ def catalogue() -> list[dict]:
     Named `/catalogue` rather than `/competitions`: that path belongs to the
     UEFA competitions, which is what the word means everywhere in the product.
     """
-    _, _, df = club_engine()
+    _, _, df = _models()
     out = []
     for slug, meta in cat.COMPETITIONS.items():
         out.append(
@@ -161,24 +259,33 @@ def catalogue() -> list[dict]:
 # carries the dataset's last date, so a refresh invalidates it without a deploy.
 _CACHE: dict[tuple, tuple[float, dict]] = {}
 _TTL_SECONDS = 600
+# One builder per key. The matchday screen fires /fixtures/day and
+# /fixtures/calendar together, the startup warm-up may be on the same answer,
+# and FastAPI runs sync endpoints in a threadpool -- so without this they all
+# built the same payload at the same time and each took as long as all of them.
+_CACHE_LOCKS: dict[tuple, threading.Lock] = {}
+_CACHE_GUARD = threading.Lock()
 
 
 def _cached(key: tuple, build):
-    import time
-
-    now = time.time()
     hit = _CACHE.get(key)
-    if hit and now - hit[0] < _TTL_SECONDS:
+    if hit and time.time() - hit[0] < _TTL_SECONDS:
         return hit[1]
-    value = build()
-    _CACHE[key] = (now, value)
-    return value
+    with _CACHE_GUARD:
+        lock = _CACHE_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        hit = _CACHE.get(key)           # whoever held the lock may have built it
+        if hit and time.time() - hit[0] < _TTL_SECONDS:
+            return hit[1]
+        value = build()
+        _CACHE[key] = (time.time(), value)
+        return value
 
 
 @app.get("/fixtures/upcoming")
 def upcoming(days: int = Query(8, ge=1, le=30)) -> dict:
     """What is about to be played across every covered league, by day."""
-    _, _, df = club_engine()
+    _, _, df = _models()
     key = ("upcoming", days, str(df["date"].max())[:10], date.today().isoformat())
     return _cached(key, lambda: _build_upcoming(df, days))
 
@@ -210,7 +317,7 @@ def match(competition: str, fixture: str) -> dict:
     meta = cat.COMPETITIONS.get(competition)
     if meta is None:
         raise HTTPException(404, f"Unknown competition: {competition}")
-    _, _, df = club_engine()
+    _, _, df = _models()
     season = cat.current_season(df, meta["id"])
     cal = cat.trusted_calendar(meta["id"], season, df)
     if cal is None or cal.empty:
@@ -727,7 +834,7 @@ def _build_match(row, competition: str, meta: dict, season: str, df) -> dict:
 
     # Team-stat distributions once: they feed both the expected-stat ranges below
     # and the team-props card, so they must be ready before the payload is built.
-    tp, pp = props_models()
+    tp, pp = _props()
     fx = None
     if tp is not None:
         try:
@@ -813,7 +920,7 @@ def fixtures(
     meta = cat.COMPETITIONS.get(competition)
     if meta is None:
         raise HTTPException(404, f"Unknown competition: {competition}")
-    _, _, df = club_engine()
+    _, _, df = _models()
     season = season or cat.current_season(df, meta["id"])
 
     cal = cat.trusted_calendar(meta["id"], season, df)
@@ -897,7 +1004,7 @@ def track_record() -> dict:
     """Benchmark, calibration and the settled live log."""
     from mundialytics.serving.track_record import evaluate_log
 
-    _, _, df = club_engine()
+    _, _, df = _models()
     key = ("track", str(df["date"].max())[:10])
 
     def build() -> dict:
@@ -960,7 +1067,7 @@ def league(competition: str) -> dict:
     if meta is None:
         raise HTTPException(404, f"Unknown competition: {competition}")
 
-    _, _, df = club_engine()
+    _, _, df = _models()
     season = cat.current_season(df, meta["id"])
     played = int(((df["competition"] == meta["id"]) & (df["season"] == season)).sum())
     path = _league_cache_path(meta["id"], season)
@@ -1062,7 +1169,7 @@ def leagues() -> list[dict]:
     """
     import json
 
-    _, _, df = club_engine()
+    _, _, df = _models()
     out = []
     for slug, meta in cat.COMPETITIONS.items():
         season = cat.current_season(df, meta["id"])
@@ -1196,7 +1303,7 @@ def awards(competition: str) -> dict:
     if meta is None:
         raise HTTPException(404, f"Unknown competition: {competition}")
 
-    _, _, df = club_engine()
+    _, _, df = _models()
     season = cat.current_season(df, meta["id"])
     rows = df[(df["competition"] == meta["id"]) & (df["season"] == season)]
     n_played = int(len(rows))
@@ -1218,8 +1325,8 @@ def awards(competition: str) -> dict:
         raise HTTPException(404, "No calendar or results for this season")
     remaining = cal[~cal["completed"].astype(bool)]
 
-    engine, _, _ = club_engine()
-    _, pp = props_models()
+    engine, _, _ = _models()
+    _, pp = _props()
     if pp is None:
         raise HTTPException(503, "The player model is not available")
 
@@ -1373,7 +1480,7 @@ def fixtures_day(day: str | None = None) -> dict:
     """
     from datetime import date as _date
 
-    _, _, df = club_engine()
+    _, _, df = _models()
     try:
         target = _date.fromisoformat(day) if day else _date.today()
     except ValueError as exc:
@@ -1447,7 +1554,7 @@ def fixtures_calendar(days_back: int = Query(7, ge=0, le=30),
     """How many fixtures each nearby day holds, for the date strip."""
     from datetime import date as _date, timedelta as _td
 
-    _, _, df = club_engine()
+    _, _, df = _models()
     today = _date.today()
     start, end = today - _td(days=days_back), today + _td(days=days_forward)
     from api import european as eu
