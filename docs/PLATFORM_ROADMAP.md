@@ -40,9 +40,11 @@ it gets rewritten six months later.
 | **A2** | Dockerisation and deployment | queued | A1 (what warm start needs decides the entrypoint), B1 (Postgres is a container) | [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) |
 
 A1 was started on 2026-10-21; B1, B2 and A2 exist as task cards in Claude Code
-waiting to be started, and those cards expire in a week. **This file, not the
-card, is the durable record** — if a card lapses, everything needed to start the
-task is still here and in the linked document.
+waiting to be started, and those cards expire in a week. **These files, not the
+cards, are the durable record**: the brief for each unstarted task — scope,
+traps, done-when, and the line to paste to start it — is in
+[PLATFORM_TASK_BRIEFS.md](PLATFORM_TASK_BRIEFS.md), so a lapsed card costs
+nothing.
 
 Why this order and not another:
 
