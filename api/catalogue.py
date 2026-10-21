@@ -9,7 +9,10 @@ team with an accent.
 """
 from __future__ import annotations
 
+import os
 import re
+import threading
+import time
 import unicodedata
 from datetime import date, timedelta
 from functools import lru_cache
@@ -18,6 +21,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
+CALENDAR_DIR = ROOT / "data/processed/fixture_calendars"
 
 COMPETITIONS: dict[str, dict] = {
     "laliga": {"id": "LaLiga", "name": "LaLiga", "country": "ES", "type": "league"},
@@ -40,39 +44,162 @@ def fixture_slug(home: str, away: str) -> str:
     return f"{slugify(home)}-vs-{slugify(away)}"
 
 
+CALENDAR_TTL_SECONDS = 1800
+CALENDAR_COLUMNS = ["date", "matchday", "home_team", "away_team", "completed",
+                    "home_goals", "away_goals"]
+
+
+def _snapshot_path(comp_id: str, season: str) -> Path:
+    return CALENDAR_DIR / f"{slugify(comp_id)}_{season}.csv"
+
+
+def _shape(fx: pd.DataFrame | None) -> pd.DataFrame:
+    """A provider frame in the shape every caller here expects."""
+    if fx is None or fx.empty or "matchday" not in fx.columns:
+        return pd.DataFrame(columns=CALENDAR_COLUMNS)
+    out = fx[["date", "matchday", "home_team", "away_team", "completed"]].copy()
+    out["home_goals"] = pd.to_numeric(fx.get("home_goals"), errors="coerce")
+    out["away_goals"] = pd.to_numeric(fx.get("away_goals"), errors="coerce")
+    out["date"] = pd.to_datetime(out["date"], errors="coerce")
+    out["matchday"] = pd.to_numeric(out["matchday"], errors="coerce")
+    # `completed` has to survive a CSV round trip as a BOOLEAN. Read back as the
+    # string "False" it would pass `astype(bool)` -- any non-empty string does --
+    # and `trusted_calendar` and the Golden Boot race both ask exactly that
+    # question, so a settled season would read as 380 fixtures still to play.
+    out["completed"] = (out["completed"].astype(str).str.strip().str.lower()
+                        .isin(("true", "1", "yes")))
+    return out
+
+
+def _fetch_calendar(comp_id: str, season: str) -> pd.DataFrame:
+    """One league-season straight from the provider. Empty if it is unreachable."""
+    try:
+        from mundialytics.providers.espn_fixtures import fetch_season_fixtures
+
+        return _shape(fetch_season_fixtures(comp_id, season, root=ROOT))
+    except Exception:
+        return pd.DataFrame(columns=CALENDAR_COLUMNS)
+
+
+# One refresh at a time per league-season. `lru_cache` does not de-duplicate
+# calls in flight and FastAPI runs sync endpoints in a threadpool, so the two
+# requests the matchday screen fires together used to fetch all five calendars
+# twice over: 14 s of work measured as 83 s of contention.
+_REFRESH_LOCKS: dict[tuple[str, str], threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+# When the fetch fails there is nothing on disk to serve, and without this every
+# single request would start another 45-second provider timeout. The lru_cache
+# this replaced got that right by accident: it cached the empty answer too.
+_LAST_TRY: dict[tuple[str, str], float] = {}
+
+
+def _refresh_lock(key: tuple[str, str]) -> threading.Lock:
+    with _LOCKS_GUARD:
+        return _REFRESH_LOCKS.setdefault(key, threading.Lock())
+
+
+def _age(path: Path) -> float:
+    """Seconds since the snapshot was written; `inf` when there is none."""
+    try:
+        return max(0.0, time.time() - path.stat().st_mtime)
+    except OSError:
+        return float("inf")
+
+
+def refresh_calendar(comp_id: str, season: str, block: bool = True,
+                     max_age: float = CALENDAR_TTL_SECONDS) -> bool:
+    """Fetch one league-season and write its snapshot.
+
+    Returns True when a usable snapshot is on disk afterwards — written now, or
+    already younger than `max_age` because a concurrent caller got there first.
+    False means the provider gave us nothing and there is still no snapshot (or
+    only the old one), which is a thing to report, not to serve.
+
+    An empty answer never replaces a snapshot: `fetch_season_fixtures` swallows
+    its errors and returns an empty frame, and letting that through is how a
+    matchday renders blank on a bad provider day.
+    """
+    key = (comp_id, season)
+    path = _snapshot_path(comp_id, season)
+    lock = _refresh_lock(key)
+    if not lock.acquire(blocking=block):
+        return False                    # someone else is already on it
+    try:
+        if _age(path) <= max_age:
+            return True                 # a waiting caller found it already done
+        cal = _fetch_calendar(comp_id, season)
+        _LAST_TRY[key] = time.time()
+        if cal.empty:
+            return False
+        CALENDAR_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".csv.tmp")
+        cal.to_csv(tmp, index=False, encoding="utf-8")
+        os.replace(tmp, path)           # a reader never sees half a file
+        return True
+    except OSError:
+        return False
+    finally:
+        lock.release()
+
+
+def refresh_calendars(seasons: dict[str, str]) -> dict[str, bool]:
+    """Write every snapshot, blocking, however fresh the last one is.
+
+    `{competition id: season}`. What the daily refresh calls: that pass talks to
+    ESPN anyway, so it is the right place to pay for this, and the serving path
+    then only ever reads.
+    """
+    return {comp: refresh_calendar(comp, season, max_age=0.0)
+            for comp, season in seasons.items()}
+
+
+@lru_cache(maxsize=32)
+def _read_snapshot(comp_id: str, season: str, _stamp: int) -> pd.DataFrame:
+    """The snapshot on disk, keyed on its mtime so a refresh is picked up at once."""
+    path = _snapshot_path(comp_id, season)
+    try:
+        return _shape(pd.read_csv(path))
+    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError, KeyError):
+        return pd.DataFrame(columns=CALENDAR_COLUMNS)
+
+
 def season_calendar(comp_id: str, season: str) -> pd.DataFrame:
     """The published calendar for a league-season: every fixture, played or not.
 
     The foundation holds only played matches, so a calendar derived from it can
     never contain a fixture before kick-off — the one thing this product is for.
-    Returns an empty frame when the provider is unreachable; callers fall back.
+    Returns an empty frame when there is no snapshot and the provider is
+    unreachable; callers fall back.
 
-    Cached for half an hour, not for the life of the process: a result or a
-    rescheduled kick-off has to reach a running API without a restart.
+    Served from a snapshot on disk, refreshed from the provider *behind* the
+    answer. ESPN used to be the serving source — two HTTP calls per
+    league-season, no disk cache of any kind, so 10.4 s for the five leagues on
+    every cold start (measured 2026-10-21) and minutes on a slow day, with the
+    visitor waiting for all of it. Now the provider is the refresh source and
+    the disk is the serving source, which is how the UEFA calendar has worked
+    since September. Staleness is bounded by CALENDAR_TTL_SECONDS and the
+    freshness that matters on a matchday arrives the same way it always did:
+    the next request after the refresh lands, keyed on the file's mtime.
     """
-    import time
-
-    return _season_calendar(comp_id, season, int(time.time() // CALENDAR_TTL_SECONDS))
-
-
-CALENDAR_TTL_SECONDS = 1800
-
-
-@lru_cache(maxsize=32)
-def _season_calendar(comp_id: str, season: str, _bucket: int) -> pd.DataFrame:
+    path = _snapshot_path(comp_id, season)
+    age = _age(path)
+    # At most one provider attempt per league-season per window, whether it
+    # succeeds or not: a dead provider must not cost a timeout per request.
+    may_try = time.time() - _LAST_TRY.get((comp_id, season), 0.0) > CALENDAR_TTL_SECONDS
+    if age == float("inf"):
+        # nothing on disk at all: the very first run has to wait for the fetch
+        if may_try:
+            refresh_calendar(comp_id, season, block=True)
+    elif age > CALENDAR_TTL_SECONDS and may_try:
+        # stale: serve what we have and refresh behind the visitor's back
+        threading.Thread(target=refresh_calendar, args=(comp_id, season, False),
+                         daemon=True, name=f"calendar-{slugify(comp_id)}").start()
+    stamp = 0
     try:
-        from mundialytics.providers.espn_fixtures import fetch_season_fixtures
-
-        fx = fetch_season_fixtures(comp_id, season, root=ROOT)
-    except Exception:
-        return pd.DataFrame()
-    if fx is None or fx.empty or "matchday" not in fx.columns:
-        return pd.DataFrame()
-    out = fx[["date", "matchday", "home_team", "away_team", "completed"]].copy()
-    out["home_goals"] = pd.to_numeric(fx.get("home_goals"), errors="coerce")
-    out["away_goals"] = pd.to_numeric(fx.get("away_goals"), errors="coerce")
-    out["date"] = pd.to_datetime(out["date"], errors="coerce")
-    return out
+        stamp = int(path.stat().st_mtime)
+    except OSError:
+        pass
+    return _read_snapshot(comp_id, season, stamp)
 
 
 def current_season(df: pd.DataFrame, comp_id: str) -> str:
