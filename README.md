@@ -485,11 +485,44 @@ pytest tests/                    # clean-checkout suite
 # Only for the daily data refresh (brings soccerdata + Selenium):
 pip install -e ".[data]"
 
-# The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes:
+# The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes.
+# Start the API first and let it finish: it loads the 29 MB fit and measures the
+# market level before it reports ready, so no page load ever pays for them.
 uvicorn api.main:app --port 8000
+
 npm --prefix web install
-npm --prefix web run dev         # http://localhost:3000
+npm --prefix web run prod        # http://localhost:3000 — build, then serve it
+npm --prefix web run dev         # ...or dev mode, only while editing web/
 ```
+
+`prod` is the normal way to run the site: it builds once (~35 s) and then every
+page answers in milliseconds. `dev` recompiles each route the first time it is
+visited, which costs a second or four per page and is paid again after every
+restart — worth it only while you are changing the front end. `prod` refuses to
+build while the API is down, because the data pages are prerendered: a build
+without an API bakes the "model is warming up" notice into them and then serves
+it as static HTML.
+
+`.claude/launch.json` is untracked, so if you use it, the production mode needs
+a second configuration of its own next to `mundialytics-web`:
+
+```json
+{
+  "name": "mundialytics-web-prod",
+  "runtimeExecutable": "npm",
+  "runtimeArgs": ["run", "prod", "--prefix", "web"],
+  "port": 3000,
+  "autoPort": true
+}
+```
+
+Start-up costs, measured on this machine and recorded with the before/after
+table in [docs/COLD_START_DIAGNOSIS.md](docs/COLD_START_DIAGNOSIS.md):
+`uvicorn` reports ready in about five seconds with its fit cache warm, and in
+about two minutes when a change to the engine code has invalidated it — a
+startup log line either way, never a page load. While it is still loading it
+answers `503` with a `Retry-After` rather than holding the connection open, and
+the matchday screen retries by itself.
 
 The web app has pages for matchday (the five leagues and the three UEFA
 competitions, each priced by its own model), single-competition simulation, league
@@ -534,7 +567,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  605 tests green on a clean checkout; 109 more
+tests/                  622 tests green on a clean checkout; 111 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
