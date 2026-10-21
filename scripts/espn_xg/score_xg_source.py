@@ -12,10 +12,12 @@ from scipy.stats import poisson
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from mundialytics.statistical_core.prediction_engine import DEPLOYED_CLUB_ENGINE_KWARGS as K  # noqa: E402
+from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
+    DEPLOYED_CLUB_ENGINE_KWARGS as K, sharpen_trio)
 
 WORK = ROOT / "data/external/transfermarkt/work"
 RHO, TEMP, GAM = K["outcome_rho"], K["goal_temper"], K["sharpen_gamma_1x2"]
+CONTRAST_ONLY = bool(K.get("sharpen_contrast_only", False))
 SV = K["squad_value_shift"]
 G = np.arange(11)
 
@@ -35,8 +37,8 @@ def trio(lh, la):
     M /= M.sum((1, 2), keepdims=True)
     i, j = np.indices((11, 11))
     P = np.stack([(M * (i > j)).sum((1, 2)), (M * (i == j)).sum((1, 2)), (M * (i < j)).sum((1, 2))], 1)
-    P = np.clip(P, 1e-9, 1) ** GAM
-    return P / P.sum(1, keepdims=True)
+    # the engine's own trio map, not a copy (it takes (N, 3))
+    return sharpen_trio(P, GAM, CONTRAST_ONLY)
 
 
 tv = pd.read_csv(ROOT / "data/processed/squad_values.csv", parse_dates=["snap"]).sort_values("snap")

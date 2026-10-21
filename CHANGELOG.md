@@ -1,5 +1,210 @@
 # Changelog
 
+## v0.64.0 — The cold start stops being a page load (2026-10-21)
+
+Task **A1** of `docs/PLATFORM_ROADMAP.md`. A latency release: not one served
+probability changes, and that is checked rather than asserted — 31 payloads
+captured from the endpoint functions before and after (15 match pages across
+the five leagues, the rounds, the day, the calendar, the three-week list, the
+standings, the scorer races, the catalogue, the track record) are byte-for-byte
+identical, and the market-level multipliers printed at startup agree to four
+decimals. Every number below was measured with the new
+`scripts/measure_cold_start.py`; the before/after tables are in
+`docs/COLD_START_DIAGNOSIS.md`.
+
+### Changed
+- **The models load before uvicorn binds its port.** There was no startup hook
+  anywhere in `api/`, so the first request after a start or a daily refresh paid
+  the whole load: 25-55 s per endpoint on a fresh process with the joblib fit
+  cache warm, and **115 s** with it cold — against a web client that aborts at
+  20 s, which is how a slow start became a 404 (`warm_api_caches.py` records the
+  last time that happened). A `lifespan` moves it: on a cache miss the fit is now
+  123 s of *boot*, announced as `models ready in 119.6s`, and the first request
+  is 0.06 s. Still keyed on `data_version()`, so warming is not
+  process-lifetime state and the daily refresh reaches a running API as before.
+- **The league calendar is served from disk.** `cat.season_calendar` fetched
+  from ESPN on every miss and kept nothing — two HTTP calls per league-season,
+  10.4 s for the five leagues, paid again after every restart, with a provider
+  ceiling of 45 s x 10 calls and no retry budget. One CSV per league-season
+  under `data/processed/fixture_calendars` (~380 rows, 16 KB), written through a
+  temporary file and swapped in. ESPN becomes the refresh source and the disk
+  the serving source, which is how the UEFA calendar has worked since September.
+  Stale-while-revalidate: a fresh snapshot is served outright, an old one is
+  served *and* refreshed behind the answer, and only a league with no snapshot
+  at all blocks — at most once per window however often the provider fails. An
+  empty provider answer never replaces a snapshot, which matters more than the
+  speed: `fetch_season_fixtures` returns an empty frame for every failure, and
+  that is how a matchday renders blank rather than slow. The daily pass is the
+  writer (`warm_api_caches.py`, step 7m) and now reports a league it could not
+  refresh. The user asked for exactly this shape, and the measurement agreed.
+- **Single-flight everywhere a cache could stampede.** `lru_cache` does not
+  de-duplicate calls in flight and FastAPI runs sync endpoints in a threadpool,
+  so the two requests the matchday screen fires together each loaded the engine
+  and each fetched all five calendars: 14 s of work measured as 83 s of
+  contention. One caller loads the models and anything arriving meanwhile gets
+  **503 with `Retry-After: 5`** instead of a held connection; one caller builds
+  each payload-cache entry; one caller refreshes each calendar.
+- **`/fixtures/day` and `/fixtures/calendar` now hit their own cache.** They
+  never did. `_cached`'s key includes `european.fixtures_fingerprint()` — the
+  mtimes of the UEFA `raw_*.csv` files — and building the payload calls
+  `european.fetch_season_fixtures`, which refetches and **rewrites those same
+  files**. Computing the value moved the key that was supposed to find it, so
+  three identical requests left three cache entries and paid ~4 s for each. The
+  European state is now cached for half an hour like the domestic calendar
+  (it was not cached at all: 1.2 s per competition per call). Warm, repeated:
+  6.67 s -> 0.051 s and 3.58 s -> 0.049 s.
+- **The market level is memoised on disk.** `market_level_detail` is **30.8 s**
+  — re-pricing every logged lambda of the season against the book's over-2.5
+  line, fourteen Newton steps per match — and it cannot live in the engine's
+  joblib, because a level frozen into a fit would be served long after the
+  matches it was measured on. So it is memoised beside the fit, keyed on
+  everything it reads: its own source fingerprint, `k`, the foundation's size
+  and last date, both lambda logs and every football-data file. `club_engine()`
+  goes from 35 s to 1.6 s. The daily refresh warms it on the way past.
+  This item was invisible in the first diagnosis, which measured `joblib.load`
+  (0.8 s) and reported it as the whole Python path (3.76 s) rather than timing
+  `club_engine()` (35 s).
+- **The site runs from a production build.** `npm --prefix web run prod`
+  (`next build && next start`) plus a `mundialytics-web-prod` launch
+  configuration; `dev` stays for editing the front end. Measured per route,
+  first visit then second: `next dev` 1.0-3.9 s then 0.13-0.27 s, `next start`
+  0.01-0.19 s then 0.004-0.048 s, for a 35 s build paid once per change. `prod`
+  refuses to build while the API is down, because every data page is SSG and a
+  build without an API bakes the "model is warming up" box into the static HTML
+  — measured, not theorised: /en/leagues built to 52 KB of warming notice
+  against 68 KB of real standings.
+- **The matchday screen retries by itself.** It fetches from the browser, so a
+  cold or restarting API left the panel on "could not load" until the tab
+  regained focus. Now every five seconds for two minutes.
+- **`/health` is a probe again.** Routing it through the readiness guard made
+  it answer 503 for as long as a load took and raise after a failed start,
+  which is the opposite of what the lifespan promises and useless as the
+  container HEALTHCHECK **A2** plans to point at it. It now answers from
+  process state and never triggers a load: 200 whenever the process is up,
+  `ready` for whether the models are in, `matches`/`dataThrough` only once they
+  are. `web/scripts/require-api.mjs` therefore checks `ready` rather than
+  merely that something answered — a loading API now returns 200, and a build
+  against one is exactly what that guard exists to prevent.
+- **One definition of the season the serving path asks for.** The daily pass
+  wrote calendar snapshots for `current_season` (the foundation's newest) while
+  `_predict` asked for the season the date implies. The two agree for eleven
+  months and diverge in July and August — when the serving path would have
+  found no snapshot, fallen back to a blocking provider fetch once per window,
+  and the daily log would have reported every calendar fine. `cat.serving_season()`
+  is now the single definition, `cat.seasons_to_snapshot()` plans both seasons
+  when they differ, and the pass distinguishes "could not refresh, still serving
+  yesterday's" from "nothing on disk".
+
+### Added
+- `scripts/measure_cold_start.py` — five modes (`imports`, `cold`, `warm`,
+  `fanout`, `web`) writing comparable JSON, so a before/after table is evidence
+  rather than two sets of hand-timings. `cold` separates *boot* from *first
+  request*, which is the whole point once a lifespan exists.
+- `output: "standalone"` in `web/next.config.ts`: 37 MB against ~500 MB of
+  `node_modules`, for the A2 container image. Not free after all — the build
+  goes from 25 s to 35 s for the file tracing — and serving is unaffected.
+- `tests/test_calendar_snapshot.py`, `tests/test_cold_start_warmup.py` (25
+  tests; the clean-checkout suite goes 605 to 629, and 737 pass with the
+  local dataset built). What they pin is the part that could serve wrong
+  football rather than slow football: `completed` has to come back off the CSV
+  as a **boolean**, because read as the string `"False"` it passes the
+  `astype(bool)` that `trusted_calendar` and the Golden Boot race both ask, and
+  a settled season would read as 380 fixtures still to play; an empty answer
+  from the provider must never replace a good snapshot; and the level memo must
+  recompute on a new logged
+  lambda, new foundation rows, a different `k` or a new odds file.
+
+### Rejected
+- **Batching the matchday predictions.** A ten-fixture round is 0.91 s, and
+  94 of the 95 ms per fixture are inside `predict_match_or_proxy` — model code,
+  which a latency task may not touch. There is no per-call overhead to batch.
+- **A second "warming up" page state.** The pages already carry that copy, and
+  in production they are prerendered and do not call the API at request time at
+  all. What was missing was recovery, not a state.
+
+## v0.63.0 — The sharpening stops draining the draw (2026-10-18)
+
+### Changed
+- **`sharpen_gamma_1x2` now applies to the home-vs-away contrast only.**
+  `p_i^gamma` renormalized is exactly `(u, v) -> (gamma*u, gamma*v)` on the two
+  log-odds against the draw, so the one exponent that corrects the model's
+  under-confidence on the favourite was also draining the draw — which did not
+  need it: the raw trio prices draws at 0.2560 against 0.2540 happening. The
+  published trio priced them at **0.2318**, a gap of +0.0222 with se 0.0041,
+  **z = +5.4 and short in 6 of 6 walk-forward seasons**; the 27-season rate is
+  higher still at 0.2587. Since `coherent_markets` (v0.57) reweights every
+  outcome region of the scoreline matrix onto the published trio, that deficit
+  was being subtracted from every exact score, BTTS and HT/FT number on the
+  page as well.
+
+  Applying the same exponent to the contrast alone (`sharpen_contrast_only`,
+  new, **defaults to False** so every number scored before today stays
+  reproducible) adds no constant and fits nothing, so all six walk-forward
+  seasons are out of sample: 1X2 log loss, exact score and HT/FT **−0.00128
+  each** and 1X2 RPS **−0.00015**, every one of them in **6 of 6** seasons.
+  Draw O/E 1.096 → 1.029; over/under and BTTS flat (−0.00006). For scale that
+  is about 40% of what the coherence deployment itself was worth. The engine's
+  draw pricing now sits within 0.2 points of Bet365's on the same matches
+  (0.2468 against 0.2489, with 0.2529 happening), where it was 1.7 points below
+  it. `scripts/draw_deficit/README.md`, `tests/test_sharpen_contrast_only.py`.
+
+  **Scored against γ = 1.3, which this same archaeology showed to be stale.**
+  Master has since re-scanned γ to **1.20** at the ρ actually served (`52d94c7`),
+  and roughly **46% of the −0.00128 is that re-scan**, not the second axis.
+  Re-based on power(1.20), this map is **−0.00066 on 1X2 log loss, exact score
+  and HT/FT (4 of 6) and −0.00011 on RPS (5 of 6)**, rising to −0.00071 at its
+  own optimum. **The two commits are NOT additive**: 1.20 is the optimum of the
+  *power* form, while this form's own LOSO optimum is **1.268** (1.246–1.287
+  across folds), so pairing it with 1.20 gives −0.00048 — the weakest of the
+  three configurations — and γ = 1.3 is already within 5e-05 of what it wants.
+  Change the form, re-scan the parameter: the γ/ρ lesson again. Swept 1.18–1.37
+  the mean gain holds everywhere (−0.00023 to −0.00071) but the fold count moves
+  5/6 → 6/6 → 5/6 → 4/6 → 3/6, so 3e-05 of log loss flips two folds; against
+  power(1.30), the baseline this displaced, it is 5/6 or 6/6 across the whole
+  range. Raised and independently reproduced by a parallel session, which then
+  reversed its own verdict; re-derived here with `score_trio_forms.py rebase`.
+
+  Why it was stale rather than wrong: `prediction_engine.py` records that
+  gamma = 1.3 came from a **joint gamma/rho scan that picked it together with
+  rho = −0.17**. rho was later smoothed to −0.06 and gamma was never
+  re-scanned. The re-scan confirms the original was self-consistent — at
+  rho = −0.17 the best gamma is 1.26, at −0.06 it is 1.20 — so moving rho
+  should have moved gamma. **Anything fitted jointly needs re-scanning when its
+  partner changes.** rho is itself a partial substitute for the draw axis and
+  wants to be weaker now (−0.03), but that is 0.00024 in sample and a second
+  change in the same place, so it is left alone.
+
+- **Published figures re-run.** 1X2 RPS 0.1999 → **0.1998**, log loss
+  0.9857 → **0.9846**, coverage of the base-rates-to-closing-line span 85% →
+  **86%**, O/U 2.5 log loss 0.6794 → 0.6793; every season improves or ties.
+  The reliability diagram is regenerated and the draw curve now sits on the
+  diagonal with the other two. Scored on the same walk-forward λ as before —
+  the sharpening is post-hoc on the trio and does not touch λ — so this
+  isolates the change. The λ themselves still predate `market_level_shift`;
+  the weekly `--full` refresh regenerates them. The lineup-pass replay figure
+  (0.1976) is from its own harness and was not re-run.
+
+- **The replicas call the engine's map instead of copying it.**
+  `sharpen_trio` is now importable and takes `(N, 3)`, and the five vectorized
+  backtests that each had their own `P ** GAM`
+  (`scripts/goals_level/score_level.py`, `scripts/espn_xg/score_xg_source.py`,
+  `scripts/squad_value/{lofo,lofo2,retune}.py`) plus the gamma-fitting tool
+  (`scripts/fit_calibration.py`) call it. A reimplementation drifting from what
+  we serve is the bug the September audit kept finding;
+  `score_level.verify()`'s assert against `deployed_markets_from_lambdas` would
+  have caught this one and now cannot go stale.
+
+### Note
+- The engine fit cache is keyed on a hash of `prediction_engine.py`, so the
+  next API start or daily refresh refits. The fits themselves are unchanged —
+  the sharpening is post-hoc — but the cache cannot know that.
+- `report_market_drift.py` **cannot see this class of problem**:
+  `calibration_drift()` opens with `ev[~ev.mercado_id.isin(PICK_ONE)]` and
+  `PICK_ONE = {"1X2", "ht_1x2", "ht_ft"}`, because a pick-one market logs one
+  selection rather than three probabilities. The 1X2's own per-outcome
+  calibration is unmonitored. The log has carried `p_home`/`p_draw`/`p_away`
+  since PR #25, so the fix is cheap; it is not in this release.
+
 ## v0.62.0 — The record names the model we price with (2026-10-06)
 
 ### Fixed

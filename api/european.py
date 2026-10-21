@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -63,8 +64,43 @@ def available_years(comp_id: str) -> list[int]:
     return sorted(cached | {current_year()}, reverse=True)
 
 
+STATE_TTL_SECONDS = 1800
+
+
 def load_state(comp_id: str, year: int) -> dict:
-    """Calibration, Elo ratings and the season's fixtures, parsed."""
+    """Calibration, Elo ratings and the season's fixtures, parsed.
+
+    Cached for half an hour, not for the life of the process -- the same
+    contract `catalogue.season_calendar` keeps, so a result or a rescheduled
+    kick-off still reaches a running API without a restart.
+
+    It did not used to be cached at all, and that cost twice over. Measured on
+    2026-10-21: 1.2 s per competition per call, so ~4 s on every /fixtures/day
+    and every /fixtures/calendar, which the matchday screen asks for together.
+    Worse, `fetch_season_fixtures` REWRITES data/external/uefa/raw_*.csv on each
+    call, and `fixtures_fingerprint()` below reads those files' mtimes into the
+    cache key of those same two endpoints -- so computing the answer moved the
+    key that was supposed to find it, and the payload cache never once hit.
+    Three identical requests left three cache entries and paid in full for each.
+
+    The frames go out as copies: a cached state must not inherit the columns the
+    last caller added to it.
+    """
+    import time
+
+    state = _load_state(comp_id, year, int(time.time() // STATE_TTL_SECONDS))
+    out = dict(state)
+    for key in ("raw", "league", "ko"):
+        if out.get(key) is not None:
+            out[key] = out[key].copy()
+    for key in ("elo_all", "elo_by_norm", "teams"):
+        out[key] = dict(out[key])
+    out["unresolved"] = list(out["unresolved"])
+    return out
+
+
+@lru_cache(maxsize=16)
+def _load_state(comp_id: str, year: int, _bucket: int) -> dict:
     from mundialytics.statistical_core.competition.european import (
         fetch_current_elo,
         fetch_season_fixtures,

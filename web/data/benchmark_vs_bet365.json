@@ -8,7 +8,7 @@
     },
     {
       "key": "engine",
-      "rps": 0.1999
+      "rps": 0.1998
     },
     {
       "key": "baseRates",
@@ -20,32 +20,32 @@
     }
   ],
   "logLoss": {
-    "engine": 0.9857,
+    "engine": 0.9846,
     "market": 0.968
   },
-  "coverage": 0.8531,
+  "coverage": 0.8568,
   "bySeason": [
     {
       "season": "2020-2021",
-      "engine": 0.2029,
+      "engine": 0.2027,
       "market": 0.1966,
       "n": 1788
     },
     {
       "season": "2021-2022",
-      "engine": 0.1989,
+      "engine": 0.1988,
       "market": 0.1954,
       "n": 1789
     },
     {
       "season": "2022-2023",
-      "engine": 0.2039,
+      "engine": 0.2037,
       "market": 0.1986,
       "n": 1753
     },
     {
       "season": "2023-2024",
-      "engine": 0.1942,
+      "engine": 0.194,
       "market": 0.1877,
       "n": 1675
     },
@@ -57,7 +57,7 @@
     },
     {
       "season": "2025-2026",
-      "engine": 0.2022,
+      "engine": 0.2021,
       "market": 0.1971,
       "n": 1669
     }
@@ -65,22 +65,22 @@
   "byLeague": [
     {
       "league": "LaLiga",
-      "gap": 0.0042,
+      "gap": 0.0041,
       "n": 2275
     },
     {
       "league": "Serie A",
-      "gap": 0.0046,
+      "gap": 0.0044,
       "n": 2275
     },
     {
       "league": "Ligue 1",
-      "gap": 0.0057,
+      "gap": 0.0055,
       "n": 2043
     },
     {
       "league": "Bundesliga",
-      "gap": 0.0062,
+      "gap": 0.0059,
       "n": 1359
     },
     {
@@ -91,14 +91,14 @@
   ],
   "overUnder25": {
     "n": 10078,
-    "logLossEngine": 0.6794,
+    "logLossEngine": 0.6793,
     "logLossMarket": 0.671
   },
   "provenance": {
-    "generated": "2026-09-29",
+    "generated": "2026-10-18",
     "script": "scripts/benchmark_vs_bet365.py",
     "predictions": "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv",
-    "predictionsSha256": "bd80f028789515df",
-    "engineCode": "16b0ca7b"
+    "predictionsSha256": "715ddfef50be0b57",
+    "engineCode": "8860836d"
   }
 }

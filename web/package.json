@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "prod": "node scripts/require-api.mjs && next build && next start",
     "lint": "eslint"
   },
   "dependencies": {
