@@ -1,0 +1,53 @@
+# Services Mundialytics needs that are not the app itself.
+#
+# Today that is one thing: the Postgres the Next.js app keeps user accounts in
+# (task B1 of docs/PLATFORM_ROADMAP.md). Task A2 adds `api` and `web` services
+# beside it, so the database is written as something to build on — a named
+# volume that survives `docker compose down`, a healthcheck a dependent service
+# can wait on, and credentials that come from the environment — rather than as
+# a throwaway container.
+#
+#   docker compose up -d postgres      start it
+#   docker compose down                stop it, keep the data
+#   docker compose down -v             stop it and delete the data
+#
+# The defaults below are development credentials on a port only this machine
+# can reach. A deployment overrides them through the environment and does not
+# publish the port at all.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: mundialytics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mundialytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mundialytics}
+      POSTGRES_DB: ${POSTGRES_DB:-mundialytics}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `docker compose up --wait` and any future `depends_on: service_healthy`
+      # need this: Postgres accepts TCP connections a second or two before it
+      # will answer a query.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-mundialytics} -d ${POSTGRES_DB:-mundialytics}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      # Every healthcheck in this file gets a start_period — the rule the
+      # deployment plan now states, after A1 measured what a missing one does
+      # to the API container: it restarts into the same cold fit for ever.
+      # Nothing here is that slow, so 10s is enough; it only has to cover the
+      # `initdb` on a volume's first run, so the retries above count real
+      # failures rather than a database that has not been created yet.
+      start_period: 10s
+
+volumes:
+  pgdata:
+    name: mundialytics-pgdata
