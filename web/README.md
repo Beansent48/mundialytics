@@ -66,12 +66,29 @@ npm --prefix web run db:generate     # diff it into SQL under lib/db/migrations
 npm --prefix web run db:migrate      # apply it
 ```
 
-The cascade behind "delete my account" has a test of its own, which needs the
-database up and the migrations applied:
+What the account holds: followed teams and competitions, theme and language,
+and SquadLab runs. Signed out, all three behave exactly as they did before
+accounts existed — favourites in `localStorage`, preferences in the browser,
+and a SquadLab draft that is lost when you leave. Nothing became sign-in-only.
+
+Two tests need the database up and the migrations applied. The second also
+needs the web app running, because what it checks — whether a session reaches
+the right rows, and whether one account can see another's — lives in the seam
+between the route handler, Better Auth and Postgres:
 
 ```bash
 node --test --test-reporter=spec web/tests/account-cascade.test.mjs
+node --test --test-reporter=spec web/tests/user-data.test.mjs
 ```
+
+Both skip rather than fail when nothing is listening, which is why CI (lint and
+tsc, no database) stays green without them.
+
+> **Adding a table?** Put it in `lib/db/app-schema.ts`, never in
+> `lib/db/schema.ts`. The latter is generated from the auth config and
+> `npm run db:schema` overwrites it, so a table added there disappears the next
+> time anyone regenerates the auth schema — with no error, because the
+> generator does not know it was not the only author.
 
 ## Layout
 
