@@ -1,5 +1,98 @@
 # Changelog
 
+## v0.65.0 — User accounts: sign-in, and a database to key them on (2026-10-23)
+
+Task **B1** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md). The
+foundation only: somebody can sign in and the app knows who they are. What the
+account is *for* — favourites, settings and SquadLab progress moving off
+`localStorage` — is B2 and is not in this release.
+
+Stacks on v0.64.0, A1's cold-start work, which landed while this was being
+written.
+
+**Nothing a served probability touches is in this diff.** No file under `src/`,
+`api/` or `scripts/` changed; the engine, the published figures and the track
+record are byte-identical, and the Python suite is green on a clean checkout.
+
+### Added
+- **Sign in with Google or with an email address**, through
+  [Better Auth](https://www.better-auth.com) 1.7.12 inside the Next.js app,
+  over our own Postgres. Two prerendered pages (`/sign-in`, `/sign-up`), an
+  account page with sign out and **delete account**, and the header menu's
+  sign-in items made real — they had been sitting greyed out with a "coming
+  soon" badge since the menu was built. Every string in
+  `web/messages/{en,es}.json`, like every other string in the product.
+
+  Why Better Auth and not Auth.js v5, since the brief left the choice open:
+  `next-auth` still publishes v5 only under the `beta` tag (`5.0.0-beta.32`,
+  with `latest` on 4.24.15), its Credentials provider cannot use database
+  sessions — which would have meant two session models in one app, JWT for
+  email and database for Google — and it leaves password hashing to the
+  application. Better Auth ships `1.7.12` as `latest`, has the Drizzle adapter
+  and email+password in core, and **generates the schema its adapter expects**,
+  so the four tables are a reviewable diff rather than a hand-copy of a
+  documentation page. Recorded, with the cost of the choice, in
+  [`docs/USER_ACCOUNTS_DESIGN.md`](docs/USER_ACCOUNTS_DESIGN.md) §8.
+
+- **Postgres and a migration tool.** `docker-compose.yml` at the repo root with
+  one `postgres:17-alpine` service, a named volume that survives
+  `docker compose down`, a healthcheck a future `depends_on` can wait on, and
+  credentials from the environment — the first piece of the stack **A2** will
+  finish, written to grow rather than as a stopgap. Drizzle for the schema,
+  with `web/lib/db/migrations/0000_accounts.sql` committed and three documented
+  commands (`db:schema`, `db:generate`, `db:migrate`) behind it.
+
+  The four tables are `user`, `session`, `account` and `verification`.
+  `user.id` is a `text` identifier and **every foreign key cascades**, which is
+  the part that matters beyond authentication: B2's favourites, settings and
+  SquadLab runs, and the achievements and XP after them, all key on
+  `user_id -> user.id ON DELETE CASCADE`, so the schema is born with somewhere
+  to hang them and "delete my account" keeps meaning it.
+  `web/tests/account-cascade.test.mjs` asserts both the behaviour and the
+  constraint — `delete_rule = CASCADE` on *every* foreign key — so a later
+  table that forgets it fails a test instead of orphaning rows.
+
+- **`web/.env.example`**, committed with every key and no values:
+  `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, the Google client
+  pair and `AUTH_REQUIRE_EMAIL_VERIFICATION`. `web/.gitignore` opts this one
+  file out of its `.env*` rule.
+
+### Changed
+- `web/README.md` gains an **Accounts** section (what each variable is for, the
+  three migration commands, how to run the cascade test) and the root
+  `README.md` the three lines that start the database. The design document
+  gains §8, what was actually built, and §9, the Google Cloud steps and the
+  exact redirect URI — `http://localhost:3000/api/auth/callback/google`, where
+  exactly means exactly, since a mismatch is `redirect_uri_mismatch` and
+  nothing else.
+
+### Unchanged, on purpose
+- **`api/` has no notion of a user and did not grow one.** Accounts live in
+  Next.js route handlers against Postgres; the API container will need no
+  database in A2. The reasoning is §2 of the design.
+- **`web/proxy.ts` is untouched.** This was the trap the roadmap warned about —
+  Next.js 16 renamed `middleware.ts` to `proxy.ts`, and every auth guide still
+  says `middleware.ts`, so following one gives you a guard Next never runs.
+  There is no guard here to get wrong: Next's own documentation says Proxy
+  "should not be used as a full session management or authorization solution",
+  and **no route on this site is sign-in-only**. The account unlocks saving,
+  not seeing.
+- **Every football page is still prerendered.** The header reads the session in
+  the browser (`useSession`), not on the server: it sits in the locale layout
+  above every page, and a server-side read there would make the whole site
+  render per request to put one name in a dropdown. `/account` is the only
+  route in the app marked `dynamic = "force-dynamic"`. A signed-out visitor
+  gets exactly the HTML they got before.
+- **No mail transport, and nothing analytics-shaped.** Verification links are
+  written to the server log (`web/lib/mail.ts`), which is a real flow for one
+  operator and costs nothing against the ~15 €/month the project has budgeted;
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` therefore defaults to off, because turning
+  it on without a sender would lock every new account out behind a link only
+  the terminal can see. The session cookie is strictly necessary, so there is
+  still no consent banner to add. Password reset, and deleting a Google account
+  whose session is over a day old, both wait on the same transport — §8 lists
+  them as open.
+
 ## v0.64.0 — The cold start stops being a page load (2026-10-21)
 
 Task **A1** of `docs/PLATFORM_ROADMAP.md`. A latency release: not one served

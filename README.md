@@ -524,6 +524,22 @@ startup log line either way, never a page load. While it is still loading it
 answers `503` with a `Retry-After` rather than holding the connection open, and
 the matchday screen retries by itself.
 
+Accounts are optional, for both the visitor and whoever runs this. Every page
+renders without one; signing in exists so that what you follow can be saved.
+If you want that part working, the web app needs a Postgres and a few keys —
+one compose service, a copied `.env`, one migration:
+
+```bash
+docker compose up -d postgres        # postgres:17-alpine, named volume
+cp web/.env.example web/.env.local   # DATABASE_URL, session secret, Google keys
+npm --prefix web run db:migrate      # creates the four account tables
+```
+
+[`web/README.md`](web/README.md#accounts) lists what each variable is for, and
+[`docs/USER_ACCOUNTS_DESIGN.md`](docs/USER_ACCOUNTS_DESIGN.md) has the design,
+the schema and the Google Cloud steps. The API never sees any of it: it stays
+stateless and anonymous, and the account layer lives entirely in Next.js.
+
 The web app has pages for matchday (the five leagues and the three UEFA
 competitions, each priced by its own model), single-competition simulation, league
 forecasting from the current table, player and team props, European
