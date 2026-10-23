@@ -59,7 +59,8 @@ fetched with `cache: "no-store"`.
 - **An auth library, not hand-rolled**: Better Auth or Auth.js v5. B1 picks one
   after reading the *current* docs — both moved fast in 2026 — with a bias to
   Better Auth for first-class Drizzle support and email+password without a
-  separate adapter.
+  separate adapter. **B1 chose Better Auth** (1.7.12); the three facts that
+  decided it are in [§8](#8-what-b1-actually-built).
 - **A typed query layer**: Drizzle, with migrations committed to the repo. The
   project's existing discipline — a schema change is a reviewable diff — applies
   to the database too.
@@ -151,6 +152,172 @@ Small, but not optional:
   casually.
 - A privacy page, with its strings in `web/messages/{en,es}.json` like every
   other string. The site is bilingual and the account pages must be too.
+
+
+---
+
+## 8. What B1 actually built
+
+Landed 2026-10-23. Sections 1-3 above were the plan; this is the record.
+
+### The library: Better Auth 1.7.12
+
+Three facts, checked against npm and the libraries' own current docs rather
+than against guides:
+
+1. **Auth.js v5 is still beta.** `next-auth` publishes `5.0.0-beta.32` under the
+   `beta` tag and `4.24.15` under `latest`. Better Auth publishes `1.7.12` as
+   `latest`. Betting the account layer of a public site on a package whose
+   maintainers have not called it stable in three years is a cost with no
+   matching benefit.
+2. **Email and password are core, not an exercise.** Auth.js leaves password
+   hashing to the application and its Credentials provider cannot use database
+   sessions — which would have meant JWT sessions for email users and database
+   sessions for Google users, two session models in one app. Better Auth hashes,
+   verifies, issues the verification token and stores every session in the same
+   table.
+3. **It generates the schema it expects.** `npm --prefix web run db:schema`
+   writes `web/lib/db/schema.ts` from the auth config, so the four tables are a
+   reviewable diff and not a hand-copy of a documentation page that could drift.
+
+Cost of the choice, recorded honestly: Better Auth is younger, so the blast
+radius of a breaking release is ours to absorb, and the version is pinned in
+`web/package-lock.json` rather than floating.
+
+### The schema, as built
+
+Four tables, generated from the auth config and committed:
+
+```
+user           id (text PK), name, email (unique), email_verified,
+               image, created_at, updated_at
+session        id, token (unique), expires_at, ip_address, user_agent,
+               user_id -> user.id ON DELETE CASCADE
+account        id, account_id, provider_id, user_id -> user.id ON DELETE
+               CASCADE, access_token, refresh_token, id_token, scope,
+               password, …expiry columns
+verification   id, identifier, value, expires_at
+```
+
+`provider_id` is `credential` for an email and password, `google` for Google.
+One person with both has one `user` row and two `account` rows —
+`accountLinking` is on, with Google trusted, because Google verifies its own
+addresses.
+
+Two properties of this matter to **B2**, which hangs favourites, settings,
+SquadLab runs and later the achievements and XP off the same user:
+
+- **`user.id` is `text`.** Every table B2 adds keys on
+  `text("user_id").references(() => user.id, { onDelete: "cascade" })`, the
+  shape `session` and `account` already use. There is no serial to migrate to
+  and no second identity to reconcile.
+- **Deletes cascade, and that is tested.**
+  `web/tests/account-cascade.test.mjs` asserts both the behaviour and the
+  constraint: every foreign key in the schema must carry `delete_rule =
+  CASCADE`, so a B2 table that forgets it fails the test rather than leaving
+  orphans behind a deleted account.
+
+B1 deliberately added none of B2's tables. Empty tables would be a guess at
+columns that B2 will design with the features in front of it, and the design
+above assigns them there. What B1 owed the gamification work is the anchor —
+one Postgres, one `user` table with a stable text id, cascade by default, and a
+migration tool that can add a table — and that exists.
+
+### Where the pieces live
+
+```
+docker-compose.yml                  postgres:17-alpine, named volume
+web/.env.example                    every key, no values
+web/drizzle.config.ts               migration tool config
+web/lib/db/client.ts                lazy pg pool + Drizzle
+web/lib/db/schema.ts                the four tables (generated)
+web/lib/db/migrations/              committed SQL + drizzle's journal
+web/lib/auth.ts                     the Better Auth instance
+web/lib/auth-config.ts              is Google configured?
+web/lib/auth-client.ts              the browser client
+web/lib/auth-errors.ts              error codes -> message keys
+web/lib/mail.ts                     the one seam a mail transport plugs into
+web/app/api/auth/[...all]/route.ts  every auth endpoint
+web/app/[locale]/sign-in|sign-up/   the two prerendered forms
+web/app/[locale]/account/           the one page rendered per request
+web/components/account/             the form, sign-out, delete
+```
+
+### Three things that are not obvious from the code
+
+- **`web/proxy.ts` is untouched.** Next.js 16's own documentation says Proxy
+  "should not be used as a full session management or authorization solution",
+  and nothing on this site is gated anyway, so there is no auth check in it.
+  The trap §3 warned about was avoided by not needing the file.
+- **The session is read in the browser for the header, on the server for the
+  account page.** The header sits in the locale layout above every football
+  page, and those pages are prerendered over the locales; a server-side session
+  read there would make the entire site render per request to put one name in a
+  dropdown. So `AccountMenu` calls `useSession()` and ships its signed-out
+  shell in the static HTML. `/account` is the only route with
+  `dynamic = "force-dynamic"`.
+- **There is no mail transport.** Verification links are written to the server
+  log by `web/lib/mail.ts`, which is a real flow for one operator on their own
+  machine and costs nothing. `AUTH_REQUIRE_EMAIL_VERIFICATION` therefore
+  defaults to off: turning it on without a transport would lock every new
+  account out behind a link only the terminal can see. Match alerts (the
+  roadmap backlog) are what should bring a real sender, and when they do they
+  replace the body of one function.
+
+### Still open after B1
+
+- **Password reset.** Someone who signs up with an address and forgets the
+  password has no way back in. Better Auth ships the flow; it needs the mail
+  transport above, so it waits for the same task.
+- **Delete, for a Google account signed in long ago.** Better Auth requires a
+  password or a session fresher than a day. An email account always has the
+  password; a Google account older than that gets told to sign in again, which
+  is true but is one click more than it should be. The clean fix is
+  `sendDeleteAccountVerification`, which again needs mail.
+- **A privacy page**, per §7. Nothing analytics-shaped was added and the
+  session cookie is strictly necessary, so there is nothing to disclose yet
+  beyond what the account stores — but the page should exist before the site is
+  public.
+
+---
+
+## 9. Setting up Google sign-in
+
+The OAuth client has to be created by the account owner; it cannot be scripted,
+and the secret should never pass through a chat. Google renames these console
+pages periodically, so the steps name what to look for rather than a menu path,
+and the one thing that must be exact is the redirect URI.
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a
+   project (or pick one) — the name is only ever seen by you.
+2. Configure the **OAuth consent screen** / branding for the project: an app
+   name, your email as the support contact, and **External** as the user type.
+   While the app is in testing, only the accounts listed as test users can sign
+   in, so add your own address there.
+3. Create an **OAuth 2.0 Client ID** of type **Web application**.
+4. Add one **authorized redirect URI**, exactly:
+
+   ```
+   http://localhost:3000/api/auth/callback/google
+   ```
+
+   Exactly means exactly: scheme, port, case and no trailing slash. A mismatch
+   is the `redirect_uri_mismatch` error and nothing else. The path comes from
+   Better Auth's handler at `web/app/api/auth/[...all]/route.ts`, and it carries
+   no locale because `web/proxy.ts` leaves `/api` out of locale routing.
+
+   Add the deployed origin's version of the same path — `https://<domain>/api/auth/callback/google` — when the site goes live in **A2**. Keep
+   the localhost one; a client can hold several.
+5. Copy the client ID and secret into `web/.env.local` as `GOOGLE_CLIENT_ID`
+   and `GOOGLE_CLIENT_SECRET`, then restart the dev server. Next reads
+   `.env.local` at startup, and the Google button is rendered from a server-side
+   check of those two variables, so until the restart the button stays hidden —
+   which is deliberate: a button with no client id behind it leads to Google's
+   own error page.
+
+No scopes need requesting beyond the defaults. Better Auth asks for `openid`,
+`email` and `profile`, which is the name, address and avatar URL §7 limits us
+to.
 
 ---
 
