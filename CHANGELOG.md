@@ -1,5 +1,127 @@
 # Changelog
 
+## v0.64.0 — The cold start stops being a page load (2026-10-21)
+
+Task **A1** of `docs/PLATFORM_ROADMAP.md`. A latency release: not one served
+probability changes, and that is checked rather than asserted — 31 payloads
+captured from the endpoint functions before and after (15 match pages across
+the five leagues, the rounds, the day, the calendar, the three-week list, the
+standings, the scorer races, the catalogue, the track record) are byte-for-byte
+identical, and the market-level multipliers printed at startup agree to four
+decimals. Every number below was measured with the new
+`scripts/measure_cold_start.py`; the before/after tables are in
+`docs/COLD_START_DIAGNOSIS.md`.
+
+### Changed
+- **The models load before uvicorn binds its port.** There was no startup hook
+  anywhere in `api/`, so the first request after a start or a daily refresh paid
+  the whole load: 25-55 s per endpoint on a fresh process with the joblib fit
+  cache warm, and **115 s** with it cold — against a web client that aborts at
+  20 s, which is how a slow start became a 404 (`warm_api_caches.py` records the
+  last time that happened). A `lifespan` moves it: on a cache miss the fit is now
+  123 s of *boot*, announced as `models ready in 119.6s`, and the first request
+  is 0.06 s. Still keyed on `data_version()`, so warming is not
+  process-lifetime state and the daily refresh reaches a running API as before.
+- **The league calendar is served from disk.** `cat.season_calendar` fetched
+  from ESPN on every miss and kept nothing — two HTTP calls per league-season,
+  10.4 s for the five leagues, paid again after every restart, with a provider
+  ceiling of 45 s x 10 calls and no retry budget. One CSV per league-season
+  under `data/processed/fixture_calendars` (~380 rows, 16 KB), written through a
+  temporary file and swapped in. ESPN becomes the refresh source and the disk
+  the serving source, which is how the UEFA calendar has worked since September.
+  Stale-while-revalidate: a fresh snapshot is served outright, an old one is
+  served *and* refreshed behind the answer, and only a league with no snapshot
+  at all blocks — at most once per window however often the provider fails. An
+  empty provider answer never replaces a snapshot, which matters more than the
+  speed: `fetch_season_fixtures` returns an empty frame for every failure, and
+  that is how a matchday renders blank rather than slow. The daily pass is the
+  writer (`warm_api_caches.py`, step 7m) and now reports a league it could not
+  refresh. The user asked for exactly this shape, and the measurement agreed.
+- **Single-flight everywhere a cache could stampede.** `lru_cache` does not
+  de-duplicate calls in flight and FastAPI runs sync endpoints in a threadpool,
+  so the two requests the matchday screen fires together each loaded the engine
+  and each fetched all five calendars: 14 s of work measured as 83 s of
+  contention. One caller loads the models and anything arriving meanwhile gets
+  **503 with `Retry-After: 5`** instead of a held connection; one caller builds
+  each payload-cache entry; one caller refreshes each calendar.
+- **`/fixtures/day` and `/fixtures/calendar` now hit their own cache.** They
+  never did. `_cached`'s key includes `european.fixtures_fingerprint()` — the
+  mtimes of the UEFA `raw_*.csv` files — and building the payload calls
+  `european.fetch_season_fixtures`, which refetches and **rewrites those same
+  files**. Computing the value moved the key that was supposed to find it, so
+  three identical requests left three cache entries and paid ~4 s for each. The
+  European state is now cached for half an hour like the domestic calendar
+  (it was not cached at all: 1.2 s per competition per call). Warm, repeated:
+  6.67 s -> 0.051 s and 3.58 s -> 0.049 s.
+- **The market level is memoised on disk.** `market_level_detail` is **30.8 s**
+  — re-pricing every logged lambda of the season against the book's over-2.5
+  line, fourteen Newton steps per match — and it cannot live in the engine's
+  joblib, because a level frozen into a fit would be served long after the
+  matches it was measured on. So it is memoised beside the fit, keyed on
+  everything it reads: its own source fingerprint, `k`, the foundation's size
+  and last date, both lambda logs and every football-data file. `club_engine()`
+  goes from 35 s to 1.6 s. The daily refresh warms it on the way past.
+  This item was invisible in the first diagnosis, which measured `joblib.load`
+  (0.8 s) and reported it as the whole Python path (3.76 s) rather than timing
+  `club_engine()` (35 s).
+- **The site runs from a production build.** `npm --prefix web run prod`
+  (`next build && next start`) plus a `mundialytics-web-prod` launch
+  configuration; `dev` stays for editing the front end. Measured per route,
+  first visit then second: `next dev` 1.0-3.9 s then 0.13-0.27 s, `next start`
+  0.01-0.19 s then 0.004-0.048 s, for a 35 s build paid once per change. `prod`
+  refuses to build while the API is down, because every data page is SSG and a
+  build without an API bakes the "model is warming up" box into the static HTML
+  — measured, not theorised: /en/leagues built to 52 KB of warming notice
+  against 68 KB of real standings.
+- **The matchday screen retries by itself.** It fetches from the browser, so a
+  cold or restarting API left the panel on "could not load" until the tab
+  regained focus. Now every five seconds for two minutes.
+- **`/health` is a probe again.** Routing it through the readiness guard made
+  it answer 503 for as long as a load took and raise after a failed start,
+  which is the opposite of what the lifespan promises and useless as the
+  container HEALTHCHECK **A2** plans to point at it. It now answers from
+  process state and never triggers a load: 200 whenever the process is up,
+  `ready` for whether the models are in, `matches`/`dataThrough` only once they
+  are. `web/scripts/require-api.mjs` therefore checks `ready` rather than
+  merely that something answered — a loading API now returns 200, and a build
+  against one is exactly what that guard exists to prevent.
+- **One definition of the season the serving path asks for.** The daily pass
+  wrote calendar snapshots for `current_season` (the foundation's newest) while
+  `_predict` asked for the season the date implies. The two agree for eleven
+  months and diverge in July and August — when the serving path would have
+  found no snapshot, fallen back to a blocking provider fetch once per window,
+  and the daily log would have reported every calendar fine. `cat.serving_season()`
+  is now the single definition, `cat.seasons_to_snapshot()` plans both seasons
+  when they differ, and the pass distinguishes "could not refresh, still serving
+  yesterday's" from "nothing on disk".
+
+### Added
+- `scripts/measure_cold_start.py` — five modes (`imports`, `cold`, `warm`,
+  `fanout`, `web`) writing comparable JSON, so a before/after table is evidence
+  rather than two sets of hand-timings. `cold` separates *boot* from *first
+  request*, which is the whole point once a lifespan exists.
+- `output: "standalone"` in `web/next.config.ts`: 37 MB against ~500 MB of
+  `node_modules`, for the A2 container image. Not free after all — the build
+  goes from 25 s to 35 s for the file tracing — and serving is unaffected.
+- `tests/test_calendar_snapshot.py`, `tests/test_cold_start_warmup.py` (25
+  tests; the clean-checkout suite goes 605 to 629, and 737 pass with the
+  local dataset built). What they pin is the part that could serve wrong
+  football rather than slow football: `completed` has to come back off the CSV
+  as a **boolean**, because read as the string `"False"` it passes the
+  `astype(bool)` that `trusted_calendar` and the Golden Boot race both ask, and
+  a settled season would read as 380 fixtures still to play; an empty answer
+  from the provider must never replace a good snapshot; and the level memo must
+  recompute on a new logged
+  lambda, new foundation rows, a different `k` or a new odds file.
+
+### Rejected
+- **Batching the matchday predictions.** A ten-fixture round is 0.91 s, and
+  94 of the 95 ms per fixture are inside `predict_match_or_proxy` — model code,
+  which a latency task may not touch. There is no per-call overhead to batch.
+- **A second "warming up" page state.** The pages already carry that copy, and
+  in production they are prerendered and do not call the API at request time at
+  all. What was missing was recovery, not a state.
+
 ## v0.63.0 — The sharpening stops draining the draw (2026-10-18)
 
 ### Changed
