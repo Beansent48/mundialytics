@@ -416,6 +416,13 @@
       "historic": "All-time Champions League",
       "historicLead": "36 sides from any era in today's format, each with its real Elo at the end of that season."
     },
+    "saved": {
+      "title": "Your saved runs",
+      "inProgress": "Draft in progress — {players} picked",
+      "finished": "Played",
+      "continue": "Continue",
+      "delete": "Delete this run"
+    },
     "positions": {
       "Goalkeeper": "Goalkeeper",
       "Defender": "Defence",

@@ -17,7 +17,7 @@ CREATE TABLE "squadlab_run" (
 	"engine_fingerprint" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "squadlab_run_mode" CHECK ("squadlab_run"."mode" in ('draft', 'historic')),
+	CONSTRAINT "squadlab_run_mode" CHECK ("squadlab_run"."mode" in ('draft', 'sandbox', 'historic')),
 	CONSTRAINT "squadlab_run_status" CHECK ("squadlab_run"."status" in ('in_progress', 'finished')),
 	CONSTRAINT "squadlab_run_finished_has_result" CHECK ("squadlab_run"."status" <> 'finished' or "squadlab_run"."result" is not null)
 );

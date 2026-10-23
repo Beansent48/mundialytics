@@ -174,7 +174,7 @@ function summarise(row: {
     status: row.status as RunStatus,
     stage: result?.stage ?? null,
     teamName: result?.teamName ?? null,
-    players: Object.keys((row.squad as Record<string, string>) ?? {}).length,
+    players: Object.keys((row.squad as Record<string, unknown>) ?? {}).length,
     engineFingerprint: row.engineFingerprint,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -232,7 +232,8 @@ export type RunInput = {
   id: string;
   mode: string;
   seed: number;
-  squad: Record<string, string>;
+  /** The chosen cards by slot; see the column's note in app-schema.ts. */
+  squad: Record<string, unknown>;
   rerolls: Record<string, number>;
   status: RunStatus;
   result: unknown | null;

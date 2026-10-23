@@ -416,6 +416,13 @@
       "historic": "Champions histórica",
       "historicLead": "36 equipos de cualquier época en el formato actual, cada uno con su Elo real al final de esa temporada."
     },
+    "saved": {
+      "title": "Tus partidas guardadas",
+      "inProgress": "Draft a medias — {players} elegidos",
+      "finished": "Jugada",
+      "continue": "Continuar",
+      "delete": "Borrar esta partida"
+    },
     "positions": {
       "Goalkeeper": "Portería",
       "Defender": "Defensa",
