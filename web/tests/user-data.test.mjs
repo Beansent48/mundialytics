@@ -50,6 +50,12 @@ async function signUp() {
     headers: { "content-type": "application/json", origin: BASE },
     body: JSON.stringify({ name: "Test Account", email, password }),
   });
+  if (res.status === 429) {
+    // Better Auth rate-limits its own endpoints, which is a property worth
+    // having and makes this file flaky when it is run repeatedly. Say so,
+    // rather than leaving a bare 429 to look like a bug in the account layer.
+    throw new RateLimited();
+  }
   assert.equal(res.status, 200, "sign-up should succeed");
   const cookie = (res.headers.getSetCookie?.() ?? [])
     .map((c) => c.split(";")[0])
@@ -72,14 +78,27 @@ async function signUp() {
 
 const json = (body) => ({ body: JSON.stringify(body) });
 
+/** Not a failure of the thing under test — the auth library defending itself. */
+class RateLimited extends Error {}
+
 test("the account layer keeps each account to its own rows", async (t) => {
   if (!(await reachable())) {
     t.skip(`nothing answering at ${BASE}; start the web app first`);
     return;
   }
 
-  const a = await signUp();
-  const b = await signUp();
+  let a;
+  let b;
+  try {
+    a = await signUp();
+    b = await signUp();
+  } catch (error) {
+    if (error instanceof RateLimited) {
+      t.skip("Better Auth is rate-limiting sign-up; wait a minute and re-run");
+      return;
+    }
+    throw error;
+  }
 
   await t.test("signed out is 401, not a redirect to HTML", async () => {
     const res = await fetch(`${BASE}/api/user/favorites`);
