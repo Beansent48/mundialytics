@@ -1,3 +1,4 @@
+import { engineFingerprint } from "@/lib/engine-fingerprint";
 import { listRuns, saveRun, type RunStatus } from "@/lib/user-data";
 import { BadRequest, readJson, withUser } from "@/lib/user-route";
 
@@ -14,7 +15,7 @@ import { BadRequest, readJson, withUser } from "@/lib/user-route";
  */
 export const dynamic = "force-dynamic";
 
-const MODES = ["draft", "historic"];
+const MODES = ["draft", "sandbox", "historic"];
 const STATUSES = ["in_progress", "finished"];
 
 function text(payload: Record<string, unknown>, field: string, allowed?: string[]) {
@@ -61,14 +62,14 @@ export const POST = withUser(async (userId, request) => {
     id: text(payload, "id"),
     mode: text(payload, "mode", MODES),
     seed,
-    squad: record(payload, "squad") as Record<string, string>,
+    squad: record(payload, "squad"),
     rerolls: record(payload, "rerolls") as Record<string, number>,
     status,
     result,
-    engineFingerprint:
-      typeof payload.engineFingerprint === "string"
-        ? payload.engineFingerprint.slice(0, 128)
-        : null,
+    // Stamped here rather than sent by the browser: the browser may have no
+    // route to the API at all once this is deployed, and a fingerprint the
+    // client could choose would be worth nothing anyway.
+    engineFingerprint: await engineFingerprint(),
   });
 
   return { id: run?.id ?? null, status: run?.status ?? null };

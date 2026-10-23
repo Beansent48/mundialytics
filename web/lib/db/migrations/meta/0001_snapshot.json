@@ -1,5 +1,5 @@
 {
-  "id": "fdf04bd3-e0be-448b-931d-43eb5ffe48d1",
+  "id": "b5db446e-c56c-41bc-b06d-1a5806b3ad40",
   "prevId": "1ac7de4c-579c-4040-9da7-51b715593775",
   "version": "7",
   "dialect": "postgresql",
@@ -514,7 +514,7 @@
       "checkConstraints": {
         "squadlab_run_mode": {
           "name": "squadlab_run_mode",
-          "value": "\"squadlab_run\".\"mode\" in ('draft', 'historic')"
+          "value": "\"squadlab_run\".\"mode\" in ('draft', 'sandbox', 'historic')"
         },
         "squadlab_run_status": {
           "name": "squadlab_run_status",

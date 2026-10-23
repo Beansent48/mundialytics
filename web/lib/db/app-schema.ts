@@ -104,7 +104,16 @@ export const squadlabRun = pgTable(
     // A uint32 from `crypto.getRandomValues`, which overflows int4 above
     // 2,147,483,647 — about half the seeds this would ever be handed.
     seed: bigint("seed", { mode: "number" }).notNull(),
-    /** The chosen names, by slot: `{ "GK_0": "Alisson", … }`. */
+    /**
+     * The chosen cards, by slot: `{ "Forward_0": { player, kind, … } }`.
+     *
+     * The whole card and not just the name, which is what the design sketched
+     * and what `play_champions` consumes. A name is ambiguous in this pool —
+     * the same footballer appears as an "actual", a "prime" and sometimes an
+     * "icono" — so storing names would resume a draft showing a card the
+     * person never held. Eighteen small objects is a cheap price for a resume
+     * that is exact, and it is still the names that get played.
+     */
     squad: jsonb("squad").notNull(),
     /** Rerolls spent per slot, which bound what the draft could have offered. */
     rerolls: jsonb("rerolls").notNull(),
@@ -122,7 +131,14 @@ export const squadlabRun = pgTable(
   (table) => [
     // Every read is "this person's runs, newest first".
     index("squadlab_run_user_idx").on(table.userId, table.createdAt),
-    check("squadlab_run_mode", sql`${table.mode} in ('draft', 'historic')`),
+    // Three, not the two the design sketched: `squad-lab.tsx` has had a
+    // `sandbox` mode all along, where you pick freely instead of being dealt
+    // cards. A constraint written from the design document rather than from
+    // the code would have rejected every sandbox run at the database.
+    check(
+      "squadlab_run_mode",
+      sql`${table.mode} in ('draft', 'sandbox', 'historic')`,
+    ),
     check(
       "squadlab_run_status",
       sql`${table.status} in ('in_progress', 'finished')`,
