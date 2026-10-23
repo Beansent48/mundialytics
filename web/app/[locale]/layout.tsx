@@ -4,6 +4,8 @@ import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 
+import { FavoritesSync } from "@/components/account/favorites-sync";
+import { SettingsSync } from "@/components/account/settings-sync";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -85,6 +87,12 @@ export default async function LocaleLayout({
           disableTransitionOnChange
         >
           <NextIntlClientProvider>
+            {/* Render nothing. They bring a signed-in person's saved
+                favourites and preferences down to this device, once per
+                sign-in, and they live here because "once" is the requirement:
+                the hooks they feed are used by many components at a time. */}
+            <FavoritesSync />
+            <SettingsSync />
             <SiteHeader />
             <main className="flex-1">{children}</main>
             <SiteFooter />
