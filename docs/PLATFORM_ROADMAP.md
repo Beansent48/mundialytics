@@ -35,7 +35,7 @@ it gets rewritten six months later.
 | # | Task | Session | Depends on | Detail |
 |---|---|---|---|---|
 | **A1** | Cold start: measure and fix | started 2026-10-21 | — | [COLD_START_DIAGNOSIS.md](COLD_START_DIAGNOSIS.md) |
-| **B1** | Accounts: auth + Postgres foundation | queued | A1 (touches `web/` layout and config) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §1-3 |
+| **B1** | Accounts: auth + Postgres foundation | built 2026-10-23 (v0.65.0) | A1 (touches `web/` layout and config) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §1-3, and §8-9 for what was built |
 | **B2** | User data on the server: favourites, settings, SquadLab progress | queued | B1 (needs a session and a user id) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §4-6 |
 | **A2** | Dockerisation and deployment | queued | A1 (what warm start needs decides the entrypoint), B1 (Postgres is a container) | [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) |
 
@@ -98,4 +98,11 @@ Not sessions yet. They are written down so they are not re-discovered.
   web's `/api/revalidate`. Cold start is not a cache-warming problem — see A1.
 - **Next.js 16 renamed `middleware.ts` to `proxy.ts`** (`web/proxy.ts`, locale
   routing). Every auth guide on the internet says `middleware.ts`. B1 will trip
-  over this if nobody says it first.
+  over this if nobody says it first. *(It did not: B1 left `proxy.ts` alone,
+  because nothing on the site is gated and Next's own docs say Proxy is not a
+  session-management layer. Auth checks are in the route handlers and in the
+  one page that reads a session.)*
+- **Accounts are built but optional.** Since v0.65.0 the web app can sign
+  somebody in, with the users in a Postgres started by `docker-compose.yml`.
+  Skipping all of it leaves the site exactly as it was — which is also what a
+  visitor without an account sees.
