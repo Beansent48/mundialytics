@@ -418,10 +418,11 @@
     },
     "saved": {
       "title": "Tus partidas guardadas",
-      "inProgress": "Draft a medias — {players} elegidos",
+      "inProgress": "Draft a medias — {players, plural, one {# elegido} other {# elegidos}}",
       "finished": "Jugada",
       "continue": "Continuar",
-      "delete": "Borrar esta partida"
+      "delete": "Borrar esta partida",
+      "unusable": "Ese draft se guardó con una versión anterior y sus cartas ya no encajan en el campo. La única salida es empezar otro; este se queda en la lista hasta que lo borres."
     },
     "positions": {
       "Goalkeeper": "Portería",
@@ -438,6 +439,7 @@
     "reset": "Empezar de cero",
     "picked": "{n} de {total} elegidos",
     "noSaveWarning": "No se guarda nada. Si recargas la página pierdes el equipo — que es también como empezar de nuevo si no te convence.",
+    "autoSaveNote": "Se guarda en tu cuenta según eliges, así que puedes irte y volver.",
     "poolFailed": "No se ha podido cargar el pool de jugadores.",
     "seasonFailed": "No se ha podido jugar la temporada. Inténtalo en un momento.",
     "newTeam": "Montar otro equipo",
