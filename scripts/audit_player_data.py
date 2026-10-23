@@ -278,6 +278,29 @@ def check_ranges(frames: dict) -> None:
             f"etiquetas de temporada de los primes: {len(seasons) - len(bad)}/{len(seasons)} "
             f"con formato AA/AA" + (f" — malas: {bad.unique()[:4].tolist()}" if len(bad) else ""))
 
+    squads = frames.get("squads")
+    if squads is not None and {"team", "player", "competition"} <= set(squads.columns):
+        # Stuttgart, 2026-10-19: 58 rows under one club, 31 first-teamers filed
+        # under "Bundesliga" and 27 VfB Stuttgart II players under "Champions
+        # League", because ESPN's UEFA roster endpoint answers with the club's
+        # whole registered pool. Everything in the pipeline only ever looked for
+        # squads that were too THIN -- `clubes con plantilla corta`, `clubes con
+        # menos de 16 cartas` -- so a club carrying two squads passed every
+        # check there was, and the reserves became cards the draft could deal.
+        split = squads.groupby("team")["competition"].nunique()
+        two = split[split > 1]
+        if len(two):
+            fatal("clubes bajo dos competiciones (dos plantillas en una): " + ", ".join(
+                f"{t} {squads[squads['team'] == t].groupby('competition').size().to_dict()}"
+                for t in two.index[:4]))
+        else:
+            ok(f"una competicion por club en los {squads['team'].nunique()} clubes")
+        size = squads.groupby("team").size()
+        big = size[size > 45]
+        (ok if big.empty else fatal)(
+            f"plantillas de {size.min()} a {size.max()} jugadores"
+            + (f" — demasiado grandes para ser una: {big.to_dict()}" if len(big) else ""))
+
     for name in ("attack", "defense"):
         df = frames.get(name)
         if df is None:
