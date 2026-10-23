@@ -18,8 +18,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { HistoricChampionsView } from "@/components/squadlab/historic-champions";
 import { LiveMatch } from "@/components/squadlab/live-match";
 import { EmptyCard, PlayerCard } from "@/components/squadlab/player-card";
+import { SavedRuns } from "@/components/squadlab/saved-runs";
 import { ShareCard } from "@/components/squadlab/share-card";
 import { TeamSheet } from "@/components/squadlab/team-sheet";
+import { useSession } from "@/lib/auth-client";
+import {
+  loadRun,
+  mintRunId,
+  saveRun as saveRunToServer,
+} from "@/lib/squadlab-runs";
 import {
   api,
   type BracketTie,
@@ -79,6 +86,26 @@ function mintSeed(): number {
   return n;
 }
 
+/**
+ * Is this stored card still something the pitch can draw?
+ *
+ * The fields the card and the pitch read without checking first. A saved run
+ * holds `SquadPlayer` as it was the day it was saved, and that shape is the
+ * API's to change, so this is the boundary where an older row stops being
+ * trusted.
+ */
+function usableCard(card: unknown): card is SquadPlayer {
+  if (!card || typeof card !== "object") return false;
+  const c = card as Partial<SquadPlayer>;
+  return (
+    typeof c.player === "string" &&
+    typeof c.display === "string" &&
+    typeof c.position === "string" &&
+    typeof c.kind === "string" &&
+    typeof c.overall === "number"
+  );
+}
+
 export function SquadLab() {
   const t = useTranslations("squadlab");
 
@@ -102,15 +129,44 @@ export function SquadLab() {
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
 
-  // Nothing is stored, so leaving loses the team. Warn only once there is
-  // something to lose — a prompt over an empty pitch is noise.
+  // The row this draft is being saved into, for somebody signed in. Minted
+  // when a draft starts so that the draft and the tournament it becomes are
+  // one row, not two.
+  const [runId, setRunId] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState(false);
+  const { data: authSession } = useSession();
+  const signedIn = Boolean(authSession);
+
+  // Signed in, the draft is a row and leaving costs nothing. Signed out,
+  // nothing is stored and leaving still loses the team — which is why the
+  // warning stays, and why it is now conditional rather than unconditional.
   const dirty = Object.keys(picks).length > 0 || season !== null;
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || signedIn) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
+  }, [dirty, signedIn]);
+
+  // Autosave the draft. Debounced because picking an eleven is eighteen
+  // changes in a row, and a failure is ignored on purpose: the next edit saves
+  // again, and a toast over a card picker would be noise about nothing.
+  useEffect(() => {
+    if (!signedIn || !runId || season) return;
+    if (Object.keys(picks).length === 0) return;
+    const timer = setTimeout(() => {
+      void saveRunToServer({
+        id: runId,
+        mode,
+        seed,
+        squad: picks,
+        rerolls,
+        status: "in_progress",
+        result: null,
+      });
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [signedIn, runId, picks, rerolls, mode, seed, season]);
 
   async function start() {
     if (mode === "historic") {
@@ -125,6 +181,7 @@ export function SquadLab() {
     setDealt({});
     setSeed(mintSeed());
     setSeason(null);
+    setRunId(signedIn ? mintRunId() : null);
     try {
       setPool(await api.squadPool());
       // the first slot opens itself: an empty pitch with no prompt is a puzzle
@@ -224,10 +281,59 @@ export function SquadLab() {
       setSeason(result);
       setRevealed(0);
       setPhase("season");
+      // A finished run keeps its own outcome. Playing again cannot recreate
+      // this tournament — ratings and pools move with the daily refresh — so
+      // this is the save that actually matters, and the row is final once it
+      // lands.
+      if (signedIn && runId) {
+        void saveRunToServer({
+          id: runId,
+          mode,
+          seed,
+          squad: picks,
+          rerolls,
+          status: "finished",
+          result,
+        });
+      }
     } catch {
       setSeasonError(t("seasonFailed"));
     } finally {
       setPlaying(false);
+    }
+  }
+
+  /** Pick up a saved draft where it was left. */
+  async function resume(id: string) {
+    const saved = await loadRun(id);
+    if (!saved || saved.status !== "in_progress") return;
+    // A stored card is a snapshot of `SquadPlayer` as it was when the run was
+    // saved, and that type belongs to the API — a field added to it later
+    // leaves older rows short of it. Rendering one of those crashed the whole
+    // page (`position.slice` of undefined) with nothing but a reload to
+    // escape, so an unusable run is refused here instead.
+    if (!Object.values(saved.squad).every(usableCard)) {
+      setResumeError(true);
+      return;
+    }
+    setResumeError(false);
+    setPhase("building");
+    setPool(null);
+    setPoolError(false);
+    setSeason(null);
+    setLineup(null);
+    setDealt({});
+    setRunId(saved.id);
+    setMode(saved.mode as Mode);
+    setSeed(saved.seed);
+    // The whole card was stored, not just the name, so the pitch comes back
+    // exactly as it was rather than as whatever the pool would deal today.
+    setPicks(saved.squad);
+    setRerolls(saved.rerolls);
+    try {
+      setPool(await api.squadPool());
+    } catch {
+      setPoolError(true);
     }
   }
 
@@ -299,6 +405,14 @@ export function SquadLab() {
           <Play className="size-4" />
           {mode === "historic" ? t("historic.start") : t("start")}
         </button>
+
+        <SavedRuns signedIn={signedIn} onContinue={resume} />
+
+        {resumeError ? (
+          <p role="alert" className="mt-4 max-w-xl text-[0.83rem] text-negative">
+            {t("saved.unusable")}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -545,8 +659,12 @@ export function SquadLab() {
             <p className="mt-4 text-[0.85rem] text-negative">{seasonError}</p>
           ) : null}
 
+          {/* This line used to be unconditional, and for somebody signed in it
+              is now simply untrue: the draft autosaves. A product that lies
+              about whether it kept your work is worse than one that keeps
+              nothing. */}
           <p className="mt-6 text-[0.76rem] leading-relaxed text-dim">
-            {t("noSaveWarning")}
+            {signedIn ? t("autoSaveNote") : t("noSaveWarning")}
           </p>
         </>
       )}

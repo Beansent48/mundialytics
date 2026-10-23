@@ -1,5 +1,89 @@
 # Changelog
 
+## v0.66.0 — What the account is for: favourites, settings, SquadLab runs (2026-10-23)
+
+Task **B2** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md), on top of
+v0.65.0. The account stops being only a sign-in and starts holding something.
+
+**No file under `src/`, `api/` or `scripts/` changed.** The engine, the
+published figures and the track record are untouched, and the API stays
+stateless and anonymous — even the engine fingerprint stamped on a saved run is
+read from the existing `/health`, so nothing here reaches a served probability.
+
+### Added
+- **Six tables**, in `web/lib/db/app-schema.ts` rather than the generated
+  `schema.ts`, because `npm run db:schema` overwrites that file and a table
+  added there would vanish the next time anyone regenerated the auth schema —
+  silently. `user_settings`, `user_favorites` and `squadlab_run` are used;
+  `user_progress`, `achievement` and `user_achievement` exist and are written
+  by nothing, exactly as the design asks, so the game rules that come later
+  need no migration. Everything cascades from `user.id`, so
+  `tests/account-cascade.test.mjs` now guards **eight** foreign keys where B1
+  had two.
+
+- **Favourites on the server, with two backends and not a replacement.** Signed
+  out, `localStorage`, behaving exactly as before accounts existed. Signed in,
+  the server is the truth and the local copy is the optimistic cache.
+  `useFavorites()` still returns `{favorites, toggle, has, ready}` and **no
+  component changed** — which is what the shape in that file was always for.
+  First sign-in on a browser is a **union**: follow Valencia on a phone and
+  Betis on a laptop, sign in on the laptop, keep both. The local copy is never
+  deleted, so signing out is not data loss.
+
+- **Settings that follow the account** — and two preferences treated
+  differently on purpose. Theme is applied silently on sign-in. **Language is
+  applied only where this device has no opinion of its own**, because
+  re-rendering the page somebody is reading into another language is the kind
+  of helpful that feels like a bug; next-intl resolves the locale from the URL
+  and the cookie, so the cookie stays authoritative for the request in flight.
+
+- **SquadLab runs, which had no storage at all.** The draft lived in React
+  state and the component warned you on the way out that leaving would lose the
+  team. Signed out that is still true; signed in, the draft autosaves and the
+  tournament it becomes is a durable row, so the `beforeunload` warning is now
+  conditional. A finished run is **final** — its result cannot be recreated by
+  playing again once ratings and pools have moved underneath it — and carries
+  the fingerprint it was played against. The saved-runs panel appears on the
+  setup screen for somebody signed in and **not at all** otherwise: a
+  greyed-out teaser is a gate wearing a disguise.
+
+- **`web/tests/user-data.test.mjs`**: 14 assertions over HTTP with two real
+  accounts, because the questions worth answering — does a session reach the
+  right rows, can one account see another's — live in the seam between the
+  route handler, Better Auth and Postgres, and calling the functions directly
+  would skip exactly the part that can be wrong.
+
+### Fixed
+- **Two things the design document had wrong about the code**, both caught by
+  reading the code rather than the document. SquadLab has **three** modes:
+  `sandbox` has been there all along, and a check constraint written from the
+  design would have rejected every sandbox run at the database. And **a name
+  does not identify a card** — the pool holds the same footballer as an
+  "actual", a "prime" and sometimes an "icono", so storing "the chosen names"
+  would have resumed a draft showing a card the person never held. The whole
+  card is stored instead.
+- **Resuming an unusable saved run white-screened SquadLab.** A stored card is
+  `SquadPlayer` as it was the day it was saved, and that type belongs to the
+  API; a row missing a field the pitch reads threw
+  `Cannot read properties of undefined (reading 'slice')` and took the page
+  down with nothing but a reload to escape. Found by resuming a deliberately
+  partial run. The cards are now checked before they are adopted, and an
+  unusable run is refused with a sentence instead.
+
+### Unchanged, on purpose
+- **No per-user response goes through `web/lib/api.ts`.** That client caches
+  every call under a shared `tags: ["data"]`, which is right for public
+  football numbers and would be a disclosure bug here — one person's favourites
+  cached and served to the next. User data has its own module, the handlers are
+  `force-dynamic`, every response carries `cache-control: no-store, private`,
+  and the test asserts those headers, so the rule has a tripwire and not only a
+  paragraph.
+- **Ownership is a `WHERE` clause, never a check after the fact.** Another
+  account's run is a **404, not a 403**, because 403 confirms it exists.
+- **Every page is still prerendered.** The build emits
+  `en/squadlab.html` and `es/squadlab.html` as before, SquadLab being the page
+  this release touched most; `/account` remains the only dynamic route.
+
 ## v0.65.0 — User accounts: sign-in, and a database to key them on (2026-10-23)
 
 Task **B1** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md). The

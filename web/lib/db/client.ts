@@ -1,7 +1,13 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-import * as schema from "./schema";
+import * as appSchema from "./app-schema";
+import * as authSchema from "./schema";
+
+// Two files because one of them is generated: `npm run db:schema` rewrites
+// `schema.ts` from the auth config and would drop anything hand-written in it.
+// See the header of `app-schema.ts`.
+const schema = { ...authSchema, ...appSchema };
 
 /**
  * The Postgres connection the account layer reads and writes.
