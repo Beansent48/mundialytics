@@ -264,6 +264,41 @@ web/components/account/             the form, sign-out, delete
   roadmap backlog) are what should bring a real sender, and when they do they
   replace the body of one function.
 
+### Exercised against a real database, 2026-10-23
+
+Not "it compiles". The whole flow was driven through the production build
+against the compose Postgres, and these are the things that were actually
+observed:
+
+- `docker compose up -d --wait postgres` reports **healthy**, and
+  `npm --prefix web run db:migrate` creates the four tables. The cascade rules
+  are in `information_schema`: `account` and `session` both `CASCADE`.
+- Creating an account writes one `user` row (`email_verified = f`), one
+  `account` row with `provider_id = credential` and a non-null hashed password,
+  and one `session` row — then lands on `/es/account` with the locale intact.
+- The verification link really is a link. `web/lib/mail.ts` printed
+  `[mail] to=… url=http://localhost:3000/api/auth/verify-email?token=…`;
+  following it returned 302 and flipped `email_verified` to `t`.
+- **The session survives more than a reload.** It survived `location.reload()`,
+  and it survived the server being stopped, `.next` deleted, rebuilt from
+  scratch and restarted — the account page still rendered the signed-in state,
+  which is what a cookie in Postgres rather than in memory buys.
+- A wrong password returns `INVALID_EMAIL_OR_PASSWORD` and the UI shows *our*
+  Spanish sentence, so `lib/auth-errors.ts` is mapping real codes and not
+  guesses. The right password signs back in.
+- Signing out deletes that session row and leaves `/api/auth/get-session`
+  answering `null`.
+- **Delete account deletes.** With one user, two sessions and one account in
+  the database, confirming with the password left **0 / 0 / 0** — the cascade
+  took a second, orphaned session belonging to that user along with it.
+  `node --test web/tests/account-cascade.test.mjs` passes against the live
+  database; both web test files together are 5 of 5.
+
+Still unexercised: **Google**, which needs an OAuth client only the account
+owner can create (§9). Everything up to Google's own door is in place — the
+button appears exactly when the two variables are set, and the callback path is
+registered by the handler.
+
 ### Still open after B1
 
 - **Password reset.** Someone who signs up with an address and forgets the

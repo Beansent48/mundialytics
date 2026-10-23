@@ -38,10 +38,17 @@ Nothing below is needed to run the site. Skip it and the sign-in page is the
 only thing that does not work.
 
 ```bash
+npm --prefix web install             # first, even on an existing checkout
 docker compose up -d postgres        # from the repo root
 cp web/.env.example web/.env.local   # then fill it in, see below
 npm --prefix web run db:migrate      # create the tables
 ```
+
+The install line is not boilerplate. This release added `better-auth`,
+`drizzle-orm`, `pg` and `drizzle-kit`, so a checkout that was already running
+before it has a `node_modules` without them — and the symptom is not a helpful
+message about a missing dependency but `MODULE_NOT_FOUND` from the server, or
+`db:migrate` failing before it reaches the database.
 
 | Variable | Purpose |
 |---|---|
