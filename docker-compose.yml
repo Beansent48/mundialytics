@@ -40,6 +40,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+      # Every healthcheck in this file gets a start_period — the rule the
+      # deployment plan now states, after A1 measured what a missing one does
+      # to the API container: it restarts into the same cold fit for ever.
+      # Nothing here is that slow, so 10s is enough; it only has to cover the
+      # `initdb` on a volume's first run, so the retries above count real
+      # failures rather than a database that has not been created yet.
+      start_period: 10s
 
 volumes:
   pgdata:
