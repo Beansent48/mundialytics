@@ -70,6 +70,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import experiment_bivariate_goals as X  # noqa: E402  the bivariate harness, reused
 
 K = X.K
+# The constants that INTERPRET the frozen lambda cache, pinned in the harness
+# this one builds on rather than read from the live deployed config -- see the
+# comment on their definition. Deltas in this file are measured against the
+# chain as it was served when it ran, and a later config change must not
+# silently re-point that baseline.
+CACHE_GAMMA, CACHE_RHO, CACHE_TEMPER = X.CACHE_GAMMA, X.CACHE_RHO, X.CACHE_TEMPER
 MARKETS = ("1x2_rps", "1x2_ll", "o25", "btts", "cs", "htft")
 LOG = "data/processed/logs/predictions_log.csv"
 EPS = 1e-12
@@ -120,7 +126,7 @@ FORMS = {
     "two_axis": (f_two_axis, np.array([1.0, 1.3]), [(0.4, 2.0), (0.6, 2.2)]),
     "vector": (f_vector, np.array([1.3, 0.0, 0.0]), [(0.6, 2.0), (-1.0, 1.0), (-1.0, 1.0)]),
 }
-DEPLOYED = ("gamma", np.array([K["sharpen_gamma_1x2"]]))
+DEPLOYED = ("gamma", np.array([CACHE_GAMMA]))
 
 
 # ── fitting: the trio's own log loss, which the identity says is the objective ─
@@ -147,8 +153,8 @@ def fit_form(raw: np.ndarray, y: np.ndarray, form: str) -> np.ndarray:
 def raw_matrix(df: pd.DataFrame, rho: float | None = None) -> np.ndarray:
     """The deployed scoreline matrix BEFORE the coherent reweighting."""
     return X.joint(df.lh.to_numpy(float), df.la.to_numpy(float), "dixon_coles",
-                   K["outcome_rho"] if rho is None else rho,
-                   temper=K["goal_temper"], fix_marginals=False)
+                   CACHE_RHO if rho is None else rho,
+                   temper=CACHE_TEMPER, fix_marginals=False)
 
 
 def score_trio(df: pd.DataFrame, M: np.ndarray, t_pub: np.ndarray,
@@ -379,7 +385,7 @@ def cmd_validate(df: pd.DataFrame) -> dict:
     M = raw_matrix(df)
     raw = X.trio_of(M)
     seasons = sorted(df.season.unique())
-    base = score_trio(df, M, f_gamma(raw, [K["sharpen_gamma_1x2"]]))
+    base = score_trio(df, M, f_gamma(raw, [CACHE_GAMMA]))
 
     nan3 = np.full(3, np.nan)
     arms: dict[str, dict] = {}
@@ -389,7 +395,7 @@ def cmd_validate(df: pd.DataFrame) -> dict:
     # it comes from section 1 -- the raw trio's draw rate is already calibrated
     # (O/E 0.992), so the draw axis needs no correction and the contrast does.
     arms["two_axis FIXED (1.0, deployed gamma)"] = score_trio(
-        df, M, f_two_axis(raw, [1.0, K["sharpen_gamma_1x2"]]))
+        df, M, f_two_axis(raw, [1.0, CACHE_GAMMA]))
     for form in FORMS:
         for regime in ("expanding", "loso", "oracle"):
             fits = fit_per_fold(df, raw, form, regime)
@@ -425,7 +431,7 @@ def cmd_validate(df: pd.DataFrame) -> dict:
 
     # decouple: publish the deployed trio, give the matrix a trio of its own
     dec: dict[str, dict] = {}
-    t_pub = f_gamma(raw, [K["sharpen_gamma_1x2"]])
+    t_pub = f_gamma(raw, [CACHE_GAMMA])
     for gm_ in (1.0, 1.2):
         sc = score_trio(df, M, t_pub, t_matrix=f_gamma(raw, [gm_]))
         dec[f"decouple: matrix gamma {gm_:.1f}"] = sc
@@ -474,7 +480,7 @@ def cmd_rebase(df: pd.DataFrame, baseline_gamma: float = 1.20) -> dict:
     base = score_trio(df, M, f_gamma(raw, [baseline_gamma]))
 
     arms: dict[str, dict] = {}
-    g_dep = K["sharpen_gamma_1x2"]
+    g_dep = CACHE_GAMMA
     arms[f"power {g_dep:.2f} (what 1.3 was)"] = score_trio(df, M, f_gamma(raw, [g_dep]))
     for b in (1.20, 1.25, 1.30, 1.35):
         arms[f"two_axis (1.0, {b:.2f})"] = score_trio(df, M, f_two_axis(raw, [1.0, b]))
@@ -525,7 +531,7 @@ def cmd_rho(df: pd.DataFrame) -> None:
         print(f"  {rho:+7.2f} " + "  ".join(f"{c:>26s}" for c in cells))
     M = raw_matrix(df)
     raw = X.trio_of(M)
-    a = X.aggregate(df, score_trio(df, M, f_gamma(raw, [K["sharpen_gamma_1x2"]])))
+    a = X.aggregate(df, score_trio(df, M, f_gamma(raw, [CACHE_GAMMA])))
     print(f"\n  deployed (rho -0.06, gamma 1.3): cs {a['cs']:.5f}, "
           f"o25 {a['o25']:.5f}, btts {a['btts']:.5f}")
     print("  (rho = -0.17 is what gamma 1.3 was scanned with; it is no longer served.)")
