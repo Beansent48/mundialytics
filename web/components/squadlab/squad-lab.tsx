@@ -86,6 +86,26 @@ function mintSeed(): number {
   return n;
 }
 
+/**
+ * Is this stored card still something the pitch can draw?
+ *
+ * The fields the card and the pitch read without checking first. A saved run
+ * holds `SquadPlayer` as it was the day it was saved, and that shape is the
+ * API's to change, so this is the boundary where an older row stops being
+ * trusted.
+ */
+function usableCard(card: unknown): card is SquadPlayer {
+  if (!card || typeof card !== "object") return false;
+  const c = card as Partial<SquadPlayer>;
+  return (
+    typeof c.player === "string" &&
+    typeof c.display === "string" &&
+    typeof c.position === "string" &&
+    typeof c.kind === "string" &&
+    typeof c.overall === "number"
+  );
+}
+
 export function SquadLab() {
   const t = useTranslations("squadlab");
 
@@ -113,6 +133,7 @@ export function SquadLab() {
   // when a draft starts so that the draft and the tournament it becomes are
   // one row, not two.
   const [runId, setRunId] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState(false);
   const { data: authSession } = useSession();
   const signedIn = Boolean(authSession);
 
@@ -286,6 +307,16 @@ export function SquadLab() {
   async function resume(id: string) {
     const saved = await loadRun(id);
     if (!saved || saved.status !== "in_progress") return;
+    // A stored card is a snapshot of `SquadPlayer` as it was when the run was
+    // saved, and that type belongs to the API — a field added to it later
+    // leaves older rows short of it. Rendering one of those crashed the whole
+    // page (`position.slice` of undefined) with nothing but a reload to
+    // escape, so an unusable run is refused here instead.
+    if (!Object.values(saved.squad).every(usableCard)) {
+      setResumeError(true);
+      return;
+    }
+    setResumeError(false);
     setPhase("building");
     setPool(null);
     setPoolError(false);
@@ -376,6 +407,12 @@ export function SquadLab() {
         </button>
 
         <SavedRuns signedIn={signedIn} onContinue={resume} />
+
+        {resumeError ? (
+          <p role="alert" className="mt-4 max-w-xl text-[0.83rem] text-negative">
+            {t("saved.unusable")}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -622,8 +659,12 @@ export function SquadLab() {
             <p className="mt-4 text-[0.85rem] text-negative">{seasonError}</p>
           ) : null}
 
+          {/* This line used to be unconditional, and for somebody signed in it
+              is now simply untrue: the draft autosaves. A product that lies
+              about whether it kept your work is worse than one that keeps
+              nothing. */}
           <p className="mt-6 text-[0.76rem] leading-relaxed text-dim">
-            {t("noSaveWarning")}
+            {signedIn ? t("autoSaveNote") : t("noSaveWarning")}
           </p>
         </>
       )}
