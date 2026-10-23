@@ -36,7 +36,7 @@ it gets rewritten six months later.
 |---|---|---|---|---|
 | **A1** | Cold start: measure and fix | started 2026-10-21 | — | [COLD_START_DIAGNOSIS.md](COLD_START_DIAGNOSIS.md) |
 | **B1** | Accounts: auth + Postgres foundation | built 2026-10-23 (v0.65.0) | A1 (touches `web/` layout and config) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §1-3, and §8-9 for what was built |
-| **B2** | User data on the server: favourites, settings, SquadLab progress | queued | B1 (needs a session and a user id) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §4-6 |
+| **B2** | User data on the server: favourites, settings, SquadLab progress | built 2026-10-23 (v0.66.0) | B1 (needs a session and a user id) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §4-6, and §10 for what was built |
 | **A2** | Dockerisation and deployment | queued | A1 (what warm start needs decides the entrypoint), B1 (Postgres is a container) | [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) |
 
 A1 was started on 2026-10-21; B1, B2 and A2 exist as task cards in Claude Code
@@ -89,10 +89,15 @@ Not sessions yet. They are written down so they are not re-discovered.
   and joblib-cached fits. It has no concept of a user and, if the plan in
   [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) holds, it never will:
   accounts live in Next.js route handlers against Postgres.
-- **Favourites are already shaped like an account.** `web/lib/favorites.ts`
-  stores `{teams, competitions}` in `localStorage` and says in its own docstring
-  that this is a staging post for accounts. B2 swaps the storage, not the
-  components.
+- **Favourites were already shaped like an account**, and since v0.66.0 they
+  use it: `web/lib/favorites.ts` has two backends, `localStorage` signed out
+  and the server signed in, and `useFavorites()` is unchanged — **no component
+  was touched**, which is what that docstring had been promising since before
+  accounts existed.
+- **A SquadLab run is now a row.** It used to live in React state, with a
+  warning on the way out that leaving would lose the team; signed out it still
+  does. Gamification (backlog 2) can read `squadlab_run` as history rather than
+  needing runs replayed.
 - **The daily refresh already warms caches.** `scripts/update_season.py` step
   7m runs `scripts/warm_api_caches.py`, and `run_update.ps1` then calls the
   web's `/api/revalidate`. Cold start is not a cache-warming problem — see A1.

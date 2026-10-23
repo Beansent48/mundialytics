@@ -356,6 +356,156 @@ to.
 
 ---
 
+## 10. What B2 actually built
+
+Landed 2026-10-23, on top of [§8](#8-what-b1-actually-built). Sections 4-6 were
+the plan; this is the record, including the two places the plan was wrong about
+the code.
+
+### The tables, as built
+
+Six, in `web/lib/db/app-schema.ts` — **not** in `schema.ts`, and that is
+load-bearing: `schema.ts` is generated from the auth config and
+`npm run db:schema` overwrites it, so a table added there would vanish the next
+time anyone regenerated the auth schema, silently, because the generator has no
+idea it was not the only author. `drizzle.config.ts` reads both files and
+`client.ts` hands both to Drizzle.
+
+```
+user_settings     user_id PK, locale, theme, odds_format, created_at, updated_at
+user_favorites    user_id, kind ('team'|'competition'), value, created_at
+                  PK (user_id, kind, value)
+squadlab_run      id PK, user_id, mode ('draft'|'sandbox'|'historic'),
+                  seed bigint, squad jsonb, rerolls jsonb,
+                  status ('in_progress'|'finished'), result jsonb,
+                  engine_fingerprint, created_at, updated_at
+user_progress     user_id PK, xp, level, updated_at          -- empty
+achievement       code PK, name, description, points          -- empty
+user_achievement  user_id, code, awarded_at, PK (user_id, code) -- empty
+```
+
+Everything cascades from `user.id`, so `tests/account-cascade.test.mjs` — which
+insists that *every* foreign key in the schema cascades — passes with eight
+foreign keys where B1 had two. The three gamification tables exist and are
+written by nothing, exactly as §6 asked: the game design is its own task, and
+it should not have to pay for a migration.
+
+Two check constraints do work that application code would otherwise have to
+remember: `mode` and `status` are closed sets, and a run that is `finished`
+must have a `result`, so "finished but empty" is unrepresentable rather than
+merely discouraged.
+
+### Two things the code knew and this document did not
+
+- **SquadLab has three modes, not two.** `squad-lab.tsx` has had a `sandbox`
+  mode all along, where you pick freely instead of being dealt cards. §4's
+  `mode (draft | historic)` would have become a check constraint that rejected
+  every sandbox run at the database. Caught before the migration shipped, which
+  is the only reason it is a footnote rather than an incident.
+- **A name does not identify a card.** §4 says to store "the chosen names", and
+  that is what `play_champions` consumes — but the pool holds the same
+  footballer as an "actual", a "prime" and sometimes an "icono", so a resumed
+  draft would show a card the person never held. The whole card is stored
+  instead. Eighteen small objects, and resume is exact.
+
+The lesson both share: a schema written from a design document and never read
+back against the code it has to serve will encode the document's assumptions,
+and constraints make those assumptions load-bearing.
+
+### How the data gets to the browser
+
+`lib/user-data.ts` for the queries, `lib/user-route.ts` for the one place a
+request becomes a user id, and five route handlers under `app/api/user/`.
+
+**Nothing goes through `lib/api.ts`.** That client caches every call under a
+shared `tags: ["data"]`, which is right for public football numbers and would
+be a disclosure bug here — one person's favourites cached and handed to the
+next. The handlers are `force-dynamic`, every response carries
+`cache-control: no-store, private`, and the browser fetches with
+`cache: "no-store"`. The test asserts those headers, so the rule has a tripwire
+rather than only a paragraph.
+
+Ownership is a `WHERE` clause and never a check after the fact. Somebody else's
+run is a **404, not a 403**, because 403 confirms it exists. The upsert carries
+the user id in its own `WHERE` too, so a guessed primary key cannot overwrite
+another account's row.
+
+### Favourites: two backends, not a replacement
+
+Signed out, `localStorage`, behaving exactly as before accounts existed — no
+page was ever gated and a visitor who never signs in must lose nothing. Signed
+in, the server is the truth and the local copy becomes the optimistic cache.
+`useFavorites()` still returns `{favorites, toggle, has, ready}`; no component
+changed, which is what the shape in that file was always for.
+
+First sign-in on a browser is a **union**, per §5. Follow Valencia on a phone
+and Betis on a laptop, sign in on the laptop, keep both. The local copy is
+never deleted, so signing out is not data loss. A toggle paints before it is
+written — a follow button that waits for a round trip feels broken even when
+the round trip is fast — but adopts what the server says back, so a failed
+write shows the truth rather than a heart that was never saved.
+
+### Settings: theme and language are not symmetrical
+
+Theme is applied silently on sign-in; nobody is surprised that dark mode
+followed them. **Language is applied only when this device has expressed no
+opinion** — no `NEXT_LOCALE` cookie. Re-rendering the page someone is reading
+into another language is the kind of helpful that feels like a bug, and
+next-intl resolves the locale from the URL and the cookie, so the cookie stays
+authoritative for the request in flight, which is what §6's answer asked for.
+Choosing a language while signed in still records it, so the account learns the
+preference without ever fighting the device for it.
+
+### SquadLab: there was no first backend
+
+Favourites were a storage swap. SquadLab was not: it stored **nothing**. The
+draft lived in React state and the component warned you on the way out that
+leaving would lose the team. Signed out that is still exactly what happens;
+signed in, the draft autosaves (debounced — picking an eleven is eighteen
+changes in a row) and the tournament it becomes is a durable row. The
+`beforeunload` warning is now conditional, which is the honest version of it.
+
+A finished run is **final**. Its result cannot be recreated by playing again
+once ratings and pools have moved under it, so the row is never overwritten
+after it lands, and it carries the fingerprint it was played against.
+
+That fingerprint is built on the server from `/health`'s `matches` and
+`dataThrough`, so **no change to `api/` was needed** — it stays stateless and
+anonymous, and nothing in B2 can reach a served probability. The browser does
+not send it: the deployment plan does not expose the API publicly, and a
+fingerprint the client could choose would be worth nothing anyway.
+
+The saved-runs panel appears on the SquadLab setup screen for somebody signed
+in, and **not at all** otherwise — not as a locked panel advertising what an
+account would buy. A greyed-out teaser is a gate wearing a disguise, and §1
+says the account unlocks saving, not seeing.
+
+### Answered, of the open questions
+
+| Question | What B2 did |
+|---|---|
+| One run at a time, or many? | Many, with the in-progress one offered as "continue". |
+| Can a logged-out visitor still play SquadLab? | Yes, exactly as before, and nothing is saved. |
+| Do settings follow the account? | Theme always; language only where the device has no opinion of its own. |
+| Usernames? | No. The display name, as decided. |
+
+### Still open after B2
+
+- **Nothing writes `user_progress`, `achievement` or `user_achievement`.** By
+  design. The game rules are their own task; the tables are there so it needs
+  no migration.
+- **`odds_format` is a column nothing reads.** It is in §4's shape and cost one
+  nullable column rather than a later migration.
+- **An in-progress run is never cleaned up.** Somebody who starts twenty drafts
+  and finishes none has twenty rows. Harmless now; a sweep belongs with
+  whatever first cares about the count.
+- **A finished `result` is a whole tournament.** The list endpoint never sends
+  it, but the rows themselves will grow. Worth measuring before it is a
+  problem, not after.
+
+
+---
+
 ## Open questions, for when B2 starts
 
 Not blocking — each has a sane default, recorded here so the choice is

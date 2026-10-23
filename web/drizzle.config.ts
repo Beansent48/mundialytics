@@ -35,7 +35,9 @@ if (!url) {
 
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./lib/db/schema.ts",
+  // Two files: `schema.ts` is generated from the auth config and must stay
+  // disposable, `app-schema.ts` is ours. See the header of `app-schema.ts`.
+  schema: ["./lib/db/schema.ts", "./lib/db/app-schema.ts"],
   out: "./lib/db/migrations",
   dbCredentials: { url },
   // Table names are Better Auth's (`user`, `session`, …) and are quoted in the

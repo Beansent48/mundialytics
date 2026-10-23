@@ -416,6 +416,14 @@
       "historic": "All-time Champions League",
       "historicLead": "36 sides from any era in today's format, each with its real Elo at the end of that season."
     },
+    "saved": {
+      "title": "Your saved runs",
+      "inProgress": "Draft in progress — {players, plural, one {# pick} other {# picks}}",
+      "finished": "Played",
+      "continue": "Continue",
+      "delete": "Delete this run",
+      "unusable": "That draft was saved by an older version and its cards no longer fit the pitch. Starting a new one is the only way forward; this one stays in the list until you delete it."
+    },
     "positions": {
       "Goalkeeper": "Goalkeeper",
       "Defender": "Defence",
@@ -431,6 +439,7 @@
     "reset": "Start over",
     "picked": "{n} of {total} picked",
     "noSaveWarning": "Nothing is saved. Reloading the page loses the team — which is also how you start again if you do not like it.",
+    "autoSaveNote": "Saved to your account as you pick, so you can leave and come back to it.",
     "poolFailed": "Could not load the player pool.",
     "seasonFailed": "Could not play the season. Try again in a moment.",
     "newTeam": "Build another team",

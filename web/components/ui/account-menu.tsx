@@ -19,6 +19,7 @@ import { useTheme } from "next-themes";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { LOCALE_NAMES, routing, type Locale } from "@/i18n/routing";
 import { signOut, useSession } from "@/lib/auth-client";
+import { saveSettings } from "@/lib/settings-client";
 import { useMounted } from "@/lib/use-mounted";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +157,12 @@ export function AccountMenu() {
             <DropdownMenu.Item
               key={value}
               className={itemClass}
-              onSelect={() => setTheme(value)}
+              onSelect={() => {
+                setTheme(value);
+                // Signed in, the choice follows the account; signed out it
+                // stays in this browser, exactly as before.
+                if (session) saveSettings({ theme: value });
+              }}
             >
               <Icon className="size-4" />
               {label}
@@ -173,7 +179,10 @@ export function AccountMenu() {
             <DropdownMenu.Item
               key={code}
               className={itemClass}
-              onSelect={() => router.replace(pathname, { locale: code })}
+              onSelect={() => {
+                router.replace(pathname, { locale: code });
+                if (session) saveSettings({ locale: code });
+              }}
             >
               <span className="w-4 text-center text-[0.7rem] font-semibold uppercase text-dim">
                 {code}
