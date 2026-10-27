@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/Beansent48/mundialytics/actions/workflows/tests.yml/badge.svg)](https://github.com/Beansent48/mundialytics/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
-![license](https://img.shields.io/badge/license-MIT-green)
+![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)
 
 A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
 BTTS, half-time markets and player/team props, fitted on **more than 46,000
@@ -609,4 +609,16 @@ under [`docs/archive/`](docs/README.md#archive).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[PolyForm Noncommercial 1.0.0](LICENSE) — source available, not open source.
+
+Any noncommercial purpose is permitted: read it, clone it, run it, study it,
+teach with it, write about it. So is use by educational, nonprofit, research and
+government organisations, and so is evaluating this repository and its author —
+including a company reading it to assess a job candidate.
+
+Commercial use needs written permission: selling this code, the fitted models or
+their forecasts, or running any of it inside a commercial product or service.
+Open an issue to ask.
+
+Commits up to and including `973e966` were published under the MIT License and
+remain available on those terms.
