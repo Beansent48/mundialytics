@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.66.1 — Source available, not open source (2026-10-27)
+
+No code changed: `src/`, `api/`, `scripts/`, `web/`, the published figures and
+the track record are untouched. Only the license terms move, from MIT to
+[PolyForm Noncommercial 1.0.0](LICENSE).
+
+MIT granted everyone the right to sell this work, which was never the intent.
+Under the new terms every use the repository actually exists for stays
+permitted — reading it, cloning it, running it, studying it, and evaluating its
+author — while commercial use needs written permission. Commits up to and
+including `973e966` were published under MIT and remain available on those
+terms.
+
 ## v0.66.0 — What the account is for: favourites, settings, SquadLab runs (2026-10-23)
 
 Task **B2** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md), on top of
