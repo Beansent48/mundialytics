@@ -29,6 +29,7 @@ from mundialytics.serving.provenance import engine_code_fingerprint  # noqa: E40
 
 # One definition, shared with the pre-kickoff logger (serving/provenance.py).
 ENGINE_FP = engine_code_fingerprint()
+LEVEL_FP = _code_fingerprint("src/mundialytics/features/market_level.py")
 PROPS_FP = _code_fingerprint(
     "src/mundialytics/props/team_props.py",
     "src/mundialytics/props/player_props.py",
@@ -80,6 +81,81 @@ def _cached_fit(tag: str, df: pd.DataFrame, build):
 
 
 FOUNDATION = ROOT / "data/processed/foundation_big5_multi_season.csv"
+# everything market_level_detail reads besides the foundation
+LEVEL_INPUTS = (ROOT / "data/processed/served_lambdas_current.csv",
+                ROOT / "data/processed/logs/predictions_log.csv")
+FOOTBALL_DATA = ROOT / "data/raw/football_data"
+
+
+def _stamp(path: Path) -> str:
+    try:
+        st = path.stat()
+        return f"{int(st.st_mtime)}-{st.st_size}"
+    except OSError:
+        return "0"
+
+
+def _dir_stamp(directory: Path, pattern: str) -> str:
+    """One short hash of a directory's listing: names, sizes and mtimes.
+
+    Stats rather than contents -- a hundred odds files are tens of megabytes to
+    read and a few hundred microseconds to stat, and a changed file changes its
+    size or its mtime either way.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for p in sorted(directory.glob(pattern)) if directory.exists() else []:
+        h.update(f"{p.name}:{_stamp(p)}|".encode())
+    return h.hexdigest()[:8]
+
+
+def _market_levels(df: pd.DataFrame, k: float) -> dict[str, tuple[int, float]]:
+    """`market_level_detail`, memoised on disk. Same numbers, 28 seconds sooner.
+
+    The level is deliberately NOT baked into the engine's joblib (see the note at
+    the call site: a level frozen into a fit would be served long after the
+    matches it was measured on), so it was recomputed on every process start and
+    after every refresh -- and it is not cheap: it re-prices every logged lambda
+    of the season against the book's over-2.5 line, fourteen Newton steps each.
+    Measured at 28.5 s against 0.8 s for the 29 MB joblib load, which made it
+    the single biggest item in the cold start, invisible in the first diagnosis
+    because that timed `joblib.load` rather than `club_engine()`.
+
+    The key is everything the function reads: its own source, k, the
+    foundation's size and last date, the two lambda logs and every football-data
+    file. A new result, a newly logged lambda or an edit to the estimator all
+    recompute it; nothing else does. The daily refresh warms it on the way past
+    (update_season step 7m calls the endpoints in-process), so the API start
+    that follows reads it off disk.
+    """
+    import json
+
+    from mundialytics.features.market_level import market_level_detail
+
+    key = "_".join([
+        LEVEL_FP, f"k{k:g}", str(len(df)), str(df["date"].max())[:10],
+        *(_stamp(p) for p in LEVEL_INPUTS),
+        _dir_stamp(FOOTBALL_DATA, "*.csv"),
+    ])
+    cache_f = CACHE_DIR / f"market_level_{key}.json"
+    if cache_f.exists():
+        try:
+            return {c: (int(n), float(m))
+                    for c, (n, m) in json.loads(cache_f.read_text(encoding="utf-8")).items()}
+        except Exception:
+            pass
+    detail = market_level_detail(df, None, k=k)
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_f.write_text(json.dumps({c: [n, m] for c, (n, m) in detail.items()}),
+                           encoding="utf-8")
+        for old in CACHE_DIR.glob("market_level_*.json"):
+            if old != cache_f:
+                old.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return detail
 
 
 def data_version() -> float:
@@ -127,9 +203,8 @@ def _club_engine(_version: float):
     # on the foundation's mtime, so the daily refresh refreshes the level too.
     if DEPLOYED_CLUB_ENGINE_KWARGS.get("market_level_shift"):
         try:
-            from mundialytics.features.market_level import market_level_detail
             k = float(DEPLOYED_CLUB_ENGINE_KWARGS["market_level_shift"].get("k", 70.0))
-            det = market_level_detail(df, None, k=k)
+            det = _market_levels(df, k)
             engine.set_market_levels({c: m for c, (_, m) in det.items()})
             print("market level " + (", ".join(f"{c} x{m:.4f} (n={n})"
                                                for c, (n, m) in sorted(det.items()))
