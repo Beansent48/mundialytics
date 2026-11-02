@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.63.1 — The card catalogue is reproducible (2026-10-19)
+## v0.66.2 — The card catalogue is reproducible (2026-11-02)
 
 ### Fixed
 - **Two rebuilds of `squadlab_cards.csv` off identical inputs dealt different
@@ -52,6 +52,318 @@
   settle. `_contained` cannot use the birth-year filter `_prefer_birth` applies
   in the other two tiers — `_by_token` does not store a birth year — and
   neither source carries one here anyway.
+
+## v0.66.1 — Source available, not open source (2026-10-27)
+
+No code changed: `src/`, `api/`, `scripts/`, `web/`, the published figures and
+the track record are untouched. Only the license terms move, from MIT to
+[PolyForm Noncommercial 1.0.0](LICENSE).
+
+MIT granted everyone the right to sell this work, which was never the intent.
+Under the new terms every use the repository actually exists for stays
+permitted — reading it, cloning it, running it, studying it, and evaluating its
+author — while commercial use needs written permission. Commits up to and
+including `973e966` were published under MIT and remain available on those
+terms.
+
+## v0.66.0 — What the account is for: favourites, settings, SquadLab runs (2026-10-23)
+
+Task **B2** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md), on top of
+v0.65.0. The account stops being only a sign-in and starts holding something.
+
+**No file under `src/`, `api/` or `scripts/` changed.** The engine, the
+published figures and the track record are untouched, and the API stays
+stateless and anonymous — even the engine fingerprint stamped on a saved run is
+read from the existing `/health`, so nothing here reaches a served probability.
+
+### Added
+- **Six tables**, in `web/lib/db/app-schema.ts` rather than the generated
+  `schema.ts`, because `npm run db:schema` overwrites that file and a table
+  added there would vanish the next time anyone regenerated the auth schema —
+  silently. `user_settings`, `user_favorites` and `squadlab_run` are used;
+  `user_progress`, `achievement` and `user_achievement` exist and are written
+  by nothing, exactly as the design asks, so the game rules that come later
+  need no migration. Everything cascades from `user.id`, so
+  `tests/account-cascade.test.mjs` now guards **eight** foreign keys where B1
+  had two.
+
+- **Favourites on the server, with two backends and not a replacement.** Signed
+  out, `localStorage`, behaving exactly as before accounts existed. Signed in,
+  the server is the truth and the local copy is the optimistic cache.
+  `useFavorites()` still returns `{favorites, toggle, has, ready}` and **no
+  component changed** — which is what the shape in that file was always for.
+  First sign-in on a browser is a **union**: follow Valencia on a phone and
+  Betis on a laptop, sign in on the laptop, keep both. The local copy is never
+  deleted, so signing out is not data loss.
+
+- **Settings that follow the account** — and two preferences treated
+  differently on purpose. Theme is applied silently on sign-in. **Language is
+  applied only where this device has no opinion of its own**, because
+  re-rendering the page somebody is reading into another language is the kind
+  of helpful that feels like a bug; next-intl resolves the locale from the URL
+  and the cookie, so the cookie stays authoritative for the request in flight.
+
+- **SquadLab runs, which had no storage at all.** The draft lived in React
+  state and the component warned you on the way out that leaving would lose the
+  team. Signed out that is still true; signed in, the draft autosaves and the
+  tournament it becomes is a durable row, so the `beforeunload` warning is now
+  conditional. A finished run is **final** — its result cannot be recreated by
+  playing again once ratings and pools have moved underneath it — and carries
+  the fingerprint it was played against. The saved-runs panel appears on the
+  setup screen for somebody signed in and **not at all** otherwise: a
+  greyed-out teaser is a gate wearing a disguise.
+
+- **`web/tests/user-data.test.mjs`**: 14 assertions over HTTP with two real
+  accounts, because the questions worth answering — does a session reach the
+  right rows, can one account see another's — live in the seam between the
+  route handler, Better Auth and Postgres, and calling the functions directly
+  would skip exactly the part that can be wrong.
+
+### Fixed
+- **Two things the design document had wrong about the code**, both caught by
+  reading the code rather than the document. SquadLab has **three** modes:
+  `sandbox` has been there all along, and a check constraint written from the
+  design would have rejected every sandbox run at the database. And **a name
+  does not identify a card** — the pool holds the same footballer as an
+  "actual", a "prime" and sometimes an "icono", so storing "the chosen names"
+  would have resumed a draft showing a card the person never held. The whole
+  card is stored instead.
+- **Resuming an unusable saved run white-screened SquadLab.** A stored card is
+  `SquadPlayer` as it was the day it was saved, and that type belongs to the
+  API; a row missing a field the pitch reads threw
+  `Cannot read properties of undefined (reading 'slice')` and took the page
+  down with nothing but a reload to escape. Found by resuming a deliberately
+  partial run. The cards are now checked before they are adopted, and an
+  unusable run is refused with a sentence instead.
+
+### Unchanged, on purpose
+- **No per-user response goes through `web/lib/api.ts`.** That client caches
+  every call under a shared `tags: ["data"]`, which is right for public
+  football numbers and would be a disclosure bug here — one person's favourites
+  cached and served to the next. User data has its own module, the handlers are
+  `force-dynamic`, every response carries `cache-control: no-store, private`,
+  and the test asserts those headers, so the rule has a tripwire and not only a
+  paragraph.
+- **Ownership is a `WHERE` clause, never a check after the fact.** Another
+  account's run is a **404, not a 403**, because 403 confirms it exists.
+- **Every page is still prerendered.** The build emits
+  `en/squadlab.html` and `es/squadlab.html` as before, SquadLab being the page
+  this release touched most; `/account` remains the only dynamic route.
+
+## v0.65.0 — User accounts: sign-in, and a database to key them on (2026-10-23)
+
+Task **B1** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md). The
+foundation only: somebody can sign in and the app knows who they are. What the
+account is *for* — favourites, settings and SquadLab progress moving off
+`localStorage` — is B2 and is not in this release.
+
+Stacks on v0.64.0, A1's cold-start work, which landed while this was being
+written.
+
+**Nothing a served probability touches is in this diff.** No file under `src/`,
+`api/` or `scripts/` changed; the engine, the published figures and the track
+record are byte-identical, and the Python suite is green on a clean checkout.
+
+### Added
+- **Sign in with Google or with an email address**, through
+  [Better Auth](https://www.better-auth.com) 1.7.12 inside the Next.js app,
+  over our own Postgres. Two prerendered pages (`/sign-in`, `/sign-up`), an
+  account page with sign out and **delete account**, and the header menu's
+  sign-in items made real — they had been sitting greyed out with a "coming
+  soon" badge since the menu was built. Every string in
+  `web/messages/{en,es}.json`, like every other string in the product.
+
+  Why Better Auth and not Auth.js v5, since the brief left the choice open:
+  `next-auth` still publishes v5 only under the `beta` tag (`5.0.0-beta.32`,
+  with `latest` on 4.24.15), its Credentials provider cannot use database
+  sessions — which would have meant two session models in one app, JWT for
+  email and database for Google — and it leaves password hashing to the
+  application. Better Auth ships `1.7.12` as `latest`, has the Drizzle adapter
+  and email+password in core, and **generates the schema its adapter expects**,
+  so the four tables are a reviewable diff rather than a hand-copy of a
+  documentation page. Recorded, with the cost of the choice, in
+  [`docs/USER_ACCOUNTS_DESIGN.md`](docs/USER_ACCOUNTS_DESIGN.md) §8.
+
+- **Postgres and a migration tool.** `docker-compose.yml` at the repo root with
+  one `postgres:17-alpine` service, a named volume that survives
+  `docker compose down`, a healthcheck a future `depends_on` can wait on, and
+  credentials from the environment — the first piece of the stack **A2** will
+  finish, written to grow rather than as a stopgap. Drizzle for the schema,
+  with `web/lib/db/migrations/0000_accounts.sql` committed and three documented
+  commands (`db:schema`, `db:generate`, `db:migrate`) behind it.
+
+  The four tables are `user`, `session`, `account` and `verification`.
+  `user.id` is a `text` identifier and **every foreign key cascades**, which is
+  the part that matters beyond authentication: B2's favourites, settings and
+  SquadLab runs, and the achievements and XP after them, all key on
+  `user_id -> user.id ON DELETE CASCADE`, so the schema is born with somewhere
+  to hang them and "delete my account" keeps meaning it.
+  `web/tests/account-cascade.test.mjs` asserts both the behaviour and the
+  constraint — `delete_rule = CASCADE` on *every* foreign key — so a later
+  table that forgets it fails a test instead of orphaning rows.
+
+- **`web/.env.example`**, committed with every key and no values:
+  `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, the Google client
+  pair and `AUTH_REQUIRE_EMAIL_VERIFICATION`. `web/.gitignore` opts this one
+  file out of its `.env*` rule.
+
+### Changed
+- `web/README.md` gains an **Accounts** section (what each variable is for, the
+  three migration commands, how to run the cascade test) and the root
+  `README.md` the three lines that start the database. The design document
+  gains §8, what was actually built, and §9, the Google Cloud steps and the
+  exact redirect URI — `http://localhost:3000/api/auth/callback/google`, where
+  exactly means exactly, since a mismatch is `redirect_uri_mismatch` and
+  nothing else.
+
+### Unchanged, on purpose
+- **`api/` has no notion of a user and did not grow one.** Accounts live in
+  Next.js route handlers against Postgres; the API container will need no
+  database in A2. The reasoning is §2 of the design.
+- **`web/proxy.ts` is untouched.** This was the trap the roadmap warned about —
+  Next.js 16 renamed `middleware.ts` to `proxy.ts`, and every auth guide still
+  says `middleware.ts`, so following one gives you a guard Next never runs.
+  There is no guard here to get wrong: Next's own documentation says Proxy
+  "should not be used as a full session management or authorization solution",
+  and **no route on this site is sign-in-only**. The account unlocks saving,
+  not seeing.
+- **Every football page is still prerendered.** The header reads the session in
+  the browser (`useSession`), not on the server: it sits in the locale layout
+  above every page, and a server-side read there would make the whole site
+  render per request to put one name in a dropdown. `/account` is the only
+  route in the app marked `dynamic = "force-dynamic"`. A signed-out visitor
+  gets exactly the HTML they got before.
+- **No mail transport, and nothing analytics-shaped.** Verification links are
+  written to the server log (`web/lib/mail.ts`), which is a real flow for one
+  operator and costs nothing against the ~15 €/month the project has budgeted;
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` therefore defaults to off, because turning
+  it on without a sender would lock every new account out behind a link only
+  the terminal can see. The session cookie is strictly necessary, so there is
+  still no consent banner to add. Password reset, and deleting a Google account
+  whose session is over a day old, both wait on the same transport — §8 lists
+  them as open.
+
+## v0.64.0 — The cold start stops being a page load (2026-10-21)
+
+Task **A1** of `docs/PLATFORM_ROADMAP.md`. A latency release: not one served
+probability changes, and that is checked rather than asserted — 31 payloads
+captured from the endpoint functions before and after (15 match pages across
+the five leagues, the rounds, the day, the calendar, the three-week list, the
+standings, the scorer races, the catalogue, the track record) are byte-for-byte
+identical, and the market-level multipliers printed at startup agree to four
+decimals. Every number below was measured with the new
+`scripts/measure_cold_start.py`; the before/after tables are in
+`docs/COLD_START_DIAGNOSIS.md`.
+
+### Changed
+- **The models load before uvicorn binds its port.** There was no startup hook
+  anywhere in `api/`, so the first request after a start or a daily refresh paid
+  the whole load: 25-55 s per endpoint on a fresh process with the joblib fit
+  cache warm, and **115 s** with it cold — against a web client that aborts at
+  20 s, which is how a slow start became a 404 (`warm_api_caches.py` records the
+  last time that happened). A `lifespan` moves it: on a cache miss the fit is now
+  123 s of *boot*, announced as `models ready in 119.6s`, and the first request
+  is 0.06 s. Still keyed on `data_version()`, so warming is not
+  process-lifetime state and the daily refresh reaches a running API as before.
+- **The league calendar is served from disk.** `cat.season_calendar` fetched
+  from ESPN on every miss and kept nothing — two HTTP calls per league-season,
+  10.4 s for the five leagues, paid again after every restart, with a provider
+  ceiling of 45 s x 10 calls and no retry budget. One CSV per league-season
+  under `data/processed/fixture_calendars` (~380 rows, 16 KB), written through a
+  temporary file and swapped in. ESPN becomes the refresh source and the disk
+  the serving source, which is how the UEFA calendar has worked since September.
+  Stale-while-revalidate: a fresh snapshot is served outright, an old one is
+  served *and* refreshed behind the answer, and only a league with no snapshot
+  at all blocks — at most once per window however often the provider fails. An
+  empty provider answer never replaces a snapshot, which matters more than the
+  speed: `fetch_season_fixtures` returns an empty frame for every failure, and
+  that is how a matchday renders blank rather than slow. The daily pass is the
+  writer (`warm_api_caches.py`, step 7m) and now reports a league it could not
+  refresh. The user asked for exactly this shape, and the measurement agreed.
+- **Single-flight everywhere a cache could stampede.** `lru_cache` does not
+  de-duplicate calls in flight and FastAPI runs sync endpoints in a threadpool,
+  so the two requests the matchday screen fires together each loaded the engine
+  and each fetched all five calendars: 14 s of work measured as 83 s of
+  contention. One caller loads the models and anything arriving meanwhile gets
+  **503 with `Retry-After: 5`** instead of a held connection; one caller builds
+  each payload-cache entry; one caller refreshes each calendar.
+- **`/fixtures/day` and `/fixtures/calendar` now hit their own cache.** They
+  never did. `_cached`'s key includes `european.fixtures_fingerprint()` — the
+  mtimes of the UEFA `raw_*.csv` files — and building the payload calls
+  `european.fetch_season_fixtures`, which refetches and **rewrites those same
+  files**. Computing the value moved the key that was supposed to find it, so
+  three identical requests left three cache entries and paid ~4 s for each. The
+  European state is now cached for half an hour like the domestic calendar
+  (it was not cached at all: 1.2 s per competition per call). Warm, repeated:
+  6.67 s -> 0.051 s and 3.58 s -> 0.049 s.
+- **The market level is memoised on disk.** `market_level_detail` is **30.8 s**
+  — re-pricing every logged lambda of the season against the book's over-2.5
+  line, fourteen Newton steps per match — and it cannot live in the engine's
+  joblib, because a level frozen into a fit would be served long after the
+  matches it was measured on. So it is memoised beside the fit, keyed on
+  everything it reads: its own source fingerprint, `k`, the foundation's size
+  and last date, both lambda logs and every football-data file. `club_engine()`
+  goes from 35 s to 1.6 s. The daily refresh warms it on the way past.
+  This item was invisible in the first diagnosis, which measured `joblib.load`
+  (0.8 s) and reported it as the whole Python path (3.76 s) rather than timing
+  `club_engine()` (35 s).
+- **The site runs from a production build.** `npm --prefix web run prod`
+  (`next build && next start`) plus a `mundialytics-web-prod` launch
+  configuration; `dev` stays for editing the front end. Measured per route,
+  first visit then second: `next dev` 1.0-3.9 s then 0.13-0.27 s, `next start`
+  0.01-0.19 s then 0.004-0.048 s, for a 35 s build paid once per change. `prod`
+  refuses to build while the API is down, because every data page is SSG and a
+  build without an API bakes the "model is warming up" box into the static HTML
+  — measured, not theorised: /en/leagues built to 52 KB of warming notice
+  against 68 KB of real standings.
+- **The matchday screen retries by itself.** It fetches from the browser, so a
+  cold or restarting API left the panel on "could not load" until the tab
+  regained focus. Now every five seconds for two minutes.
+- **`/health` is a probe again.** Routing it through the readiness guard made
+  it answer 503 for as long as a load took and raise after a failed start,
+  which is the opposite of what the lifespan promises and useless as the
+  container HEALTHCHECK **A2** plans to point at it. It now answers from
+  process state and never triggers a load: 200 whenever the process is up,
+  `ready` for whether the models are in, `matches`/`dataThrough` only once they
+  are. `web/scripts/require-api.mjs` therefore checks `ready` rather than
+  merely that something answered — a loading API now returns 200, and a build
+  against one is exactly what that guard exists to prevent.
+- **One definition of the season the serving path asks for.** The daily pass
+  wrote calendar snapshots for `current_season` (the foundation's newest) while
+  `_predict` asked for the season the date implies. The two agree for eleven
+  months and diverge in July and August — when the serving path would have
+  found no snapshot, fallen back to a blocking provider fetch once per window,
+  and the daily log would have reported every calendar fine. `cat.serving_season()`
+  is now the single definition, `cat.seasons_to_snapshot()` plans both seasons
+  when they differ, and the pass distinguishes "could not refresh, still serving
+  yesterday's" from "nothing on disk".
+
+### Added
+- `scripts/measure_cold_start.py` — five modes (`imports`, `cold`, `warm`,
+  `fanout`, `web`) writing comparable JSON, so a before/after table is evidence
+  rather than two sets of hand-timings. `cold` separates *boot* from *first
+  request*, which is the whole point once a lifespan exists.
+- `output: "standalone"` in `web/next.config.ts`: 37 MB against ~500 MB of
+  `node_modules`, for the A2 container image. Not free after all — the build
+  goes from 25 s to 35 s for the file tracing — and serving is unaffected.
+- `tests/test_calendar_snapshot.py`, `tests/test_cold_start_warmup.py` (25
+  tests; the clean-checkout suite goes 605 to 629, and 737 pass with the
+  local dataset built). What they pin is the part that could serve wrong
+  football rather than slow football: `completed` has to come back off the CSV
+  as a **boolean**, because read as the string `"False"` it passes the
+  `astype(bool)` that `trusted_calendar` and the Golden Boot race both ask, and
+  a settled season would read as 380 fixtures still to play; an empty answer
+  from the provider must never replace a good snapshot; and the level memo must
+  recompute on a new logged
+  lambda, new foundation rows, a different `k` or a new odds file.
+
+### Rejected
+- **Batching the matchday predictions.** A ten-fixture round is 0.91 s, and
+  94 of the 95 ms per fixture are inside `predict_match_or_proxy` — model code,
+  which a latency task may not touch. There is no per-call overhead to batch.
+- **A second "warming up" page state.** The pages already carry that copy, and
+  in production they are prerendered and do not call the API at request time at
+  all. What was missing was recovery, not a state.
 
 ## v0.63.0 — The sharpening stops draining the draw (2026-10-18)
 
