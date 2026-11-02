@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/Beansent48/mundialytics/actions/workflows/tests.yml/badge.svg)](https://github.com/Beansent48/mundialytics/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
-![license](https://img.shields.io/badge/license-MIT-green)
+![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)
 
 A football match-prediction engine: probabilistic forecasts for 1X2, over/under,
 BTTS, half-time markets and player/team props, fitted on **more than 46,000
@@ -485,11 +485,60 @@ pytest tests/                    # clean-checkout suite
 # Only for the daily data refresh (brings soccerdata + Selenium):
 pip install -e ".[data]"
 
-# The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes:
+# The UI is a web app (Next.js in web/) over the FastAPI in api/ — two processes.
+# Start the API first and let it finish: it loads the 29 MB fit and measures the
+# market level before it reports ready, so no page load ever pays for them.
 uvicorn api.main:app --port 8000
+
 npm --prefix web install
-npm --prefix web run dev         # http://localhost:3000
+npm --prefix web run prod        # http://localhost:3000 — build, then serve it
+npm --prefix web run dev         # ...or dev mode, only while editing web/
 ```
+
+`prod` is the normal way to run the site: it builds once (~35 s) and then every
+page answers in milliseconds. `dev` recompiles each route the first time it is
+visited, which costs a second or four per page and is paid again after every
+restart — worth it only while you are changing the front end. `prod` refuses to
+build while the API is down, because the data pages are prerendered: a build
+without an API bakes the "model is warming up" notice into them and then serves
+it as static HTML.
+
+`.claude/launch.json` is untracked, so if you use it, the production mode needs
+a second configuration of its own next to `mundialytics-web`:
+
+```json
+{
+  "name": "mundialytics-web-prod",
+  "runtimeExecutable": "npm",
+  "runtimeArgs": ["run", "prod", "--prefix", "web"],
+  "port": 3000,
+  "autoPort": true
+}
+```
+
+Start-up costs, measured on this machine and recorded with the before/after
+table in [docs/COLD_START_DIAGNOSIS.md](docs/COLD_START_DIAGNOSIS.md):
+`uvicorn` reports ready in about five seconds with its fit cache warm, and in
+about two minutes when a change to the engine code has invalidated it — a
+startup log line either way, never a page load. While it is still loading it
+answers `503` with a `Retry-After` rather than holding the connection open, and
+the matchday screen retries by itself.
+
+Accounts are optional, for both the visitor and whoever runs this. Every page
+renders without one; signing in exists so that what you follow can be saved.
+If you want that part working, the web app needs a Postgres and a few keys —
+one compose service, a copied `.env`, one migration:
+
+```bash
+docker compose up -d postgres        # postgres:17-alpine, named volume
+cp web/.env.example web/.env.local   # DATABASE_URL, session secret, Google keys
+npm --prefix web run db:migrate      # creates the four account tables
+```
+
+[`web/README.md`](web/README.md#accounts) lists what each variable is for, and
+[`docs/USER_ACCOUNTS_DESIGN.md`](docs/USER_ACCOUNTS_DESIGN.md) has the design,
+the schema and the Google Cloud steps. The API never sees any of it: it stays
+stateless and anonymous, and the account layer lives entirely in Next.js.
 
 The web app has pages for matchday (the five leagues and the three UEFA
 competitions, each priced by its own model), single-competition simulation, league
@@ -534,7 +583,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  608 tests green on a clean checkout; 109 more
+tests/                  629 tests green on a clean checkout; 111 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
@@ -560,4 +609,16 @@ under [`docs/archive/`](docs/README.md#archive).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[PolyForm Noncommercial 1.0.0](LICENSE) — source available, not open source.
+
+Any noncommercial purpose is permitted: read it, clone it, run it, study it,
+teach with it, write about it. So is use by educational, nonprofit, research and
+government organisations, and so is evaluating this repository and its author —
+including a company reading it to assess a job candidate.
+
+Commercial use needs written permission: selling this code, the fitted models or
+their forecasts, or running any of it inside a commercial product or service.
+Open an issue to ask.
+
+Commits up to and including `973e966` were published under the MIT License and
+remain available on those terms.
