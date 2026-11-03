@@ -162,3 +162,49 @@ Por hacer:
 No uses el recuento de líneas: los diffs están dominados por CSV de datos y
 registros de predicciones. Usa commits, versiones publicadas (v0.64.0 → v0.66.1 y
 las que vengan) y las fichas del registro de trabajo en `docs/tfg/registro/`.
+
+## La tesis: un sistema prometedor con huecos, endurecido para producción
+
+Este es el hilo que une todo el TFG, y conviene enunciarlo en el apartado 1.4
+porque reordena lo que cuenta como resultado.
+
+El punto de partida es un motor **que funciona**: 0.1998 de RPS, el 86 % de la
+brecha alcanzable contra una casa afilada, y una web que lo sirve. Pero funciona
+como funciona un prototipo: con huecos que no se manifiestan como errores, sino
+como cifras plausibles. Y una cifra plausible no despierta a nadie.
+
+La aportación del TFG no es subir la métrica —ya quedó dicho que arranca en su
+mejor valor y que el techo es informativo—, sino **convertir ese prototipo en un
+sistema de producción**, y el catálogo de defectos encontrados por el camino es
+la prueba de que hacía falta. Hasta ahora, y todos reales, fechados y corregidos
+con su medición:
+
+| Defecto | Síntoma | Por qué no se veía |
+|---|---|---|
+| La ficha re-ejecutaba el motor ya ajustado con el resultado | «esto predijimos» decía 53,8 % donde el registro decía 48,1 % | la página respondía, solo que con otra cifra |
+| El RPS publicado se mantenía a mano | 0.2025 escrito mientras el motor iba a 0.2008 | nadie compara un número con su generador |
+| Un paso fallido reportaba éxito | tres días de 403 y la pasada decía OK | el código de salida era 0 |
+| Las predicciones europeas no se comprobaban | 0 de 162 filas cruzaban | el 1X2 seguía puntuando al 83 % |
+| Los partidos reprogramados se tiraban | 4 partidos jugados, dados por no predichos | el total bajaba, no fallaba |
+| La foundation iba por detrás del calendario | la jornada más reciente nunca se comprobaba | sesgo sistemático, no error |
+| La ventana de fechas copiaba solo los goles | 644 predicciones sin comprobar | parecía falta de cobertura |
+| La caché de un endpoint se auto-invalidaba | no cacheaba nada | solo era «lento» |
+| La temporada se escribía de un modo y se leía de otro | divergen en julio | en julio nadie mira |
+| El xG llevaba dos correcciones para la misma inflación | 4,8 % de λ | ambas correcciones eran razonables por separado |
+| La forma reciente se leía de una lista sin fechas | 13 de 96 equipos tasados con forma de temporadas viejas | RPS 0.2203 donde el resto daba 0.1941 |
+
+El patrón se repite y es el material de la memoria: **ninguno de estos fallos
+levantaba una excepción**. Todos dejaban el sistema respondiendo con una cifra
+creíble. Por eso la respuesta no puede ser «arreglarlos», sino construir lo que
+los detecta —registro pre-partido con huella de modelo, garantía de cobertura,
+auditoría de liquidación en dos niveles, informe de deriva, tests como verja— y
+eso es ingeniería de datos y MLOps, no fontanería.
+
+Dos corolarios que también son resultado:
+
+1. **El techo no es algorítmico, es informativo.** Contra un libro afilado no
+   falta modelo, falta información. Siete experimentos lo sostienen con cifras,
+   y el único nivel de goles que valida es el que **lee del propio mercado**.
+2. **Un sistema vale lo que vale su medición.** Es la frase que conecta el
+   capítulo 4 con el 7: la validación en vivo solo significa algo porque antes
+   se arregló lo que la medía.

@@ -88,6 +88,7 @@ resultado bonito.
 
 | Apartado | Contenido | Material |
 |---|---|---|
+| 5.0 | **Catálogo de defectos**: qué tenía de prototipo el sistema de partida, con el síntoma y la causa de cada fallo | tabla en `00-punto-de-partida.md` y las fichas de `registro/` *(se llena solo)* |
 | 5.1 | Diagnóstico y corrección del arranque en frío, con medición antes y después | `docs/COLD_START_DIAGNOSIS.md` *(listo)* |
 | 5.2 | Capa de cuentas: modelo de datos, autenticación, aislamiento por usuario, borrado en cascada | `docs/USER_ACCOUNTS_DESIGN.md` *(listo)* |
 | 5.3 | Contenerización: composición reproducible de API, web y base de datos | *(por hacer)* |
@@ -96,6 +97,14 @@ resultado bonito.
 
 Encuádralo como ingeniería de datos y MLOps: de prototipo de un usuario en un
 portátil a servicio multiusuario reproducible y publicado. No como «hacer la web».
+
+El 5.0 es el apartado que **justifica el capítulo entero**, y conviene abrirlo con
+él. Sin el catálogo, industrializar parece una decisión de gusto; con él, es la
+respuesta a once defectos reales, fechados y medidos, de los cuales **ninguno
+levantaba una excepción**: todos dejaban el sistema respondiendo con una cifra
+creíble. Ese es el argumento, y la tabla está montada en
+`00-punto-de-partida.md`. Cada defecto nuevo que aparezca mientras trabajas suma
+una fila, así que no lo dejes para el final: ve añadiéndolo.
 
 ## 6. Monitorización del modelo en producción
 
@@ -172,10 +181,17 @@ licencia no comercial.
 | E | Capturas del producto | `docs/img/` *(listo)* |
 | F | Delimitación verificable del punto de partida | *(listo)* |
 | G | Registro histórico de experimentos del proyecto previo, con cifras | *(generar desde el CHANGELOG)* |
+| H | **Catálogo de defectos**: uno por fila, con síntoma, causa, corrección, commit y **por qué no saltó ninguna alarma** | tabla en `00-punto-de-partida.md` *(se llena solo)* |
 
 El anexo G merece la pena aunque sea de antecedentes: una tabla con los
 experimentos previos y sus veredictos sostiene el argumento del techo informativo
 del capítulo 10 sin reclamarlos como trabajo propio del TFG.
+
+El anexo H es el que sostiene la tesis. La columna que importa no es la
+corrección, es la última: **por qué no saltó ninguna alarma**. Once defectos y
+ninguno levantaba una excepción, porque todos dejaban el sistema respondiendo
+con una cifra creíble. Eso es lo que justifica todo el capítulo 5, y es un
+argumento que casi ningún TFG puede hacer con datos propios.
 
 ---
 
