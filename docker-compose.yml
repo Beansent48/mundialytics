@@ -1,19 +1,31 @@
-# Services Mundialytics needs that are not the app itself.
+# The whole site, as five services. Task A2 of docs/PLATFORM_ROADMAP.md.
 #
-# Today that is one thing: the Postgres the Next.js app keeps user accounts in
-# (task B1 of docs/PLATFORM_ROADMAP.md). Task A2 adds `api` and `web` services
-# beside it, so the database is written as something to build on — a named
-# volume that survives `docker compose down`, a healthcheck a dependent service
-# can wait on, and credentials that come from the environment — rather than as
-# a throwaway container.
+#   caddy      the only public port; one origin for the site and the API
+#   web        Next.js, built standalone, server-rendered
+#   api        the model server (python, uvicorn, one worker)
+#   postgres   the accounts database (from task B1)
+#   refresh    the daily data refresh, which the user chose to move into the
+#              stack on 2026-11-02 (option b of docs/DEPLOYMENT_PLAN.md)
+#   migrate    a one-shot that applies the Drizzle migrations and exits
 #
-#   docker compose up -d postgres      start it
-#   docker compose down                stop it, keep the data
-#   docker compose down -v             stop it and delete the data
+# Local, from a clean checkout:
 #
-# The defaults below are development credentials on a port only this machine
-# can reach. A deployment overrides them through the environment and does not
-# publish the port at all.
+#   cp .env.example .env            and fill BETTER_AUTH_SECRET
+#   docker compose up -d --wait postgres api
+#   docker compose build web        # needs the API up: see web/Dockerfile
+#   docker compose up -d
+#   open http://localhost
+#
+# After that first time, `docker compose up -d` is the whole command. The
+# README has the deployment sequence and docs/DEPLOYMENT_PLAN.md the reasoning.
+
+# Fixed, and not derived from the directory name. A1 found B1's Postgres
+# invisible to `docker compose` run from the main checkout: it had been started
+# from a worktree, so its labels said
+# `com.docker.compose.project=zen-shaw-6fa492` and the command exited 0 having
+# done nothing. With the name pinned here, the main checkout and every worktree
+# address the same stack.
+name: mundialytics
 
 services:
   postgres:
@@ -48,6 +60,197 @@ services:
       # failures rather than a database that has not been created yet.
       start_period: 10s
 
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: api
+    image: mundialytics-api
+    container_name: mundialytics-api
+    restart: unless-stopped
+    # Who the process is, which on Linux decides whether it can write to the
+    # mounted data at all: a bind mount keeps the host's ownership, and the
+    # image's own user (uid 10001) owns nothing on the host. Docker Desktop
+    # hides this -- its file sharing makes everything writable -- so it has to
+    # be said rather than discovered on the server. Set DATA_UID/DATA_GID to the
+    # owner of DATA_DIR (`id -u`, `id -g`) or chown it to 10001.
+    user: "${DATA_UID:-10001}:${DATA_GID:-10001}"
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      # Empty on purpose: in production the browser reaches the API through
+      # Caddy on the site's own origin, so no cross-origin request is ever made
+      # and no allow-list is needed. The development default (any localhost
+      # port) is in api/main.py and must not be what ships — the deployment
+      # plan called that out and this is the knob that settles it.
+      MUNDIALYTICS_CORS_ORIGINS: ${API_CORS_ORIGINS:-}
+    volumes:
+      # Data is a mount, never an image layer: the refresh rewrites it daily and
+      # the tree is 26.5 GB on this machine, of which the serving path opens a
+      # fraction (scripts/measure_serving_bundle.py measures which).
+      #
+      # Read-write, against what the plan assumed: the serving path writes its
+      # fitted-engine cache, the ESPN fixture snapshots and uvicorn's log under
+      # data/. Measured, not guessed — the write list is in the plan.
+      - ${DATA_DIR:-./data}:/app/data
+    ports:
+      # Loopback only. Not for the browser (that goes through Caddy) but for the
+      # `web` image build, which prerenders every data page against a live API,
+      # and for a tunnel when something has to be poked by hand.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      # start_period is the whole point, and A1 measured why: uvicorn runs the
+      # lifespan — which loads the models — BEFORE it binds the socket, so a
+      # probe during a cold start gets a refused connection, not a 503. Without
+      # a start_period the container is marked unhealthy, restarted, and the
+      # restart begins the same fit again: it never comes up.
+      #
+      # The arithmetic: 119 s for a full fit on this machine (joblib cache
+      # empty), times about three for two slow vCPUs, plus the payload warm-up.
+      # 420 s, and a container that is genuinely broken still fails 4 × 15 s
+      # after it.
+      start_period: 420s
+      interval: 15s
+      timeout: 10s
+      retries: 4
+
+  # Applies the Drizzle migrations, then exits. Runs from the `source` stage of
+  # the web image, which still has drizzle-kit (a devDependency the standalone
+  # runner does not carry) and the migration SQL.
+  #
+  # This is the answer to "when do migrations run in a deployment": before the
+  # app that needs them, every time the stack comes up, as its own container
+  # whose exit code gates `web`. Not in web's entrypoint (two replicas would
+  # race) and not by hand (the one step everybody forgets).
+  migrate:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: source
+    image: mundialytics-web-tools
+    container_name: mundialytics-migrate
+    restart: "no"
+    command: ["npx", "drizzle-kit", "migrate"]
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      DATABASE_URL: ${DATABASE_URL:-postgres://mundialytics:mundialytics@postgres:5432/mundialytics}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: runner
+      # The build prerenders every data page, so it has to reach the API. The
+      # builder has no route to the compose network, so it borrows the host's
+      # and talks to the port `api` publishes on loopback. This is why the API
+      # publishes one at all, and why the first build is a separate step.
+      network: host
+      args:
+        # A path, not an origin: same-origin through Caddy, so no CORS.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_PATH:-/engine}
+        API_INTERNAL_URL: http://127.0.0.1:${API_PORT:-8000}
+    image: mundialytics-web
+    container_name: mundialytics-web
+    restart: unless-stopped
+    # The guard is here and not as a `${VAR:?}` in the environment below,
+    # because compose interpolates the whole file whatever you ask it to start:
+    # a required variable would also break `docker compose up -d postgres`,
+    # which is how B1's database is started on its own. An empty session secret
+    # makes Better Auth fall back to a published default, so it must stop the
+    # app rather than warn in a log nobody reads.
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$BETTER_AUTH_SECRET" ]; then
+          echo "BETTER_AUTH_SECRET is empty. Set it in .env (see web/.env.example);"
+          echo "generate one with: node -e \"console.log(require('node:crypto').randomBytes(32).toString('base64url'))\""
+          exit 1
+        fi
+        exec node server.js
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      # Server-side calls skip Caddy and go straight to the container.
+      API_INTERNAL_URL: http://api:8000
+      DATABASE_URL: ${DATABASE_URL:-postgres://mundialytics:mundialytics@postgres:5432/mundialytics}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-}
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
+      # Noindex by default (the user's call on 2026-11-02: public but quiet).
+      # Set to 1 the day the site should be found.
+      SITE_INDEXABLE: ${SITE_INDEXABLE:-}
+    depends_on:
+      api:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mundialytics-caddy
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      # `:80` locally; the public hostname in production, which is also what
+      # makes Caddy fetch a certificate.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      ACME_EMAIL: ${ACME_EMAIL:-nobody@example.invalid}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account keys. A named volume because losing them
+      # means re-issuing, and Let's Encrypt rate-limits that.
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      web:
+        condition: service_started
+
+  # The daily refresh, inside the stack. Asleep until REFRESH_AT, then it runs
+  # scripts/update_season.py exactly as the Windows scheduled task does and
+  # invalidates the web cache; the API picks the new data up by itself, because
+  # its model cache is keyed on the foundation's mtime.
+  #
+  # Its own image stage: soccerdata brings Selenium along, and the serving image
+  # has no business carrying a browser driver.
+  refresh:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: refresh
+    image: mundialytics-refresh
+    container_name: mundialytics-refresh
+    restart: unless-stopped
+    # It writes far more of the data volume than the API does; same reasoning.
+    user: "${DATA_UID:-10001}:${DATA_GID:-10001}"
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      REFRESH_AT: ${REFRESH_AT:-10:00}
+      REFRESH_FULL_DAY: ${REFRESH_FULL_DAY:-Monday}
+      REFRESH_ON_START: ${REFRESH_ON_START:-0}
+      REFRESH_ARGS: ${REFRESH_ARGS:-}
+      REVALIDATE_URL: http://web:3000/api/revalidate
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+    # Started last and needed by nobody: it writes to the same volume the API
+    # reads, and the API notices on its own.
+    depends_on:
+      api:
+        condition: service_started
+
 volumes:
   pgdata:
     name: mundialytics-pgdata
+  caddydata:
+    name: mundialytics-caddydata
+  caddyconfig:
+    name: mundialytics-caddyconfig
