@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.66.2 — Every prediction whose result we hold now gets checked (2026-11-03)
+
+Scoring the season's live track record for the first time found 220 of 412
+logged 1X2 predictions unsettled. Three bugs, none of which raised anything: the
+record kept publishing a number over fewer matches than it claimed.
+
+### Fixed
+- **Every European prediction was unsettled.** The UEFA results carry ClubElo
+  names ("Bayern", "Man United") and the log carries foundation names ("bayern
+  munich", "manchester united"), so the join matched 0 of 162 rows. The log side
+  is now resolved into Elo space first, which settles all 108 that have a
+  result. Canonicalising instead only lowercases, and reaches 15.
+- **Fixtures that moved were dropped.** Settlement demanded an exact date, and
+  four matches were played a day off the date the calendar promised when the
+  prediction was logged: toulouse-troyes, paris sg-lyon, nice-rennes and
+  lyon-angers. A two-day window settles them, and only when the pairing is
+  unambiguous — a window that tight cannot reach the reverse fixture or another
+  season's meeting.
+- **The newest round could never settle.** Settlement only read the foundation,
+  which trails by a round or two, so the freshest results sat on disk unused:
+  lorient vs brest was played 0-2 on 2026-11-02 and settled nowhere. For a live
+  record that is a systematic bias, not a delay. The season fixture calendars
+  are now a fallback for what the foundation has not ingested — foundation
+  first, always, and only goal-outcome markets can settle from there, since the
+  calendars carry no shots, cards or half-time goals.
+
+Settled 1X2 rows went 192 → 300 → 304 → 309 of 412 across the three fixes. Of
+the 103 that remain, 102 are unplayed and one is vallecano vs ath bilbao, logged
+for 2026-10-10 and moved by the calendar to 2026-12-09.
+
+### Changed
+- "Is there a result for this fixture?" was answered in three places — the
+  serving path, the audit and the analysis script — and the audit disagreed with
+  the settlement it was auditing, reporting the four moved fixtures as holes.
+  One function, `attach_results`, now answers it for all three.
+
+### Added
+- `scripts/audit_settlement.py` exits non-zero on any played match whose
+  prediction is not checked, which is the opposite question to
+  `audit_prediction_coverage.py`. It also reports per-market scoring rates and
+  fails outright on a market that scores nothing — the symptom that would have
+  caught the European hole on day one. Accepted holes go in
+  `data/curated/settlement_known_gaps.csv` with a cause.
+- `scripts/tfg/score_live_track_record.py` aggregates the live log by model
+  fingerprint: RPS, log loss, bootstrap intervals, per-outcome bias and
+  calibration.
+- `docs/tfg/` records the starting point of the degree project built on this
+  repository (the baseline commit is tagged `tfg-baseline`), the plan of the
+  report's sections, and a work log with one entry per piece of work.
+
+### Measured
+Live 1X2, 2026/27, over 309 settled predictions logged before kick-off: RPS
+0.1990, 95% bootstrap [0.1836, 0.2149], against 0.1998 for the published
+backtest and 0.2326 for this sample's own base rates. Domestic 0.2017 on 201,
+Europe 0.1939 on 108. Per-outcome bias is inside the noise (draw z = −1.03), so
+v0.63.0's draw fix holds up live. ECE 0.0264.
+
+With 309 matches the RPS interval is ±0.016 while the differences between model
+eras are around 0.001. The live record cannot discriminate between eras, and
+should not be asked to.
+
+### Not done
+Per-market settlement is measured, not enforced. 1X2 reconciles exactly — 519 of
+622 scored, and 622 − 519 is the 103 unplayed — but half-time markets sit at
+53.5%, event markets at 65-75% and player markets at 55%. Those are
+explainable, since the calendar fallback carries no half-time goals, event
+counts or player rows, but the audit does not yet classify each unscored row by
+the column it is missing and fail on the remainder.
+
+### Tests
+705 pass, 6 skip.
+
+
 ## v0.66.1 — Source available, not open source (2026-10-27)
 
 No code changed: `src/`, `api/`, `scripts/`, `web/`, the published figures and
