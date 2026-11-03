@@ -12,6 +12,8 @@ squad going stale looks exactly like the squad being fine until someone reads
 the names. They pin the properties that make a squad current, not merely
 present.
 """
+import os
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -173,6 +175,124 @@ def test_short_key_refuses_to_drop_two_name_parts():
     assert idx.lookup("Pape Sarr") == "sarr"
 
 
+# The name shapes that put two EQUALLY RARE tokens in front of one query, with
+# the historical side trimmed to the records that create the tie. Every one of
+# them was found in the card build of 2026-10-19: with the tie broken by `set`
+# iteration order, the same inputs dealt different cards from run to run.
+#
+# `(name, rank)` on the left, and the one answer each query may ever give on the
+# right. Two tokens tying means neither is better evidenced, so both lists have
+# to be read — the first two shapes lose the player outright if the losing
+# token's list is the one taken, and the last one hands his history to a
+# different man.
+_TIED_HISTORY = [
+    # `dias` and `freitas` carry two records each, `tiago` three
+    ("Rúben Dias", 300.0), ("Tiago Dias", 40.0),
+    ("Afonso Freitas", 20.0), ("Marlon Freitas", 25.0),
+    ("Tiago Santos", 60.0), ("Tiago Gouveia", 30.0),
+    # `ze` and `figueiredo` one each, `pedro` three
+    ("Zé Pedro", 90.0), ("Miguel Figueiredo", 15.0),
+    ("Pedro Neto", 200.0), ("Pedro Porro", 180.0),
+    # `oyarzabal` and `ugarte` one each, `mikel` three
+    ("Mikel Oyarzabal", 250.0), ("Manuel Ugarte", 150.0),
+    ("Mikel Merino", 210.0), ("Mikel Jauregizar", 70.0),
+    # `zubimendi` and `ibañez` one each, `martin` three
+    ("Martín Zubimendi", 240.0), ("Pablo Ibáñez", 35.0),
+    ("Martín Satriano", 45.0), ("Martín Aguirregabiria", 55.0),
+    # CONSTRUCTED rather than measured, for the case the measured ones do not
+    # reach: two DIFFERENT men admit the query and the tied tokens hold one
+    # each, so a single list means no arbitration at all. `pinto` admits only
+    # the four-part name, `mota` admits both and lets the rank margin decide —
+    # and both tokens carry two records, so which of the two men got the
+    # history came down to the hash seed.
+    ("Carlos Mota", 400.0), ("Carlos Mota Pinto Silva", 10.0),
+    ("Dinis Pinto", 60.0), ("Carlos Vicente", 120.0),
+]
+_TIED_ANSWERS = {
+    "Tiago Dias Freitas": "Tiago Dias",
+    "Zé Pedro Figueiredo": "Zé Pedro",
+    "Mikel Oyarzabal Ugarte": "Mikel Oyarzabal",
+    "Martín Zubimendi Ibáñez": "Martín Zubimendi",
+    "Carlos Mota Pinto": "Carlos Mota",
+}
+
+
+def _tied_index() -> NameIndex:
+    idx = NameIndex()
+    for name, rank in _TIED_HISTORY:
+        idx.add(name, name, rank=rank)
+    return idx
+
+
+def test_a_tie_between_equally_rare_tokens_goes_to_the_evidence():
+    """Two tokens of one name bringing the same number of candidates.
+
+    The containment tier reads the rarest token's candidates, and when two
+    tokens are equally rare there is nothing to choose between them — so both
+    are read. Measured over the card build, the losing token's list held no
+    admissible record at all in all nine queries where the two disagreed:
+    "Tiago Dias Freitas" resolved to Tiago Dias through `dias` and to nobody
+    through `freitas`, so taking one list meant deciding by coin flip between
+    the right answer and no answer. "Carlos Mota Pinto" is the shape that is worse
+    still — a coin flip between two different men, which the rank margin
+    exists to settle and cannot when it sees only one of them.
+    """
+    idx = _tied_index()
+    for query, want in _TIED_ANSWERS.items():
+        assert idx.lookup(query) == want, f"{query} deberia resolver a {want}"
+    # and the tiers above the containment one are untouched by any of this
+    assert idx.lookup("Rúben Dias") == "Rúben Dias"
+    assert idx.lookup("Luis Díaz") is None
+
+
+# Run in a child process on purpose: the string hash seed is fixed when the
+# interpreter starts, so the only way to ask "does this depend on the hash
+# seed?" is to start interpreters that disagree about it.
+#
+# The names carry accents and the child's stdout is cp1252 on this machine, so
+# both ends are pinned to utf-8 rather than left to the console codepage — one
+# name outside cp1252 would otherwise crash the probe instead of answering the
+# question it was asked.
+_SEED_PROBE = """
+import sys
+sys.path.insert(0, {src!r})
+from mundialytics.identity.current_squads import NameIndex
+idx = NameIndex()
+for name, rank in {hist!r}:
+    idx.add(name, name, rank=rank)
+for q in {queries!r}:
+    print(q, "->", idx.lookup(q))
+"""
+
+
+def test_the_index_answers_the_same_under_any_hash_seed():
+    """The guard on the card catalogue being rebuildable.
+
+    Two rebuilds off identical inputs used to deal different cards — 228
+    overalls moved by up to 2.1 points and one card lost its measured axes —
+    because the containment tier picked its candidate list with `min` over a
+    `set`, and a tie in length came out of the set's iteration order, which is
+    the hash seed. The symptom was in the catalogue; the test belongs here,
+    where the tie is, because rebuilding the catalogue to find out costs half a
+    minute and names that tie can be written down in twenty lines.
+    """
+    import subprocess
+
+    src = str(ROOT / "src")
+    code = _SEED_PROBE.format(src=src, hist=_TIED_HISTORY,
+                              queries=list(_TIED_ANSWERS))
+    seen: dict[str, list[str]] = {}
+    for seed in ("0", "1", "2", "3"):
+        env = dict(os.environ, PYTHONHASHSEED=seed, PYTHONIOENCODING="utf-8")
+        r = subprocess.run([sys.executable, "-c", code], env=env,
+                           capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        seen.setdefault(r.stdout, []).append(seed)
+    assert len(seen) == 1, (
+        "el emparejamiento de nombres depende de la semilla de hash:\n"
+        + "\n".join(f"  semillas {s}:\n{o}" for o, s in seen.items()))
+
+
 def test_index_never_compares_the_stored_objects():
     """Two entries tied on rank must not fall through to comparing values —
     a PlayerStrengthProfile is not orderable and the lookup raises."""
@@ -274,3 +394,62 @@ def test_season_tallies_ignore_rows_from_older_seasons():
     assert got["apps"] == 1, "older seasons must not be counted as this season's appearances"
     assert got["goals"] == 1
     assert got["squad_matches"] == 1
+
+
+# -- who is on the squad at all -----------------------------------------------
+def _bcs():
+    import sys
+    sys.path[:0] = [str(ROOT / "scripts")]
+    import build_current_squads as bcs
+    return bcs
+
+
+def test_the_reserve_pool_is_not_part_of_the_squad():
+    """ESPN's own marker: a registered player has a shirt number, a reserve
+    does not. All 27 of Stuttgart's extras had none."""
+    rosters = pd.DataFrame({
+        "competition": ["Champions League"] * 5,
+        "team": ["stuttgart"] * 5,
+        "player": ["Angelo Stiller", "Deniz Undav", "David Preu",
+                   "Veit Stange", "Kian Speidel"],
+        "jersey": ["6", "26", None, None, None],
+    })
+    kept = _bcs().first_team(rosters)
+    assert set(kept["player"]) == {"Angelo Stiller", "Deniz Undav"}
+
+
+def test_an_appearance_outranks_a_missing_shirt_number():
+    """The appeal against the rule. Of the 159 unnumbered players in the feed,
+    3 had been named in a match this season -- Slavia Prague's Rezek and
+    Kolisek among them -- and a player who has played is on the squad whatever
+    the feed says about his shirt."""
+    rosters = pd.DataFrame({
+        "competition": ["Europa League"] * 3,
+        "team": ["slavia prague"] * 3,
+        "player": ["Adam Rezek", "Jakub Kolisek", "Nobody At All"],
+        "jersey": [None, None, None],
+    })
+    played = {("slavia prague", "Adam Rezek"), ("slavia prague", "Jakub Kolisek")}
+    kept = _bcs().first_team(rosters, played=played)
+    assert set(kept["player"]) == {"Adam Rezek", "Jakub Kolisek"}
+
+
+def test_a_cache_without_shirt_numbers_is_left_alone():
+    """No column is no evidence, not an empty squad -- the same stance
+    match_positions takes on a file written without positions."""
+    rosters = pd.DataFrame({"competition": ["Champions League"] * 2,
+                            "team": ["sabah fk"] * 2,
+                            "player": ["One", "Two"]})
+    assert len(_bcs().first_team(rosters)) == 2
+
+
+def test_the_played_set_ignores_older_seasons(tmp_path):
+    """Same rule as match_tallies: a historical backfill left in these files
+    must not let a player who last appeared in 2024/25 keep a squad place
+    today."""
+    src = tmp_path / "rows.csv"
+    pd.DataFrame([
+        {"season": "2024-2025", "team": "stuttgart", "player": "Gone Long Ago"},
+        {"season": "2026-2027", "team": "stuttgart", "player": "Here Now"},
+    ]).to_csv(src, index=False)
+    assert _bcs().played_this_season(src) == {("stuttgart", "Here Now")}
