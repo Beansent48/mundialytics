@@ -60,6 +60,17 @@ Tres bugs vivos en la liquidación de producción, los tres silenciosos:
    ahora todas las columnas de la fuente, y eso comprueba **644 predicciones
    más**: córners 3608 → 3762, tiros 3280 → 3420, amarillas 2952 → 3078,
    descanso 1665 → 1735, puntos de tarjeta 984 → 1026.
+5. **Ningún partido europeo podía liquidar primera parte.** Los ficheros de
+   resultados de la UEFA solo traen el marcador final, así que 172 de 519
+   partidos liquidados no tenían descanso. Los eventos de ESPN sí llevan el
+   periodo de cada gol, y contar los del primero reproduce el marcador al
+   descanso de football-data en **447 de 447** partidos domésticos de la
+   temporada: exacto, en los dos lados, y con el 1X2 y el total de primera parte
+   de propina. Aplicado a los ficheros europeos comprueba **760 predicciones
+   más** (descanso 1735 → 2495) y los partidos sin descanso bajan de 172 a 20.
+   La descarga europea ya era el paso 7d2 de `update_season.py`, así que esto se
+   mantiene fresco sin fontanería nueva: simplemente nunca se había ejecutado
+   aquí.
 
 Efecto sobre la cobertura:
 
@@ -116,8 +127,8 @@ agujero europeo durante semanas:
 | Mercado | registradas | puntuables | puntuadas | no puntuables porque |
 |---|---|---|---|---|
 | 1X2 y Goles | 622 | 519 | 519 | — |
-| ht_1x2 y ht_ft | 622 | 347 | 347 | sin marcador al descanso (172) |
-| ht_goles | 1866 | 1041 | 1041 | sin marcador al descanso (516) |
+| ht_1x2 y ht_ft | 622 | 499 | 499 | sin marcador al descanso (20) |
+| ht_goles | 1866 | 1497 | 1497 | sin marcador al descanso (60) |
 | córners | 5019 | 3762 | 3762 | sin `home_corners` (556) |
 | tiros | 4402 | 3420 | 3420 | sin `home_shots` (384) |
 | amarillas | 4227 | 3078 | 3078 | sin `home_yellow_cards` (546) |
@@ -128,13 +139,26 @@ Déficit cero en los dieciséis mercados. El clasificador replica las propias
 ramas de `evaluate_log`, así que lo que allí hace saltar una fila tiene que
 nombrarse aquí.
 
-Lo que sigue pendiente es de **fuente de datos, no de liquidación**: 172 de 519
-partidos no traen marcador al descanso —108 son eliminatorias europeas, cuyos
-CSV de la UEFA solo traen el resultado final, y el resto son europeas de antes de
-la provenance o filas liquidadas por el calendario— y a unas 3.200 filas por
-mercado de jugador les faltan los datos del futbolista. Están declarados y
-vigilados, pero son cobertura que no tenemos. La foundation, en cambio, está
-impecable: 447 filas de la temporada y **cero** sin marcador al descanso.
+Lo que sigue pendiente es de **fuente de datos, no de liquidación**: 20 de 519
+partidos sin marcador al descanso y unas 3.200 filas por mercado de jugador sin
+los datos del futbolista. Están declarados y vigilados, pero son cobertura que no
+tenemos. La foundation, en cambio, está impecable: 447 filas de la temporada y
+**cero** sin descanso.
+
+Los 20 restantes tienen nombre y apellidos, y son **dos defectos nuevos**, no
+uno:
+
+- **Clubes europeos pequeños que el resolver de ClubElo no mapea**, casi todos
+  por diacríticos: `f.c. københavn`, `mjällby aif`, `fc nordsjælland`,
+  `inter d'escaldes`, `viktoria plzen`. Es trabajo de alias, acotado.
+- **El mismo partido registrado dos veces con dos grafías.** El 2026-09-10 el log
+  tiene `bayern münchen vs bodø/glimt` *y* `bayern munich vs bodo/glimt`; el
+  2026-09-16, `hapoel be'er vs dinamo zagreb` *y* `h. beer-sheva vs gnk dinamo`.
+  Un control de duplicados que agrupe por el **texto** del partido no lo ve,
+  porque los textos son distintos — y eso es exactamente lo que yo comprobé al
+  principio de esta sesión, concluyendo «sin duplicados». Ninguno tiene
+  provenance, así que no contamina ninguna cifra publicada, pero es un defecto de
+  calidad del dato.
 
 Tampoco está medida la potencia estadística: con 309 partidos el intervalo del
 RPS es de ±0.016, y las diferencias entre eras de modelo son de 0.001. **El

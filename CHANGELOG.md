@@ -32,6 +32,32 @@ record kept publishing a number over fewer matches than it claimed.
   join that stopped early. The window now carries every column the source has,
   which checks **644 more predictions**: corners 3608 → 3762, shots 3280 →
   3420, yellows 2952 → 3078, half-time 1665 → 1735, booking points 984 → 1026.
+- **No European tie could settle a half-time market.** The UEFA result files
+  carry only the final score, so 172 of 519 settled fixtures had no half-time at
+  all. ESPN's key events carry a period per goal, and counting the first-period
+  ones reproduces football-data's half-time score on **447 of 447** domestic
+  matches of this season — exactly, both sides, with the first-half 1X2 and
+  total too. Applied to the European files it checks **760 more predictions**:
+  half-time 1735 → 2495, and fixtures with no half-time drop from 172 to 20. The
+  UEFA fetch was already step 7d2 of `update_season.py`, so this stays fresh
+  without new plumbing; it had simply never been run in this checkout.
+
+### Found along the way
+- **ESPN files an own goal under the side it counts for.** Flipping it — the
+  obvious reading of the `own_goal` column — moved one goal to the wrong side in
+  18 of 447 matches while the first-half *total* stayed correct. A total that
+  reconciles while the sides do not is the signature of a misattribution, not of
+  missing data. Nothing else in the project reads that column.
+- **The same fixture is logged twice under two spellings.** On 2026-09-10 the
+  log holds both `bayern münchen vs bodø/glimt` and `bayern munich vs
+  bodo/glimt`; on 2026-09-16 both `hapoel be'er vs dinamo zagreb` and `h.
+  beer-sheva vs gnk dinamo`. A duplicate check that groups by the fixture *text*
+  cannot see it, because the texts differ. All of them predate provenance, so no
+  published figure is affected — probabilistic scoring drops rows with no
+  probability trio — but it is a data-quality defect, not a cosmetic one, and
+  the 20 fixtures still without half-time are these plus smaller European clubs
+  whose names the Elo resolver does not map (`f.c. københavn`, `mjällby aif`,
+  `fc nordsjælland`, `inter d'escaldes`).
 
 Settled 1X2 rows went 192 → 300 → 304 → 309 of 412 across the three fixes. Of
 the 103 that remain, 102 are unplayed and one is vallecano vs ath bilbao, logged
@@ -79,8 +105,8 @@ zero:
 | Market | logged | scoreable | scored | unscoreable because |
 |---|---|---|---|---|
 | 1X2, Goles | 622 | 519 | 519 | — |
-| ht_1x2, ht_ft | 622 | 347 | 347 | no half-time goals (172) |
-| ht_goles | 1866 | 1041 | 1041 | no half-time goals (516) |
+| ht_1x2, ht_ft | 622 | 499 | 499 | no half-time goals (20) |
+| ht_goles | 1866 | 1497 | 1497 | no half-time goals (60) |
 | corners | 5019 | 3762 | 3762 | no `home_corners` (556) |
 | shots | 4402 | 3420 | 3420 | no `home_shots` (384) |
 | yellows | 4227 | 3078 | 3078 | no `home_yellow_cards` (546) |
