@@ -1,0 +1,2201 @@
+{
+  "files": [
+    {
+      "path": "data/curated/card_highlights.csv",
+      "bytes": 27124,
+      "opens": 1
+    },
+    {
+      "path": "data/curated/clubelo_manual_seeds.csv",
+      "bytes": 664,
+      "opens": 5
+    },
+    {
+      "path": "data/curated/european_champions.csv",
+      "bytes": 1617,
+      "opens": 1
+    },
+    {
+      "path": "data/curated/fixture_team_aliases.csv",
+      "bytes": 2685,
+      "opens": 1
+    },
+    {
+      "path": "data/external/advanced/espn/commentary/2026-2027.jsonl",
+      "bytes": 5793903,
+      "opens": 2
+    },
+    {
+      "path": "data/external/advanced/espn/espn_matches_current.csv",
+      "bytes": 31255,
+      "opens": 1
+    },
+    {
+      "path": "data/external/advanced/espn/espn_matches_uefa.csv",
+      "bytes": 12865,
+      "opens": 1
+    },
+    {
+      "path": "data/external/advanced/espn/espn_player_events_current.csv",
+      "bytes": 353249,
+      "opens": 1
+    },
+    {
+      "path": "data/external/advanced/espn/espn_player_events_uefa.csv",
+      "bytes": 125145,
+      "opens": 1
+    },
+    {
+      "path": "data/external/advanced/espn/espn_player_match_current.csv",
+      "bytes": 2179247,
+      "opens": 4
+    },
+    {
+      "path": "data/external/advanced/fbref/fbref_player_match_current.csv",
+      "bytes": 1147345,
+      "opens": 1
+    },
+    {
+      "path": "data/external/advanced/understat/understat_player_match.csv",
+      "bytes": 106894769,
+      "opens": 2
+    },
+    {
+      "path": "data/external/advanced/understat/understat_shots.csv",
+      "bytes": 121178529,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/AEK.csv",
+      "bytes": 186858,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Ajaccio.csv",
+      "bytes": 114989,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Ajax.csv",
+      "bytes": 300390,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Alaves.csv",
+      "bytes": 183059,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Almeria.csv",
+      "bytes": 151307,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Amiens.csv",
+      "bytes": 90301,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Anderlecht.csv",
+      "bytes": 324273,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Angers.csv",
+      "bytes": 147067,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Antwerp.csv",
+      "bytes": 148829,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Aris.csv",
+      "bytes": 138645,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Arsenal.csv",
+      "bytes": 358908,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/AstonVilla.csv",
+      "bytes": 413449,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Atalanta.csv",
+      "bytes": 346117,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Atletico.csv",
+      "bytes": 371928,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Augsburg.csv",
+      "bytes": 170340,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Auxerre.csv",
+      "bytes": 216320,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Barcelona.csv",
+      "bytes": 328445,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bastia.csv",
+      "bytes": 168585,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bayern.csv",
+      "bytes": 273706,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Benevento.csv",
+      "bytes": 29184,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Benfica.csv",
+      "bytes": 340309,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Besiktas.csv",
+      "bytes": 220575,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Betis.csv",
+      "bytes": 338444,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bielefeld.csv",
+      "bytes": 201754,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bilbao.csv",
+      "bytes": 386517,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bochum.csv",
+      "bytes": 297643,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bologna.csv",
+      "bytes": 311903,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/BoracBanjaLuka.csv",
+      "bytes": 44780,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bordeaux.csv",
+      "bytes": 326094,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Bournemouth.csv",
+      "bytes": 101146,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Braga.csv",
+      "bytes": 216666,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Brentford.csv",
+      "bytes": 91721,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Brescia.csv",
+      "bytes": 278740,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Brest.csv",
+      "bytes": 111250,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Brighton.csv",
+      "bytes": 163457,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Brugge.csv",
+      "bytes": 310645,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Burnley.csv",
+      "bytes": 274770,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Cadiz.csv",
+      "bytes": 150326,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Caen.csv",
+      "bytes": 136068,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Cagliari.csv",
+      "bytes": 281880,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Cardiff.csv",
+      "bytes": 193007,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Celje.csv",
+      "bytes": 81512,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Celta.csv",
+      "bytes": 291730,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Celtic.csv",
+      "bytes": 307129,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/CercleBrugge.csv",
+      "bytes": 146109,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Chelsea.csv",
+      "bytes": 351953,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Chievo.csv",
+      "bytes": 127657,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Clermont.csv",
+      "bytes": 87337,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Como.csv",
+      "bytes": 131659,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Cremonese.csv",
+      "bytes": 121380,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Crotone.csv",
+      "bytes": 72151,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/CrvenaZvezda.csv",
+      "bytes": 341136,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/CrystalPalace.csv",
+      "bytes": 300736,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Darmstadt.csv",
+      "bytes": 134822,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Dijon.csv",
+      "bytes": 67619,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/DinamoMinsk.csv",
+      "bytes": 184727,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/DinamoZagreb.csv",
+      "bytes": 296265,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Djurgarden.csv",
+      "bytes": 130851,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Dortmund.csv",
+      "bytes": 349562,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/DynamoKyiv.csv",
+      "bytes": 376453,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Eibar.csv",
+      "bytes": 150001,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Elche.csv",
+      "bytes": 242343,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Elfsborg.csv",
+      "bytes": 119076,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Empoli.csv",
+      "bytes": 148527,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Espanyol.csv",
+      "bytes": 391368,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Everton.csv",
+      "bytes": 381466,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/FCKobenhavn.csv",
+      "bytes": 200533,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/FKAstana.csv",
+      "bytes": 11827,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Fenerbahce.csv",
+      "bytes": 248958,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Ferencvaros.csv",
+      "bytes": 203639,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Feyenoord.csv",
+      "bytes": 317533,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Fiorentina.csv",
+      "bytes": 383156,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Frankfurt.csv",
+      "bytes": 377975,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Freiburg.csv",
+      "bytes": 235190,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Frosinone.csv",
+      "bytes": 72521,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Fulham.csv",
+      "bytes": 279081,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Galatasaray.csv",
+      "bytes": 258383,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Genk.csv",
+      "bytes": 135284,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Genoa.csv",
+      "bytes": 282481,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Gent.csv",
+      "bytes": 166403,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Getafe.csv",
+      "bytes": 187441,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Girona.csv",
+      "bytes": 102937,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Granada.csv",
+      "bytes": 159730,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Guingamp.csv",
+      "bytes": 128628,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/HJKHelsinki.csv",
+      "bytes": 21828,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Haecken.csv",
+      "bytes": 59199,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Hamburg.csv",
+      "bytes": 361162,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Hannover.csv",
+      "bytes": 298195,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Hearts.csv",
+      "bytes": 214184,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Heidenheim.csv",
+      "bytes": 51193,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Hertha.csv",
+      "bytes": 332491,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Hoffenheim.csv",
+      "bytes": 132586,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Huddersfield.csv",
+      "bytes": 180096,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Huesca.csv",
+      "bytes": 77251,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Hull.csv",
+      "bytes": 146972,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/IMT.csv",
+      "bytes": 8842,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Ingolstadt.csv",
+      "bytes": 69441,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Inter.csv",
+      "bytes": 325364,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Ipswich.csv",
+      "bytes": 274547,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Jagiellonia.csv",
+      "bytes": 62000,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Juventus.csv",
+      "bytes": 320422,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Koeln.csv",
+      "bytes": 321130,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/LASK.csv",
+      "bytes": 128823,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Larne.csv",
+      "bytes": 3180,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/LasPalmas.csv",
+      "bytes": 270626,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lazio.csv",
+      "bytes": 337207,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/LeHavre.csv",
+      "bytes": 171522,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lecce.csv",
+      "bytes": 166967,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Leeds.csv",
+      "bytes": 303720,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Leganes.csv",
+      "bytes": 112748,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Legia.csv",
+      "bytes": 149887,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Leicester.csv",
+      "bytes": 365807,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lens.csv",
+      "bytes": 253805,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Levante.csv",
+      "bytes": 205690,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Leverkusen.csv",
+      "bytes": 325421,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lille.csv",
+      "bytes": 260205,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Liverpool.csv",
+      "bytes": 339667,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lorient.csv",
+      "bytes": 127213,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lugano.csv",
+      "bytes": 123111,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Luton.csv",
+      "bytes": 175382,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Lyon.csv",
+      "bytes": 266832,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/MaccabiHaifa.csv",
+      "bytes": 92250,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Mainz.csv",
+      "bytes": 228750,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Malaga.csv",
+      "bytes": 227950,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Mallorca.csv",
+      "bytes": 260607,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Malmoe.csv",
+      "bytes": 155423,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/ManCity.csv",
+      "bytes": 352772,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/ManUnited.csv",
+      "bytes": 363174,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Marseille.csv",
+      "bytes": 330130,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Metz.csv",
+      "bytes": 224452,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Middlesbrough.csv",
+      "bytes": 342446,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Midtjylland.csv",
+      "bytes": 86686,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Milan.csv",
+      "bytes": 323684,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Molde.csv",
+      "bytes": 94876,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Monaco.csv",
+      "bytes": 329034,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Montpellier.csv",
+      "bytes": 235114,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Monza.csv",
+      "bytes": 125557,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Nancy.csv",
+      "bytes": 167401,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Nantes.csv",
+      "bytes": 274998,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Napoli.csv",
+      "bytes": 314181,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Newcastle.csv",
+      "bytes": 396632,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Nice.csv",
+      "bytes": 254417,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Nimes.csv",
+      "bytes": 159566,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Noah.csv",
+      "bytes": 3413,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Norwich.csv",
+      "bytes": 293653,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/OlimpijaLjubljana.csv",
+      "bytes": 149899,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Olympiakos.csv",
+      "bytes": 280957,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Osasuna.csv",
+      "bytes": 287364,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Oviedo.csv",
+      "bytes": 218753,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/PAOK.csv",
+      "bytes": 167925,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/PSV.csv",
+      "bytes": 302973,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Paderborn.csv",
+      "bytes": 75785,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Palermo.csv",
+      "bytes": 221023,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Panathinaikos.csv",
+      "bytes": 251875,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/ParisFc.csv",
+      "bytes": 46039,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/ParisSG.csv",
+      "bytes": 257617,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Parma.csv",
+      "bytes": 208127,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Pescara.csv",
+      "bytes": 151361,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Petrocub.csv",
+      "bytes": 6337,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Pisa.csv",
+      "bytes": 107354,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Porto.csv",
+      "bytes": 329995,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/RBLeipzig.csv",
+      "bytes": 69265,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/RFS.csv",
+      "bytes": 4679,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Rangers.csv",
+      "bytes": 313006,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/RapidWien.csv",
+      "bytes": 238081,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/RayoVallecano.csv",
+      "bytes": 261593,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/RealMadrid.csv",
+      "bytes": 330868,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Reims.csv",
+      "bytes": 163655,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Rennes.csv",
+      "bytes": 262117,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Roma.csv",
+      "bytes": 338109,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Salernitana.csv",
+      "bytes": 134896,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Salzburg.csv",
+      "bytes": 204216,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Sampdoria.csv",
+      "bytes": 348569,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Sassuolo.csv",
+      "bytes": 101468,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Schalke.csv",
+      "bytes": 362343,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Servette.csv",
+      "bytes": 176066,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Sevilla.csv",
+      "bytes": 377584,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Shakhtar.csv",
+      "bytes": 270641,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Shamrock.csv",
+      "bytes": 13515,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/SheffieldUnited.csv",
+      "bytes": 326519,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/SheriffTiraspol.csv",
+      "bytes": 19332,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/SlovanBratislava.csv",
+      "bytes": 175975,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Sociedad.csv",
+      "bytes": 372173,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Southampton.csv",
+      "bytes": 371746,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Spal.csv",
+      "bytes": 117799,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/SpartaPraha.csv",
+      "bytes": 313194,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/SpartakMoskva.csv",
+      "bytes": 363890,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Spezia.csv",
+      "bytes": 72576,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Sporting.csv",
+      "bytes": 391682,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/StGallen.csv",
+      "bytes": 144676,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/StPauli.csv",
+      "bytes": 221939,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Stoke.csv",
+      "bytes": 295526,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Strasbourg.csv",
+      "bytes": 247239,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/SturmGraz.csv",
+      "bytes": 192303,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Stuttgart.csv",
+      "bytes": 380036,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Sunderland.csv",
+      "bytes": 337057,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Swansea.csv",
+      "bytes": 162173,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/TheNewSaints.csv",
+      "bytes": 11701,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Torino.csv",
+      "bytes": 358666,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Tottenham.csv",
+      "bytes": 396580,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Toulouse.csv",
+      "bytes": 232855,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Trabzonspor.csv",
+      "bytes": 158885,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Troyes.csv",
+      "bytes": 129474,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Twente.csv",
+      "bytes": 232074,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Udinese.csv",
+      "bytes": 290653,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/UnionBerlin.csv",
+      "bytes": 134973,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Valencia.csv",
+      "bytes": 391532,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Valladolid.csv",
+      "bytes": 326993,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Venezia.csv",
+      "bytes": 138166,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Verona.csv",
+      "bytes": 274805,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/ViktoriaPlzen.csv",
+      "bytes": 152212,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Villarreal.csv",
+      "bytes": 203936,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Watford.csv",
+      "bytes": 215811,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Werder.csv",
+      "bytes": 374673,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/WestBrom.csv",
+      "bytes": 369569,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/WestHam.csv",
+      "bytes": 420534,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Wolfsburg.csv",
+      "bytes": 246724,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Wolves.csv",
+      "bytes": 317183,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/YoungBoys.csv",
+      "bytes": 223845,
+      "opens": 1
+    },
+    {
+      "path": "data/external/clubelo/teams/Zenit.csv",
+      "bytes": 251311,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_champions-league_2021.csv",
+      "bytes": 9515,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_champions-league_2022.csv",
+      "bytes": 9544,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_champions-league_2023.csv",
+      "bytes": 9694,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_champions-league_2024.csv",
+      "bytes": 10204,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_champions-league_2025.csv",
+      "bytes": 10347,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_champions-league_2026.csv",
+      "bytes": 6844,
+      "opens": 2
+    },
+    {
+      "path": "data/external/uefa/raw_conference-league_2024.csv",
+      "bytes": 8534,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_conference-league_2025.csv",
+      "bytes": 8461,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_conference-league_2026.csv",
+      "bytes": 5152,
+      "opens": 2
+    },
+    {
+      "path": "data/external/uefa/raw_europa-league_2021.csv",
+      "bytes": 10830,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_europa-league_2022.csv",
+      "bytes": 10986,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_europa-league_2023.csv",
+      "bytes": 10908,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_europa-league_2024.csv",
+      "bytes": 10003,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_europa-league_2025.csv",
+      "bytes": 9733,
+      "opens": 1
+    },
+    {
+      "path": "data/external/uefa/raw_europa-league_2026.csv",
+      "bytes": 6908,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/clubelo_local.csv",
+      "bytes": 28310,
+      "opens": 5
+    },
+    {
+      "path": "data/processed/competition_cache/live_bundesliga_2026-2027.json",
+      "bytes": 57134,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/live_laliga_2026-2027.json",
+      "bytes": 67191,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/competition_cache/live_ligue-1_2026-2027.json",
+      "bytes": 54484,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/live_premier-league_2026-2027.json",
+      "bytes": 69296,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/competition_cache/live_serie-a_2026-2027.json",
+      "bytes": 66536,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/competition_cache/scorers_laliga_2026-2027.json",
+      "bytes": 2516,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/scorers_premier-league_2026-2027.json",
+      "bytes": 2465,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/scorers_serie-a_2026-2027.json",
+      "bytes": 2447,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/uefa_champions_2026.json",
+      "bytes": 7242,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/uefa_conference_2026.json",
+      "bytes": 7238,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/competition_cache/uefa_europa_2026.json",
+      "bytes": 7239,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/current_squads.csv",
+      "bytes": 942121,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/elo_lambda_calibration_euro.json",
+      "bytes": 292,
+      "opens": 4
+    },
+    {
+      "path": "data/processed/enriched/understat_xg/walkforward_preds.csv",
+      "bytes": 1746379,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv",
+      "bytes": 1550507,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/enriched/understat_xg/walkforward_preds_hist.csv",
+      "bytes": 477071,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/espn_referees.csv",
+      "bytes": 798301,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/fixture_calendars/bundesliga_2026-2027.csv",
+      "bytes": 13844,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/fixture_calendars/laliga_2026-2027.csv",
+      "bytes": 15873,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/fixture_calendars/ligue-1_2026-2027.csv",
+      "bytes": 12053,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/fixture_calendars/premier-league_2026-2027.csv",
+      "bytes": 16463,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/fixture_calendars/serie-a_2026-2027.csv",
+      "bytes": 14803,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/foundation_big5_multi_season.csv",
+      "bytes": 15726558,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/logs/predictions_log.csv",
+      "bytes": 19470694,
+      "opens": 2
+    },
+    {
+      "path": "data/processed/player_micro_stats.csv",
+      "bytes": 1409288,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/served_lambdas_current.csv",
+      "bytes": 25696,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/squad_values.csv",
+      "bytes": 3443977,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/squadlab_cards.csv",
+      "bytes": 876648,
+      "opens": 1
+    },
+    {
+      "path": "data/processed/understat_team_match_xg.csv",
+      "bytes": 3736380,
+      "opens": 2
+    },
+    {
+      "path": "data/raw/football_data/0001_D1.csv",
+      "bytes": 51613,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0001_E0.csv",
+      "bytes": 62076,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0001_F1.csv",
+      "bytes": 28638,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0001_I1.csv",
+      "bytes": 29812,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0001_SP1.csv",
+      "bytes": 38966,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0102_D1.csv",
+      "bytes": 53961,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0102_E0.csv",
+      "bytes": 66230,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0102_F1.csv",
+      "bytes": 31999,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0102_I1.csv",
+      "bytes": 31741,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0102_SP1.csv",
+      "bytes": 42369,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0203_D1.csv",
+      "bytes": 44858,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0203_E0.csv",
+      "bytes": 72322,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0203_F1.csv",
+      "bytes": 45768,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0203_I1.csv",
+      "bytes": 41324,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0203_SP1.csv",
+      "bytes": 54790,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0304_D1.csv",
+      "bytes": 66831,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0304_E0.csv",
+      "bytes": 85438,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0304_F1.csv",
+      "bytes": 58843,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0304_I1.csv",
+      "bytes": 53721,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0304_SP1.csv",
+      "bytes": 72830,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0405_D1.csv",
+      "bytes": 67857,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0405_E0.csv",
+      "bytes": 85894,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0405_F1.csv",
+      "bytes": 65249,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0405_I1.csv",
+      "bytes": 69503,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0405_SP1.csv",
+      "bytes": 73451,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0506_D1.csv",
+      "bytes": 79148,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0506_E0.csv",
+      "bytes": 102129,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0506_F1.csv",
+      "bytes": 93075,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0506_I1.csv",
+      "bytes": 99857,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0506_SP1.csv",
+      "bytes": 98942,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0607_D1.csv",
+      "bytes": 80296,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0607_E0.csv",
+      "bytes": 102043,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0607_F1.csv",
+      "bytes": 95042,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0607_I1.csv",
+      "bytes": 100110,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0607_SP1.csv",
+      "bytes": 98966,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0708_D1.csv",
+      "bytes": 83700,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0708_E0.csv",
+      "bytes": 105683,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0708_F1.csv",
+      "bytes": 100311,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0708_I1.csv",
+      "bytes": 99808,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0708_SP1.csv",
+      "bytes": 102708,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0809_D1.csv",
+      "bytes": 84127,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0809_E0.csv",
+      "bytes": 106205,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0809_F1.csv",
+      "bytes": 101205,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0809_I1.csv",
+      "bytes": 100586,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0809_SP1.csv",
+      "bytes": 103886,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0910_D1.csv",
+      "bytes": 83642,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0910_E0.csv",
+      "bytes": 105752,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0910_F1.csv",
+      "bytes": 100639,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0910_I1.csv",
+      "bytes": 100607,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/0910_SP1.csv",
+      "bytes": 103451,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1011_D1.csv",
+      "bytes": 84990,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1011_E0.csv",
+      "bytes": 106586,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1011_F1.csv",
+      "bytes": 100690,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1011_I1.csv",
+      "bytes": 102028,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1011_SP1.csv",
+      "bytes": 103698,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1112_D1.csv",
+      "bytes": 85125,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1112_E0.csv",
+      "bytes": 106303,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1112_F1.csv",
+      "bytes": 102658,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1112_I1.csv",
+      "bytes": 102400,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1112_SP1.csv",
+      "bytes": 103977,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1213_D1.csv",
+      "bytes": 89983,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1213_E0.csv",
+      "bytes": 113085,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1213_F1.csv",
+      "bytes": 110075,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1213_I1.csv",
+      "bytes": 109491,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1213_SP1.csv",
+      "bytes": 110545,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1314_D1.csv",
+      "bytes": 81743,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1314_E0.csv",
+      "bytes": 103642,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1314_F1.csv",
+      "bytes": 100451,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1314_I1.csv",
+      "bytes": 99710,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1314_SP1.csv",
+      "bytes": 100249,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1415_D1.csv",
+      "bytes": 79194,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1415_E0.csv",
+      "bytes": 100899,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1415_F1.csv",
+      "bytes": 96761,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1415_I1.csv",
+      "bytes": 96108,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1415_SP1.csv",
+      "bytes": 97119,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1516_D1.csv",
+      "bytes": 78179,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1516_E0.csv",
+      "bytes": 100656,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1516_F1.csv",
+      "bytes": 95146,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1516_I1.csv",
+      "bytes": 95127,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1516_SP1.csv",
+      "bytes": 96045,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1617_D1.csv",
+      "bytes": 78466,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1617_E0.csv",
+      "bytes": 99990,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1617_F1.csv",
+      "bytes": 94928,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1617_I1.csv",
+      "bytes": 95048,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1617_SP1.csv",
+      "bytes": 96226,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1718_D1.csv",
+      "bytes": 78641,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1718_E0.csv",
+      "bytes": 100734,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1718_F1.csv",
+      "bytes": 95353,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1718_I1.csv",
+      "bytes": 95137,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1718_SP1.csv",
+      "bytes": 96801,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1819_D1.csv",
+      "bytes": 75587,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1819_E0.csv",
+      "bytes": 96144,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1819_F1.csv",
+      "bytes": 91888,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1819_I1.csv",
+      "bytes": 91392,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1819_SP1.csv",
+      "bytes": 92914,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1920_D1.csv",
+      "bytes": 138965,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1920_E0.csv",
+      "bytes": 175475,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1920_F1.csv",
+      "bytes": 125011,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1920_I1.csv",
+      "bytes": 170130,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/1920_SP1.csv",
+      "bytes": 171484,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2021_D1.csv",
+      "bytes": 139075,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2021_E0.csv",
+      "bytes": 175815,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2021_F1.csv",
+      "bytes": 170539,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2021_I1.csv",
+      "bytes": 170667,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2021_SP1.csv",
+      "bytes": 171721,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122/2122_D1.csv",
+      "bytes": 139177,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122/2122_E0.csv",
+      "bytes": 175363,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122/2122_F1.csv",
+      "bytes": 171274,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122/2122_I1.csv",
+      "bytes": 171204,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122/2122_SP1.csv",
+      "bytes": 172174,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122_D1.csv",
+      "bytes": 139177,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122_E0.csv",
+      "bytes": 175363,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122_F1.csv",
+      "bytes": 171274,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122_I1.csv",
+      "bytes": 171204,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2122_SP1.csv",
+      "bytes": 172174,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223/2223_D1.csv",
+      "bytes": 139302,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223/2223_E0.csv",
+      "bytes": 176180,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223/2223_F1.csv",
+      "bytes": 171165,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223/2223_I1.csv",
+      "bytes": 171573,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223/2223_SP1.csv",
+      "bytes": 172199,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223_D1.csv",
+      "bytes": 139302,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223_E0.csv",
+      "bytes": 176180,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223_F1.csv",
+      "bytes": 171165,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223_I1.csv",
+      "bytes": 171573,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2223_SP1.csv",
+      "bytes": 172199,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324/2324_D1.csv",
+      "bytes": 135825,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324/2324_E0.csv",
+      "bytes": 172196,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324/2324_F1.csv",
+      "bytes": 135000,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324/2324_I1.csv",
+      "bytes": 167015,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324/2324_SP1.csv",
+      "bytes": 168164,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324_D1.csv",
+      "bytes": 135825,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324_E0.csv",
+      "bytes": 172196,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324_F1.csv",
+      "bytes": 135000,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324_I1.csv",
+      "bytes": 167015,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2324_SP1.csv",
+      "bytes": 168164,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425/2425_D1.csv",
+      "bytes": 156414,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425/2425_E0.csv",
+      "bytes": 197110,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425/2425_F1.csv",
+      "bytes": 154703,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425/2425_I1.csv",
+      "bytes": 191722,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425/2425_SP1.csv",
+      "bytes": 192863,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425_D1.csv",
+      "bytes": 156414,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425_E0.csv",
+      "bytes": 197110,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425_F1.csv",
+      "bytes": 154703,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425_I1.csv",
+      "bytes": 191722,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2425_SP1.csv",
+      "bytes": 192863,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526/2526_D1.csv",
+      "bytes": 159944,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526/2526_E0.csv",
+      "bytes": 203438,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526/2526_F1.csv",
+      "bytes": 157965,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526/2526_I1.csv",
+      "bytes": 196217,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526/2526_SP1.csv",
+      "bytes": 197653,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526_D1.csv",
+      "bytes": 159944,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526_E0.csv",
+      "bytes": 203438,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526_F1.csv",
+      "bytes": 158471,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526_I1.csv",
+      "bytes": 196217,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2526_SP1.csv",
+      "bytes": 197653,
+      "opens": 1
+    },
+    {
+      "path": "data/raw/football_data/2627_D1.csv",
+      "bytes": 34772,
+      "opens": 2
+    },
+    {
+      "path": "data/raw/football_data/2627_E0.csv",
+      "bytes": 43739,
+      "opens": 2
+    },
+    {
+      "path": "data/raw/football_data/2627_F1.csv",
+      "bytes": 38342,
+      "opens": 2
+    },
+    {
+      "path": "data/raw/football_data/2627_I1.csv",
+      "bytes": 46629,
+      "opens": 2
+    },
+    {
+      "path": "data/raw/football_data/2627_SP1.csv",
+      "bytes": 51631,
+      "opens": 2
+    },
+    {
+      "path": "web/data/benchmark_vs_bet365.json",
+      "bytes": 1918,
+      "opens": 1
+    }
+  ],
+  "total_bytes": 355713710,
+  "count": 439
+}
