@@ -632,8 +632,9 @@ src/mundialytics/
 ├── providers/          ESPN fixtures, external API configuration
 └── matchday/, reports/ earlier matchday builder and paper-ledger reports
 
-api/                    FastAPI service the web app reads from
+api/                    FastAPI service the web app reads from, and its Dockerfile
 web/                    Next.js front end — see web/README.md
+docker/                 Caddyfile (the reverse proxy) and the nightly pg_dump
 scripts/                ~200 CLI entry points — see scripts/README.md
 tests/                  629 tests green on a clean checkout; 111 more
                         skip unless the local dataset is built
