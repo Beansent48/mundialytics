@@ -37,8 +37,17 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Dependencies first, so editing the engine does not reinstall scipy.
+#
+# The lock is the whole project's known-good set, and three of its entries have
+# no business in a serving image: `soccerdata` (which pulls Selenium) belongs to
+# the daily refresh, `matplotlib` draws the figures in docs/, and `pytest` runs
+# the suite. Filtered rather than split into a second file, so there is still
+# one list of versions — and checked: nothing the serving path reads imports
+# any of the three (measured, with scripts/measure_serving_bundle.py's read set).
 COPY requirements-lock.txt ./
-RUN pip install --no-cache-dir -r requirements-lock.txt
+RUN grep -vE '^(soccerdata|matplotlib|pytest)' requirements-lock.txt > /tmp/serving.txt \
+ && pip install --no-cache-dir -r /tmp/serving.txt \
+ && rm /tmp/serving.txt
 
 # The serving path, and the scripts the refresh stage below runs. `data/` is
 # absent on purpose; `config/` carries the YAML the engine reads at import.
@@ -80,7 +89,13 @@ CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "
 FROM api AS refresh
 
 USER root
-RUN pip install --no-cache-dir "soccerdata>=1.8" "beautifulsoup4>=4.12" "lxml>=5.0"
+# The three the serving stage filtered out, at the lock's own versions, plus the
+# two the refresh needs that the lock does not carry (they are pyproject's
+# `data` extra: the transfermarkt provider parses HTML).
+RUN grep -E '^(soccerdata|matplotlib)' requirements-lock.txt > /tmp/refresh.txt \
+ && pip install --no-cache-dir -r /tmp/refresh.txt \
+      "beautifulsoup4>=4.12" "lxml>=5.0" \
+ && rm /tmp/refresh.txt
 USER mundialytics
 
 # HOME and SOCCERDATA_DIR both default to the user's home directory, and this
