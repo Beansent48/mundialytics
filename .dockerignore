@@ -1,0 +1,37 @@
+# What never belongs in the API image's build context.
+#
+# The context is the repo root because the image needs api/, src/, config/ and
+# scripts/. Everything else is either enormous or irrelevant, and the context is
+# uploaded to the daemon before a single layer is built: with data/ in it, that
+# upload alone is 26.5 GB.
+
+# Data is a volume, never a layer (api/Dockerfile says why).
+data/
+outputs/
+outputs.zip
+
+# The web app has its own image, built from ./web with its own .dockerignore.
+web/
+
+# Local environments and caches.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+soccerdata_cache/
+*.joblib
+
+# Repository plumbing and session scratch.
+.git/
+.github/
+.gitignore
+.claude/
+*.log
+*.log.stderr
+
+# Documentation and the test suite: CI runs the suite from a checkout, the
+# container does not.
+docs/
+tests/

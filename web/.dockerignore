@@ -1,0 +1,15 @@
+# The build context for the web image. `npm ci` installs from the lockfile and
+# `next build` produces .next, so shipping either from the host would at best
+# waste the upload and at worst install a different tree than the lockfile says.
+node_modules/
+.next/
+out/
+
+# Secrets stay out of the context. The container's values come from the
+# environment (see docker-compose.yml and .env.example).
+.env
+.env.local
+.env.*.local
+
+Dockerfile
+.dockerignore
