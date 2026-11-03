@@ -42,23 +42,45 @@ record kept publishing a number over fewer matches than it claimed.
   UEFA fetch was already step 7d2 of `update_season.py`, so this stays fresh
   without new plumbing; it had simply never been run in this checkout.
 
+- **Seven European clubs were unmatchable by name, so their ties could not
+  settle.** ESPN's canonical pass strips accents with NFKD and then turns
+  anything still non-ASCII into a space — but NFKD does not decompose `ø` or
+  `æ`, so `f.c. københavn` was written to disk as `f c k benhavn` and
+  `fc nordsjælland` as `fc nordsj lland`. `ä` came through as a plain `a`,
+  because that one *does* decompose, which is what made the failure look
+  arbitrary. A new `transliterate()` spells out only the letters NFKD cannot
+  handle, applied in the ESPN connector before canonicalisation; `ä`, `ö` and
+  `ü` are deliberately left out, since mapping them would rewrite names that
+  already resolve. Six aliases cover the clubs whose ClubElo spelling differs
+  anyway (`FC Kobenhavn` with a plain `o`, `Mjaellby`, `St Truiden`,
+  `St Gillis`, `Beer-Sheva`, `Escaldes`) — the existing entries for those clubs
+  were keyed on the spellings that still carry their diacritics, which is what
+  the prediction log holds, not what ESPN writes. All 108 European names now
+  resolve, and fixtures with no half-time fall from 172 to **5 of 519**.
+- **The shared normaliser is still wrong, and on purpose.** The root cause is
+  that `normalize_club` carries a transliteration table and `normalize_text`
+  does not. Adding one to `normalize_text` is a two-line change and was not
+  made: that function also backs `canonical_player_name`, so it would rewrite
+  the identity key of every player with one of those letters — Ødegaard,
+  Højlund, Sørloth — across files already written. That is a migration, not a
+  fix, and it deserves its own change.
+
 ### Found along the way
+- **Every European fixture of mid-September is in the log twice.** Not two
+  fixtures: **25**, each logged once under broadcast short names and once under
+  full ones — `fc porto vs manchester city` and `porto vs man city`,
+  `real madrid vs inter` and `real madrid vs internazionale`, `liverpool vs
+  atleti` and `liverpool vs atlético madrid`. Grouping by the fixture text
+  cannot see any of them. The audit now groups by the names resolved into
+  ClubElo space, which collapses the spellings onto one club. All 25 predate
+  provenance, so no published figure is contaminated and the audit warns
+  instead of failing; it fails only on a duplicate from the current logging
+  path, because an audit that stays red over unfixable history is noise.
 - **ESPN files an own goal under the side it counts for.** Flipping it — the
   obvious reading of the `own_goal` column — moved one goal to the wrong side in
   18 of 447 matches while the first-half *total* stayed correct. A total that
   reconciles while the sides do not is the signature of a misattribution, not of
   missing data. Nothing else in the project reads that column.
-- **The same fixture is logged twice under two spellings.** On 2026-09-10 the
-  log holds both `bayern münchen vs bodø/glimt` and `bayern munich vs
-  bodo/glimt`; on 2026-09-16 both `hapoel be'er vs dinamo zagreb` and `h.
-  beer-sheva vs gnk dinamo`. A duplicate check that groups by the fixture *text*
-  cannot see it, because the texts differ. All of them predate provenance, so no
-  published figure is affected — probabilistic scoring drops rows with no
-  probability trio — but it is a data-quality defect, not a cosmetic one, and
-  the 20 fixtures still without half-time are these plus smaller European clubs
-  whose names the Elo resolver does not map (`f.c. københavn`, `mjällby aif`,
-  `fc nordsjælland`, `inter d'escaldes`).
-
 Settled 1X2 rows went 192 → 300 → 304 → 309 of 412 across the three fixes. Of
 the 103 that remain, 102 are unplayed and one is vallecano vs ath bilbao, logged
 for 2026-10-10 and moved by the calendar to 2026-12-09.
@@ -105,8 +127,8 @@ zero:
 | Market | logged | scoreable | scored | unscoreable because |
 |---|---|---|---|---|
 | 1X2, Goles | 622 | 519 | 519 | — |
-| ht_1x2, ht_ft | 622 | 499 | 499 | no half-time goals (20) |
-| ht_goles | 1866 | 1497 | 1497 | no half-time goals (60) |
+| ht_1x2, ht_ft | 622 | 514 | 514 | no half-time goals (5) |
+| ht_goles | 1866 | 1542 | 1542 | no half-time goals (15) |
 | corners | 5019 | 3762 | 3762 | no `home_corners` (556) |
 | shots | 4402 | 3420 | 3420 | no `home_shots` (384) |
 | yellows | 4227 | 3078 | 3078 | no `home_yellow_cards` (546) |

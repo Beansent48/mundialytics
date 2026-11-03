@@ -121,3 +121,20 @@ CLUB_ALIASES.update({
     "f.c. københavn": "FC Kobenhavn",
     "fc københavn": "FC Kobenhavn",
 })
+
+# The same clubs again, spelled the way ESPN's canonical pass leaves them:
+# lower case, no punctuation, and the letters NFKD cannot decompose written out
+# ("ø" -> "oe", "æ" -> "ae") while "ä" stays a plain "a". The entries above are
+# keyed on the spellings that reach us with their diacritics intact, which is
+# what the prediction log carries; these are keyed on what ESPN writes to disk.
+# Both are needed, because settlement joins one against the other: with only
+# the first set, no European tie could settle a half-time market.
+CLUB_ALIASES.update({
+    "f c koebenhavn": "FC Kobenhavn",
+    "fc koebenhavn": "FC Kobenhavn",
+    "mjallby aif": "Mjaellby",          # ClubElo transliterates the "ä"
+    "sint truidense": "St Truiden",
+    "union st gilloise": "St Gillis",
+    "hapoel be er": "Beer-Sheva",       # ESPN truncates "Hapoel Be'er Sheva"
+    "inter d escaldes": "Escaldes",     # as above: NOT Atletic Club Escaldes
+})

@@ -300,11 +300,17 @@ def main() -> None:
     OUT_E = DIR / f"espn_player_events_{suffix}.csv"
     OUT_T = DIR / f"espn_team_match_{suffix}.csv"
 
-    from mundialytics.identity.normalization import canonical_team_name
+    from mundialytics.identity.normalization import (canonical_team_name,
+                                                      transliterate)
     alias = _aliases()
 
     def canon(name: str) -> str:
-        return alias.get(name, canonical_team_name(name))
+        # Transliterate first: "f.c. kobenhavn" and "fc nordsjaelland" came out
+        # as "f c k benhavn" and "fc nordsj lland", because NFKD leaves oe and
+        # ae intact and the canonical pass turns anything non-ASCII into a
+        # space. Seven European clubs were unmatchable by name, which is why no
+        # half-time could be settled for their ties.
+        return alias.get(name, canonical_team_name(transliterate(name)))
 
     now = pd.Timestamp.now()
     y = now.year if now.month >= 7 else now.year - 1
