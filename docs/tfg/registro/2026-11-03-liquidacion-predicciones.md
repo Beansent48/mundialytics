@@ -97,21 +97,32 @@ huecos sin explicar.
 
 ## Qué quedó fuera
 
-**El reparto por mercado no está asegurado todavía, solo medido.** La auditoría
-falla si un mercado no puntúa nada, pero no si puntúa menos de lo que debería:
+El reparto por mercado **ya está asegurado**, no solo medido. La auditoría
+trabaja en dos niveles, porque el de partido por sí solo es lo que dejó correr el
+agujero europeo durante semanas:
 
-| Mercado | registradas | puntuadas | % |
-|---|---|---|---|
-| 1X2 y Goles | 622 | 519 | 83,4 |
-| Primera parte | 622 | 333 | 53,5 |
-| Eventos (córners, tiros…) | 2026–5019 | — | 64,8–74,5 |
-| Jugador | 9235–18866 | — | 54,7–55,2 |
+1. **Nivel de partido.** ¿Existe un resultado que la liquidación no usó?
+2. **Nivel de fila.** Toda fila que *sí* tiene resultado y no se puntuó debe
+   nombrar la columna que le falta, y la auditoría falla si alguna no puede.
 
-El 83,4 % del 1X2 cuadra exactamente (622 − 519 = 103 sin jugar). Los demás son
-explicables —los calendarios no traen goles al descanso, ni córners, ni datos de
-jugador, así que las filas liquidadas por respaldo solo sirven para mercados de
-goles— pero *explicable* no es *comprobado*. Falta que la auditoría clasifique
-cada fila no puntuada por la columna que le falta, y falle si sobra alguna.
+| Mercado | registradas | puntuables | puntuadas | no puntuables porque |
+|---|---|---|---|---|
+| 1X2 y Goles | 622 | 519 | 519 | — |
+| Primera parte (3 mercados) | 622 | 333 | 333 | sin marcador al descanso (186) |
+| córners | 5019 | 3608 | 3608 | sin `home_corners` (710) |
+| tiros | 4402 | 3280 | 3280 | sin `home_shots` (524) |
+| amarillas | 4227 | 2952 | 2952 | sin `home_yellow_cards` (672) |
+| puntos de tarjeta | 1188 | 984 | 984 | sin tarjetas (57) |
+| tiros de jugador | 18866 | 10361 | 10361 | sin datos de jugador (6235) |
+
+Déficit cero en los dieciséis mercados. El clasificador replica las propias
+ramas de `evaluate_log`, así que lo que allí hace saltar una fila tiene que
+nombrarse aquí.
+
+Lo que sigue pendiente es de **fuente de datos, no de liquidación**: 186 de 519
+partidos no traen marcador al descanso y a unas 3.200 filas por mercado de
+jugador les faltan los datos del futbolista. Están declarados y vigilados, pero
+son cobertura que no tenemos.
 
 Tampoco está medida la potencia estadística: con 309 partidos el intervalo del
 RPS es de ±0.016, y las diferencias entre eras de modelo son de 0.001. **El

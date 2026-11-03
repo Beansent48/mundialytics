@@ -61,13 +61,27 @@ With 309 matches the RPS interval is ±0.016 while the differences between model
 eras are around 0.001. The live record cannot discriminate between eras, and
 should not be asked to.
 
-### Not done
-Per-market settlement is measured, not enforced. 1X2 reconciles exactly — 519 of
-622 scored, and 622 − 519 is the 103 unplayed — but half-time markets sit at
-53.5%, event markets at 65-75% and player markets at 55%. Those are
-explainable, since the calendar fallback carries no half-time goals, event
-counts or player rows, but the audit does not yet classify each unscored row by
-the column it is missing and fail on the remainder.
+### Enforced, not just plausible
+The audit works at two levels, because the fixture level on its own is what let
+the European hole run for weeks. Level one asks whether a result exists that
+settlement failed to use. Level two requires every row that *has* a result and
+was still not scored to name the column it is missing, and fails on any row that
+cannot. Every market reconciles exactly — scored equals scoreable, shortfall
+zero:
+
+| Market | logged | scoreable | scored | unscoreable because |
+|---|---|---|---|---|
+| 1X2, Goles | 622 | 519 | 519 | — |
+| Half-time (3 markets) | 622 | 333 | 333 | no half-time goals (186) |
+| corners | 5019 | 3608 | 3608 | no `home_corners` (710) |
+| shots | 4402 | 3280 | 3280 | no `home_shots` (524) |
+| yellows | 4227 | 2952 | 2952 | no `home_yellow_cards` (672) |
+| booking_pts | 1188 | 984 | 984 | no cards (57) |
+| jug_tiros | 18866 | 10361 | 10361 | no player rows (6235) |
+
+A plausible rate is no longer enough, because "explainable" is exactly what the
+European rows looked like. The classifier mirrors `evaluate_log`'s own branches,
+so whatever makes it skip a row has to name itself here.
 
 ### Tests
 705 pass, 6 skip.
