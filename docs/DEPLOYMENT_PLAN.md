@@ -301,6 +301,33 @@ race, and not by hand, which is the step everybody forgets.
   shell script whose shebang ends in CR fails on the server with "bad
   interpreter".
 
+### What did not work, so nobody tries it again
+
+- **A read-only `data/` mount**, which this plan assumed. Measured impossible
+  (§1): serving a page writes. A middle road — read-only plus a writable volume
+  over `data/processed/cache` — does not survive either, because the UEFA
+  fixture fetch rewrites `data/external/uefa/raw_*.csv` on the way to answering
+  `/fixtures/day`.
+- **`python:3.12-slim` with `requirements-lock.txt`**, which is what this plan
+  specified. The lock is the set the suite last passed with **on 3.14** and its
+  own header says some of those pins do not exist for 3.12, so it would have
+  meant installing ranges and losing the only reproducible dependency set the
+  project has. The image is 3.14; CI keeps testing the ranges on 3.10 and 3.12.
+- **Installing the whole lock in the serving image.** It pulls `soccerdata`
+  (and therefore Selenium), `matplotlib` and `pytest` into a container that
+  serves JSON. The serving stage installs the lock minus those three and the
+  refresh stage adds them back at the same versions; checked against the read
+  set, which shows none of the 92 modules the serving path imports touching any
+  of them.
+- **A web image that builds without a running API.** The alternative to the
+  two-move bring-up is to stop prerendering the data pages, which would undo
+  A1's measured 4-48 ms routes and make every page render per request. Not
+  worth avoiding one extra command in a deployment.
+- **Proxying the API through a Next route handler**, which this plan called the
+  cleaner of the two options. It reaches the same same-origin result as the
+  Caddy path does, with a Node hop on every client call and a catch-all handler
+  to maintain. Rejected on those grounds, not tried.
+
 ---
 
 ## 4. Operations, minimal but real
