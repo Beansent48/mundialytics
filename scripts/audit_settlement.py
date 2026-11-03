@@ -41,6 +41,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from mundialytics.serving.track_record import (  # noqa: E402
     EVENT_COLS,
     PRED_LOG,
+    _elo_resolver,
     _player_finder,
     _player_match_actuals,
     attach_results,
@@ -112,6 +113,34 @@ def _missing_column(row, find_player) -> str | None:
                or find_player(row.fecha, str(row.away), str(row.ambito)))
         return None if act is not None else "faltan datos de jugador"
     return f"mercado desconocido: {mk}"
+
+
+def _duplicate_fixtures(m: pd.DataFrame) -> pd.DataFrame:
+    """The same fixture logged twice under two spellings.
+
+    On 2026-09-10 the log holds `bayern münchen vs bodø/glimt` *and* `bayern
+    munich vs bodo/glimt`; on 2026-09-16 `hapoel be'er vs dinamo zagreb` and
+    `h. beer-sheva vs gnk dinamo`. Grouping by the fixture text cannot see it,
+    because the texts differ — the check written earlier in this work grouped
+    that way and reported no duplicates. Grouping by the names resolved into
+    ClubElo space collapses the spellings onto one club and the pair shows up.
+    """
+    resolve = _elo_resolver()
+    if resolve is None:
+        return pd.DataFrame()
+    fx = m[["fecha", "home", "away", "model_fp"]].copy()
+    fx["kh"] = fx["home"].astype(str).map(resolve)
+    fx["ka"] = fx["away"].astype(str).map(resolve)
+    fx = fx.dropna(subset=["kh", "ka"])
+    fx["spelling"] = fx["home"].astype(str) + " vs " + fx["away"].astype(str)
+    out = []
+    for (fecha, kh, ka), g in fx.groupby(["fecha", "kh", "ka"]):
+        spellings = sorted(set(g["spelling"]))
+        if len(spellings) > 1:
+            out.append({"fecha": fecha, "club_local": kh, "club_visitante": ka,
+                        "grafias": " | ".join(spellings),
+                        "con_trazabilidad": int(g["model_fp"].notna().sum())})
+    return pd.DataFrame(out)
 
 
 def main() -> int:
@@ -189,7 +218,26 @@ def main() -> int:
     print("\n--- por mercado ---")
     print(pd.DataFrame(rows).to_string(index=False))
 
+    # ---------- level 3: the same fixture logged under two spellings ----------
+    dups = _duplicate_fixtures(m)
+    print("\n--- el mismo partido con dos grafias ---")
+    if len(dups):
+        print(dups.to_string(index=False))
+    else:
+        print("ninguno")
+
     bad = False
+    live_dups = dups[dups["con_trazabilidad"] > 0] if len(dups) else dups
+    if len(live_dups):
+        # Only the current logging path is a gate: the historical rows predate
+        # provenance, cannot be scored probabilistically anyway, and failing on
+        # them forever would turn this audit into noise nobody reads.
+        print(f"\nFALLO: {len(live_dups)} partidos registrados dos veces por el "
+              f"camino actual, que si cuentan para las cifras.")
+        bad = True
+    elif len(dups):
+        print(f"\nAVISO: {len(dups)} duplicados, todos anteriores a la "
+              f"trazabilidad. No contaminan ninguna cifra publicada.")
     if holes:
         print(f"\nFALLO: {len(holes)} partidos jugados cuya prediccion no se "
               f"comprueba. Arregla la liquidacion, o anotalos en "

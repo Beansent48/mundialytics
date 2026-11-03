@@ -127,8 +127,8 @@ agujero europeo durante semanas:
 | Mercado | registradas | puntuables | puntuadas | no puntuables porque |
 |---|---|---|---|---|
 | 1X2 y Goles | 622 | 519 | 519 | — |
-| ht_1x2 y ht_ft | 622 | 499 | 499 | sin marcador al descanso (20) |
-| ht_goles | 1866 | 1497 | 1497 | sin marcador al descanso (60) |
+| ht_1x2 y ht_ft | 622 | 514 | 514 | sin marcador al descanso (5) |
+| ht_goles | 1866 | 1542 | 1542 | sin marcador al descanso (15) |
 | córners | 5019 | 3762 | 3762 | sin `home_corners` (556) |
 | tiros | 4402 | 3420 | 3420 | sin `home_shots` (384) |
 | amarillas | 4227 | 3078 | 3078 | sin `home_yellow_cards` (546) |
@@ -145,20 +145,46 @@ los datos del futbolista. Están declarados y vigilados, pero son cobertura que 
 tenemos. La foundation, en cambio, está impecable: 447 filas de la temporada y
 **cero** sin descanso.
 
-Los 20 restantes tienen nombre y apellidos, y son **dos defectos nuevos**, no
-uno:
+Perseguir esos 20 destapó **dos defectos más**, y el segundo es grande.
 
-- **Clubes europeos pequeños que el resolver de ClubElo no mapea**, casi todos
-  por diacríticos: `f.c. københavn`, `mjällby aif`, `fc nordsjælland`,
-  `inter d'escaldes`, `viktoria plzen`. Es trabajo de alias, acotado.
-- **El mismo partido registrado dos veces con dos grafías.** El 2026-09-10 el log
-  tiene `bayern münchen vs bodø/glimt` *y* `bayern munich vs bodo/glimt`; el
-  2026-09-16, `hapoel be'er vs dinamo zagreb` *y* `h. beer-sheva vs gnk dinamo`.
-  Un control de duplicados que agrupe por el **texto** del partido no lo ve,
-  porque los textos son distintos — y eso es exactamente lo que yo comprobé al
-  principio de esta sesión, concluyendo «sin duplicados». Ninguno tiene
-  provenance, así que no contamina ninguna cifra publicada, pero es un defecto de
-  calidad del dato.
+**6. Siete clubes europeos eran inencontrables por nombre.** El paso canónico de
+ESPN quita acentos con NFKD y luego convierte en espacio todo lo que siga sin ser
+ASCII. Pero NFKD **no descompone** `ø` ni `æ`, así que `f.c. københavn` se
+escribía en disco como `f c k benhavn` y `fc nordsjælland` como
+`fc nordsj lland`. La `ä` salía como `a` limpia, porque esa **sí** se descompone,
+y eso es lo que hacía parecer el fallo arbitrario. Función nueva
+`transliterate()` para las letras que NFKD no sabe, aplicada en el conector antes
+de canonicalizar, más seis alias para los clubes cuya grafía en ClubElo difiere
+igualmente (`FC Kobenhavn` con `o` simple, `Mjaellby`, `St Truiden`, `St Gillis`,
+`Beer-Sheva`, `Escaldes`). Los alias que ya existían para esos clubes estaban
+indexados por la grafía **con** diacríticos, que es la que trae el log, no la que
+escribe ESPN. Resultado: **108 de 108 nombres europeos resuelven** y los partidos
+sin descanso bajan de 172 a **5 de 519**.
+
+`ä`, `ö` y `ü` quedan **fuera** de la tabla a propósito: esas se descomponen bien
+y meterlas reescribiría nombres que hoy resuelven.
+
+**7. Toda la ronda europea de mediados de septiembre está en el log dos veces.**
+No dos partidos: **25**, cada uno registrado una vez con nombres cortos de
+difusión y otra con nombres completos — `fc porto vs manchester city` y
+`porto vs man city`, `real madrid vs inter` y `real madrid vs internazionale`,
+`liverpool vs atleti` y `liverpool vs atlético madrid`. Un control que agrupe por
+el **texto** del partido no ve ninguno, y eso es exactamente lo que hice al
+empezar esta sesión, concluyendo «sin duplicados». La auditoría agrupa ahora por
+los nombres resueltos a espacio ClubElo, que colapsa las grafías sobre un mismo
+club. Los 25 son anteriores a la trazabilidad, así que no contaminan ninguna
+cifra publicada: la auditoría avisa, y **falla** solo si el duplicado viene del
+camino de registro actual.
+
+## Lo que decidí NO arreglar
+
+La causa de fondo del defecto 6 es que el proyecto tiene dos implementaciones del
+mismo concepto: `normalize_club` lleva tabla de transliteración y `normalize_text`
+no. Añadirla a `normalize_text` son dos líneas, y no lo he hecho: esa función
+también alimenta `canonical_player_name`, así que reescribiría la clave de
+identidad de **todo jugador con esas letras** —Ødegaard, Højlund, Sørloth— en
+ficheros ya escritos. Eso es una migración de identidad, no un arreglo, y merece
+su propio cambio con su propia verificación.
 
 Tampoco está medida la potencia estadística: con 309 partidos el intervalo del
 RPS es de ±0.016, y las diferencias entre eras de modelo son de 0.001. **El
