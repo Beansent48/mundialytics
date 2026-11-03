@@ -15,6 +15,7 @@ so it survives restarts and invalidates itself on either change.
 """
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -137,21 +138,39 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The web front end runs on its own origin in development and will run on its
-# own domain in production; both need to be allowed explicitly.
+# Who may call this API from a browser.
+#
+# Development: the web front end runs on its own origin, and not always on 3000
+# — a second session holding it pushes Next.js onto 3001 and every browser call
+# then failed CORS while server-side calls kept working, which looks like a
+# broken app rather than a busy port. Hence the regex over any local port; it
+# echoes the caller's own origin, so allow_credentials still holds (a bare "*"
+# would not).
+#
+# Deployment: that regex must not ship, and MUNDIALYTICS_CORS_ORIGINS is how it
+# does not. The variable distinguishes three cases on purpose:
+#
+#   unset          development — localhost:3000 plus the any-local-port regex
+#   set and empty  no cross-origin call is allowed at all. This is what the
+#                  container sets, because the deployed site is ONE origin:
+#                  Caddy serves the app and hands /engine/* to this API, so the
+#                  browser never makes a cross-origin request to it.
+#   a list         exactly those origins, comma-separated, and no regex. For a
+#                  deployment that does end up calling the API from elsewhere.
+def cors_config(value: str | None) -> tuple[list[str], str | None]:
+    """(allowed origins, allowed-origin regex) for a MUNDIALYTICS_CORS_ORIGINS value."""
+    if value is None:
+        return (["http://localhost:3000", "http://127.0.0.1:3000"],
+                r"http://(localhost|127\.0\.0\.1):\d+")
+    return [o.strip() for o in value.split(",") if o.strip()], None
+
+
+_cors_origins, _cors_regex = cors_config(os.environ.get("MUNDIALYTICS_CORS_ORIGINS"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    # ...and any other local port, because the dev server does not always get
-    # 3000: a second session holding it pushes Next.js onto 3001 and every
-    # browser call then failed CORS while server-side calls kept working, which
-    # looks like a broken app rather than a busy port. The regex echoes the
-    # caller's own origin, so allow_credentials still holds (a bare "*" would
-    # not). Production is same-origin and unaffected.
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    allow_origins=_cors_origins,
+    allow_origin_regex=_cors_regex,
     allow_credentials=True,
     # POST is here for /squadlab/season, which carries the user's chosen eleven
     # in its body. Listing only GET silently blocked it in the browser while

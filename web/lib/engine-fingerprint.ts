@@ -13,11 +13,11 @@
  * through. **No change to `api/` was needed**, which matters — the API stays
  * stateless and anonymous, and nothing here can reach a served probability.
  *
- * Read on the server, not in the browser. The deployment plan does not expose
- * the API publicly, so the browser may have no route to it at all; the route
- * handler does.
+ * Read on the server, not in the browser: the server reaches the API directly
+ * on the container network, so this costs one internal hop instead of a round
+ * trip through the proxy (`lib/api-base.ts` has both routes).
  */
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiBase } from "@/lib/api-base";
 
 // It changes once a day at most, and a run being stamped with a fingerprint a
 // minute stale is not a problem worth a request per save.
@@ -30,7 +30,7 @@ export async function engineFingerprint(): Promise<string | null> {
 
   let value: string | null = null;
   try {
-    const res = await fetch(`${BASE}/health`, {
+    const res = await fetch(`${apiBase()}/health`, {
       cache: "no-store",
       signal: AbortSignal.timeout(2000),
     });
