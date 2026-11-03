@@ -636,7 +636,7 @@ api/                    FastAPI service the web app reads from, and its Dockerfi
 web/                    Next.js front end — see web/README.md
 docker/                 Caddyfile (the reverse proxy) and the nightly pg_dump
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  629 tests green on a clean checkout; 111 more
+tests/                  643 tests green on a clean checkout; 112 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
