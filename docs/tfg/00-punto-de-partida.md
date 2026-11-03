@@ -192,6 +192,8 @@ con su medición:
 | La temporada se escribía de un modo y se leía de otro | divergen en julio | en julio nadie mira |
 | El xG llevaba dos correcciones para la misma inflación | 4,8 % de λ | ambas correcciones eran razonables por separado |
 | La forma reciente se leía de una lista sin fechas | 13 de 96 equipos tasados con forma de temporadas viejas | RPS 0.2203 donde el resto daba 0.1941 |
+| Ningún partido europeo podía liquidar primera parte | 172 de 519 sin marcador al descanso | el mercado seguía puntuando, con menos partidos |
+| El mismo partido registrado con dos grafías | `bayern münchen` y `bayern munich`, mismo día | un control de duplicados por texto no lo ve |
 
 El patrón se repite y es el material de la memoria: **ninguno de estos fallos
 levantaba una excepción**. Todos dejaban el sistema respondiendo con una cifra

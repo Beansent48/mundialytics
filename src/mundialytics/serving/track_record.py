@@ -64,6 +64,62 @@ def _european_results() -> pd.DataFrame:
 
 
 CALENDAR_DIR = ROOT / "data/processed/fixture_calendars"
+ESPN_DIR = ROOT / "data/external/advanced/espn"
+
+
+def _espn_half_time() -> pd.DataFrame:
+    """Half-time scores rebuilt from ESPN's first-period goals.
+
+    The UEFA result files carry only the final score, so every European
+    prediction on a half-time market was unscoreable — 172 of 519 settled
+    fixtures of 2026/27 had no half-time at all. ESPN's key events carry a
+    period per goal, and counting the first-period ones reproduced
+    football-data's half-time score on **447 of 447** domestic matches of this
+    season: exact, both sides, and the first-half 1X2 and total with it.
+
+    The one trap: **own goals are left alone.** ESPN already files an own goal
+    under the side it counts for, so flipping it — the obvious reading of the
+    `own_goal` column — moved one goal to the wrong side in 18 of those 447,
+    while the first-half total stayed right. A total that reconciles while the
+    sides do not is the signature of a misattribution, not of missing data.
+
+    Both files per suffix are needed: the match list is what supplies the 0-0
+    half-times, which generate no events at all.
+    """
+    frames = []
+    for suffix in ("current", "uefa"):
+        mt_f = ESPN_DIR / f"espn_matches_{suffix}.csv"
+        ev_f = ESPN_DIR / f"espn_player_events_{suffix}.csv"
+        if not (mt_f.exists() and ev_f.exists()):
+            continue
+        try:
+            mt = pd.read_csv(mt_f, low_memory=False)
+            ev = pd.read_csv(ev_f, low_memory=False)
+        except Exception:
+            continue
+        played = mt[mt["home_goals"].notna()]
+        if not len(played) or "period" not in ev.columns:
+            continue
+        scoring = ev["scoring"].fillna(False).astype(bool)
+        shoot = (ev["shootout"].fillna(False).astype(bool)
+                 if "shootout" in ev.columns
+                 else pd.Series(False, index=ev.index))
+        goals = ev[scoring & ~shoot & (ev["period"] == 1)]
+        by_event: dict = {}
+        for e in goals.itertuples(index=False):
+            by_event.setdefault(e.event_id, []).append(str(e.team))
+        rows = []
+        for r in played.itertuples(index=False):
+            teams = by_event.get(r.event_id, [])
+            hh = sum(1 for t in teams if t == str(r.home_team))
+            rows.append({"fecha": str(r.date)[:10], "home": r.home_team,
+                         "away": r.away_team, "home_goals_ht": float(hh),
+                         "away_goals_ht": float(len(teams) - hh)})
+        frames.append(pd.DataFrame(rows))
+    if not frames:
+        return pd.DataFrame()
+    return (pd.concat(frames, ignore_index=True)
+            .drop_duplicates(subset=["fecha", "home", "away"]))
 
 
 def _calendar_results() -> pd.DataFrame:
@@ -358,6 +414,32 @@ def attach_results(log: pd.DataFrame, df_clubs: pd.DataFrame) -> pd.DataFrame:
     if "_elo_home" in m.columns and len(eu_res):
         m = _fill_near_date(m, eu_res, "_elo_home", "_elo_away")
         m = m.drop(columns=["_elo_home", "_elo_away"])
+
+    # Half-time for fixtures whose result source carries only the final score,
+    # which is every European tie: the UEFA files have no half-time at all.
+    ht = _espn_half_time()
+    if len(ht) and "home_goals_ht" in m.columns:
+        def _fill_ht(frame: pd.DataFrame, keys: pd.DataFrame) -> None:
+            fill = keys.merge(frame, on=["home", "away", "fecha"], how="left")
+            m.loc[keys.index, "home_goals_ht"] = fill["home_goals_ht"].to_numpy()
+            m.loc[keys.index, "away_goals_ht"] = fill["away_goals_ht"].to_numpy()
+
+        need = m["home_goals_ht"].isna() & m["home_goals"].notna()
+        if need.any():
+            _fill_ht(ht, m.loc[need, ["home", "away", "fecha"]].copy())
+        # ESPN spells European sides the way ClubElo does ("dortmund",
+        # "man city", "ath madrid") while the log uses foundation names
+        # ("borussia dortmund", "manchester city", "atletico madrid"), so the
+        # second pass bridges both sides through the Elo resolver.
+        need = m["home_goals_ht"].isna() & m["home_goals"].notna()
+        if need.any() and resolve is not None:
+            hte = ht.assign(home=ht["home"].astype(str).map(resolve),
+                            away=ht["away"].astype(str).map(resolve)
+                            ).dropna(subset=["home", "away"])
+            keys = m.loc[need, ["home", "away", "fecha"]].copy()
+            keys["home"] = keys["home"].astype(str).map(resolve)
+            keys["away"] = keys["away"].astype(str).map(resolve)
+            _fill_ht(hte, keys)
     return m
 
 
