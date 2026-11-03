@@ -5,7 +5,7 @@
  * bite in production live: a timeout (the engine can be cold) and a revalidate
  * window (fixtures change when a match kicks off, not on every page view).
  */
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiBase } from "@/lib/api-base";
 
 export type Probabilities = { home: number; draw: number; away: number };
 
@@ -544,7 +544,7 @@ async function request<T>(path: string, revalidate = 300): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await fetch(`${apiBase()}${path}`, {
       signal: controller.signal,
       // One shared tag on every cached response so the daily data refresh can
       // invalidate them all at once (see app/api/revalidate). The per-call
@@ -607,7 +607,7 @@ export const api = {
     reroll: number,
     taken: string[],
   ) => {
-    const res = await fetch(`${BASE}/squadlab/deal`, {
+    const res = await fetch(`${apiBase()}/squadlab/deal`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ seed, position, index, reroll, taken }),
@@ -623,7 +623,7 @@ export const api = {
     // no two visitors send the same body, and each play takes a random slot in
     // the draw. Playing the whole tournament takes real seconds, so this
     // deliberately skips `request`'s 20s abort.
-    const res = await fetch(`${BASE}/squadlab/season`, {
+    const res = await fetch(`${apiBase()}/squadlab/season`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ squad, bench, mode, seed }),
