@@ -25,6 +25,13 @@ record kept publishing a number over fewer matches than it claimed.
   are now a fallback for what the foundation has not ingested — foundation
   first, always, and only goal-outcome markets can settle from there, since the
   calendars carry no shots, cards or half-time goals.
+- **A moved fixture settled its 1X2 and nothing else.** The two-day window
+  copied only the goals, so a fixture played a day off its logged date had its
+  half-time and event markets left unscoreable even though the foundation held
+  them in full, one day over. That read as missing coverage rather than as a
+  join that stopped early. The window now carries every column the source has,
+  which checks **644 more predictions**: corners 3608 → 3762, shots 3280 →
+  3420, yellows 2952 → 3078, half-time 1665 → 1735, booking points 984 → 1026.
 
 Settled 1X2 rows went 192 → 300 → 304 → 309 of 412 across the three fixes. Of
 the 103 that remain, 102 are unplayed and one is vallecano vs ath bilbao, logged
@@ -72,11 +79,12 @@ zero:
 | Market | logged | scoreable | scored | unscoreable because |
 |---|---|---|---|---|
 | 1X2, Goles | 622 | 519 | 519 | — |
-| Half-time (3 markets) | 622 | 333 | 333 | no half-time goals (186) |
-| corners | 5019 | 3608 | 3608 | no `home_corners` (710) |
-| shots | 4402 | 3280 | 3280 | no `home_shots` (524) |
-| yellows | 4227 | 2952 | 2952 | no `home_yellow_cards` (672) |
-| booking_pts | 1188 | 984 | 984 | no cards (57) |
+| ht_1x2, ht_ft | 622 | 347 | 347 | no half-time goals (172) |
+| ht_goles | 1866 | 1041 | 1041 | no half-time goals (516) |
+| corners | 5019 | 3762 | 3762 | no `home_corners` (556) |
+| shots | 4402 | 3420 | 3420 | no `home_shots` (384) |
+| yellows | 4227 | 3078 | 3078 | no `home_yellow_cards` (546) |
+| booking_pts | 1188 | 1026 | 1026 | no cards (15) |
 | jug_tiros | 18866 | 10361 | 10361 | no player rows (6235) |
 
 A plausible rate is no longer enough, because "explainable" is exactly what the

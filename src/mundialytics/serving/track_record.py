@@ -277,20 +277,27 @@ def _fill_near_date(m: pd.DataFrame, res: pd.DataFrame,
     """
     if not len(res) or not m["home_goals"].isna().any():
         return m
+    # Carry every column the source has, not just the goals. Filling goals
+    # alone settled the 1X2 of a moved fixture and left its half-time and event
+    # markets unscoreable even though the foundation held them one day over —
+    # 14 of 2026/27's fixtures, which read as missing coverage rather than as a
+    # join that stopped early. `date` stays out: the row keeps the date it was
+    # predicted for.
+    cols = [c for c in res.columns
+            if c not in ("home", "away", "fecha", "date") and c in m.columns]
     idx: dict[tuple, list] = {}
     for r in res.itertuples(index=False):
-        idx.setdefault((r.home, r.away), []).append(
-            (pd.Timestamp(r.fecha), r.home_goals, r.away_goals))
+        idx.setdefault((r.home, r.away), []).append(r)
     tol = pd.Timedelta(days=tol_days)
     for i in m.index[m["home_goals"].isna()]:
         cands = idx.get((m.at[i, home_col], m.at[i, away_col]))
         if not cands:
             continue
         want = pd.Timestamp(m.at[i, "fecha"])
-        near = [c for c in cands if abs(c[0] - want) <= tol]
+        near = [c for c in cands if abs(pd.Timestamp(c.fecha) - want) <= tol]
         if len(near) == 1:
-            m.at[i, "home_goals"] = near[0][1]
-            m.at[i, "away_goals"] = near[0][2]
+            for c in cols:
+                m.at[i, c] = getattr(near[0], c)
     return m
 
 

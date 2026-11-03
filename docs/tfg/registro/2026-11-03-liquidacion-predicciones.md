@@ -52,6 +52,14 @@ Tres bugs vivos en la liquidación de producción, los tres silenciosos:
    reciente no se podía comprobar nunca**. Para un registro en vivo eso es un
    sesgo sistemático, no un retraso. Los calendarios de temporada se usan ahora
    como respaldo, sin tocar lo que la foundation ya tiene.
+4. **Un partido desplazado liquidaba su 1X2 y nada más.** La ventana de dos días
+   copiaba solo los goles, así que un partido jugado un día antes o después se
+   quedaba sin descanso ni eventos **aunque la foundation los tuviera completos
+   un día más allá**: 14 partidos de 2026/27. Eso se leía como falta de
+   cobertura en lugar de como un cruce que se quedaba a medias. La ventana lleva
+   ahora todas las columnas de la fuente, y eso comprueba **644 predicciones
+   más**: córners 3608 → 3762, tiros 3280 → 3420, amarillas 2952 → 3078,
+   descanso 1665 → 1735, puntos de tarjeta 984 → 1026.
 
 Efecto sobre la cobertura:
 
@@ -108,21 +116,25 @@ agujero europeo durante semanas:
 | Mercado | registradas | puntuables | puntuadas | no puntuables porque |
 |---|---|---|---|---|
 | 1X2 y Goles | 622 | 519 | 519 | — |
-| Primera parte (3 mercados) | 622 | 333 | 333 | sin marcador al descanso (186) |
-| córners | 5019 | 3608 | 3608 | sin `home_corners` (710) |
-| tiros | 4402 | 3280 | 3280 | sin `home_shots` (524) |
-| amarillas | 4227 | 2952 | 2952 | sin `home_yellow_cards` (672) |
-| puntos de tarjeta | 1188 | 984 | 984 | sin tarjetas (57) |
+| ht_1x2 y ht_ft | 622 | 347 | 347 | sin marcador al descanso (172) |
+| ht_goles | 1866 | 1041 | 1041 | sin marcador al descanso (516) |
+| córners | 5019 | 3762 | 3762 | sin `home_corners` (556) |
+| tiros | 4402 | 3420 | 3420 | sin `home_shots` (384) |
+| amarillas | 4227 | 3078 | 3078 | sin `home_yellow_cards` (546) |
+| puntos de tarjeta | 1188 | 1026 | 1026 | sin tarjetas (15) |
 | tiros de jugador | 18866 | 10361 | 10361 | sin datos de jugador (6235) |
 
 Déficit cero en los dieciséis mercados. El clasificador replica las propias
 ramas de `evaluate_log`, así que lo que allí hace saltar una fila tiene que
 nombrarse aquí.
 
-Lo que sigue pendiente es de **fuente de datos, no de liquidación**: 186 de 519
-partidos no traen marcador al descanso y a unas 3.200 filas por mercado de
-jugador les faltan los datos del futbolista. Están declarados y vigilados, pero
-son cobertura que no tenemos.
+Lo que sigue pendiente es de **fuente de datos, no de liquidación**: 172 de 519
+partidos no traen marcador al descanso —108 son eliminatorias europeas, cuyos
+CSV de la UEFA solo traen el resultado final, y el resto son europeas de antes de
+la provenance o filas liquidadas por el calendario— y a unas 3.200 filas por
+mercado de jugador les faltan los datos del futbolista. Están declarados y
+vigilados, pero son cobertura que no tenemos. La foundation, en cambio, está
+impecable: 447 filas de la temporada y **cero** sin marcador al descanso.
 
 Tampoco está medida la potencia estadística: con 309 partidos el intervalo del
 RPS es de ±0.016, y las diferencias entre eras de modelo son de 0.001. **El
