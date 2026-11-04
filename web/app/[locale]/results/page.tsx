@@ -60,8 +60,11 @@ export default async function ResultsPage({
       ) : (
         <div className="mt-14 flex flex-col gap-20">
           {/* 1 · Against the market — the same measurement the landing leads on,
-                 so a visitor arriving from there lands on familiar ground. */}
-          <RpsLadder benchmark={data.benchmark} />
+                 so a visitor arriving from there lands on familiar ground.
+                 Conditional because the API serves this one fail-soft: with the
+                 benchmark file missing the rest of the page (the live log, the
+                 calibration) is still worth rendering. */}
+          {data.benchmark && <RpsLadder benchmark={data.benchmark} />}
 
           {/* 2 · The live log */}
           <Reveal as="section">

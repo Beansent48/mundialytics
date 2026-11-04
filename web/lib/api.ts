@@ -197,7 +197,14 @@ export type Benchmark = {
 export type CalibrationBin = { announced: number; observed: number; n: number };
 
 export type TrackRecord = {
-  benchmark: Benchmark;
+  /**
+   * Null when `web/data/benchmark_vs_bet365.json` is not where the API can read
+   * it — `_benchmark()` in api/main.py is deliberately fail-soft. This type used
+   * to say `Benchmark`, which is why nothing guarded it and why the results page
+   * crashed the moment it really was null: the API image did not carry the file
+   * (found 2026-11-03, building the container).
+   */
+  benchmark: Benchmark | null;
   calibration: CalibrationBin[] | null;
   live: {
     count: number;
