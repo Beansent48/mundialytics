@@ -188,7 +188,10 @@ con su medición:
 | Los partidos reprogramados se tiraban | 4 partidos jugados, dados por no predichos | el total bajaba, no fallaba |
 | La foundation iba por detrás del calendario | la jornada más reciente nunca se comprobaba | sesgo sistemático, no error |
 | La ventana de fechas copiaba solo los goles | 644 predicciones sin comprobar | parecía falta de cobertura |
-| La caché de un endpoint se auto-invalidaba | no cacheaba nada | solo era «lento» |
+| La caché de `/fixtures/day` se auto-invalidaba | tres peticiones idénticas pagaban las tres (6,67 s → 0,051 s al arreglarlo) | la clave incluía los mtime de unos CSV que construir la respuesta reescribía: calcular el valor movía la clave que debía encontrarlo |
+| `/health` dejó de ser una sonda | devolvía 503 mientras cargaba modelos | **el comentario del propio código afirmaba lo contrario** |
+| `gh pr merge --auto` salía con código 0 sin hacer nada | el repo tiene `allow_auto_merge: false` | el código de salida decía éxito |
+| Resolver un conflicto de `pyproject.toml` al lado equivocado | la licencia volvía de PolyForm a MIT | parece un conflicto de versión y es de términos legales |
 | La temporada se escribía de un modo y se leía de otro | divergen en julio | en julio nadie mira |
 | El xG llevaba dos correcciones para la misma inflación | 4,8 % de λ | ambas correcciones eran razonables por separado |
 | La forma reciente se leía de una lista sin fechas | 13 de 96 equipos tasados con forma de temporadas viejas | RPS 0.2203 donde el resto daba 0.1941 |
