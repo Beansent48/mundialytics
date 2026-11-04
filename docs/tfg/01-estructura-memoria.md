@@ -100,7 +100,7 @@ portátil a servicio multiusuario reproducible y publicado. No como «hacer la w
 
 El 5.0 es el apartado que **justifica el capítulo entero**, y conviene abrirlo con
 él. Sin el catálogo, industrializar parece una decisión de gusto; con él, es la
-respuesta a catorce defectos reales, fechados y medidos, de los cuales **ninguno
+respuesta a diecisiete defectos reales, fechados y medidos, de los cuales **ninguno
 levantaba una excepción**: todos dejaban el sistema respondiendo con una cifra
 creíble. Ese es el argumento, y la tabla está montada en
 `00-punto-de-partida.md`. Cada defecto nuevo que aparezca mientras trabajas suma
@@ -188,7 +188,7 @@ experimentos previos y sus veredictos sostiene el argumento del techo informativ
 del capítulo 10 sin reclamarlos como trabajo propio del TFG.
 
 El anexo H es el que sostiene la tesis. La columna que importa no es la
-corrección, es la última: **por qué no saltó ninguna alarma**. Catorce defectos y
+corrección, es la última: **por qué no saltó ninguna alarma**. Diecisiete defectos y
 ninguno levantaba una excepción, porque todos dejaban el sistema respondiendo
 con una cifra creíble. Eso es lo que justifica todo el capítulo 5, y es un
 argumento que casi ningún TFG puede hacer con datos propios.
