@@ -56,6 +56,11 @@ COPY src/ ./src/
 COPY config/ ./config/
 COPY scripts/ ./scripts/
 COPY pyproject.toml README.md ./
+# The one file the API reads from the web app's tree: `BENCHMARK_JSON` in
+# api/main.py is `web/data/benchmark_vs_bet365.json`, the published comparison
+# against Bet365's closing prices. 1.9 KB, and without it /track-record serves
+# `benchmark: null` (see .dockerignore).
+COPY web/data/ ./web/data/
 
 # Writes under /app/data go to the mounted volume; nothing else is written.
 RUN useradd --create-home --uid 10001 mundialytics \
@@ -71,7 +76,7 @@ EXPOSE 8000
 # The start_period that makes this survivable is in docker-compose.yml, where
 # the arithmetic behind it is written down: during a startup fit uvicorn has
 # not bound the port at all and this probe gets a refused connection.
-HEALTHCHECK --interval=15s --timeout=10s --start-period=420s --retries=4 \
+HEALTHCHECK --interval=15s --timeout=10s --start-period=1200s --retries=4 \
   CMD ["python", "-c", "import json,urllib.request,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=8)).get('ready') else 1)"]
 
 # One worker on purpose. Each would hold its own copy of the fit (29 MB of
