@@ -572,17 +572,26 @@ as a one-shot, and the daily refresh as a service of its own.
 ```bash
 cp .env.example .env                        # fill BETTER_AUTH_SECRET and REVALIDATE_SECRET
 docker compose up -d --wait postgres api    # the API is "healthy" once its models are in
-docker compose build web                    # needs that: see below
+docker buildx bake -f docker-compose.yml web --allow=network.host --load
 docker compose up -d                        # http://localhost
 ```
 
-**Why the build is a separate move.** Every data page is prerendered, so
-`next build` renders each one against whatever the API answers *at build time* —
-and the builder has no route to the compose network, so it borrows the host's
-and talks to the port the API publishes on loopback. The API therefore has to be
-up and ready *before* the web image is built, and it refuses to build otherwise
-rather than baking the "model is warming up" box into static HTML. After the
-first time, `docker compose up -d` is the whole command.
+**Why the build is a separate move, and why that third line is not
+`docker compose build web`.** Every data page is prerendered, so `next build`
+renders each one against whatever the API answers *at build time* — and the
+builder has no route to the compose network, so it borrows the host's and talks
+to the port the API publishes on loopback. The API therefore has to be up and
+ready *before* the web image is built, and it refuses to build otherwise rather
+than baking the "model is warming up" box into static HTML. Host networking in
+a build is a BuildKit *entitlement* and compose has no flag to grant one, so
+that step goes through `buildx bake`, which does. After the first time,
+`docker compose up -d` is the whole command.
+
+**The first start is slow, once.** On a freshly seeded data directory there are
+no caches, so the API fits the engine, recomputes the market level and refits
+the prop models before it binds its port: **394.7 s measured** in the container.
+That is what the healthcheck's `start_period` covers. With
+`data/processed/cache` warm the same start is seconds.
 
 **The data is a mount, never a layer** (`DATA_DIR`, `./data` by default): the
 refresh rewrites it daily, so an image with a CSV inside would have to be
