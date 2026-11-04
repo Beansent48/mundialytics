@@ -5,7 +5,7 @@
 - **Versión:** v0.67.0
 - **Commits:** `9956ed3`, `ba53568`, `8b770c9`, `c31b96c`, `08c0cdf`, `1aa5bab`, `f540046`, `adead20`, `15e5595`
 - **Capítulo de la memoria:** 7 (industrialización)
-- **Veredicto:** en curso — construido y documentado, verificación en contenedor pendiente
+- **Veredicto:** desplegado en local y verificado en contenedor — con una medición pendiente y nombrada (el contenedor de refresco nunca ha corrido un refresco)
 
 ## Contexto
 
@@ -42,8 +42,9 @@ Escrito **antes** de empezar, en el encargo de la tarea (sección A2 de
 5. El plan de despliegue refleja lo construido, con los números medidos y lo que
    no funcionó.
 
-Los puntos 3, 4 y 5 están cumplidos y comprobados ejecutando. El 1 y el 2
-**siguen sin medir**: ver «Qué quedó fuera».
+Los cinco están cumplidos y comprobados ejecutando. El 1 y el 2 estuvieron «sin
+medir» mientras Docker no arrancaba en esta máquina; se midieron el 2026-11-03/04,
+y es ahí donde apareció lo que de verdad aporta esta pieza.
 
 ## Datos y diseño
 
@@ -103,6 +104,27 @@ Tests nuevos: 9. `tests/test_refresh_loop.py` (6) fija la aritmética del horari
 del refresco y el contrato de `last_run.json`; `tests/test_cors_origins.py` (3)
 fija que «vacío» y «sin definir» no son lo mismo en la lista de CORS.
 
+## Resultado en contenedor (2026-11-03/04)
+
+| | |
+|---|---|
+| `mundialytics-api` | **692 MB** — 386 MB de dependencias, **5,2 MB de código del proyecto** |
+| `mundialytics-refresh` | **1,01 GB** — filtrar soccerdata de la imagen de servicio ahorra **320 MB** |
+| `mundialytics-web` | **352 MB** — solo `.next/standalone` |
+| `mundialytics-web-tools` | 1,88 GB — el contenedor de un solo uso de las migraciones |
+| las dos imágenes de Python | construidas en 97 s |
+| arranque en frío, en contenedor | **394,7 s** y **544,1 s** en dos pasadas |
+| arranque con cachés calientes | **21 s** a todo-sano (`models ready in 2.0s`) |
+| paquete de servicio | 277 fich./194,5 MB → **583/234,7 MB** → ~356 MB con el fichero de tiros |
+
+El sitio entero por el proxy, en un solo origen: `/`, `/es` y las seis páginas de
+datos responden 200 con 58-111 KB de contenido real; `/engine/health` y
+`/engine/fixtures/day` responden 200; `/robots.txt` devuelve el Disallow; el alta
+de cuenta responde 200, crea la fila de usuario y la cookie de sesión resuelve.
+El nivel de mercado sale con sus multiplicadores reales por liga (LaLiga
+x1,0451, Serie A x1,0546, …) y el *benchmark* publicado con sus filas (mercado
+0,1946, motor 0,1998).
+
 ## Veredicto
 
 Construido y documentado; **la verificación en contenedor no se ha hecho**, así
@@ -153,40 +175,77 @@ que la ficha no puede decir «desplegado». Lo que sí se decidió, con su razó
 
 ## Trampas encontradas
 
+### Los seis defectos que solo aparecieron al levantar contenedores
+
+Ninguno levantaba una excepción. **Todos dejaban el sistema respondiendo con una
+cifra creíble**, que es la columna que importa para el capítulo de incidentes.
+
+| # | Defecto | Por qué no saltó ninguna alarma |
+|---|---|---|
+| 1 | el paquete medido no podía recalcular el nivel de mercado: 41 MB de entradas escondidas tras un memo cuya clave se construye con un `scandir` | `_club_engine` tiene rama de fallo suave: una línea de log («market level unavailable, lambdas left alone») y todos los partidos tasados sin desplazamiento de mercado |
+| 2 | `_market_levels` **memoizaba ese fallo** bajo una clave que describe los ficheros ausentes (`..._e3b0c442.json`, el hash de nada) | los arranques posteriores *aciertan* la caché: responden en menos de un segundo, sin recalcular y sin nivel. Un fallo cacheado se lee como un éxito rápido, y convierte un problema transitorio en permanente |
+| 3 | `start_period` de 420 s calculado sobre los 119 s del host, contra 394,7 s y 544,1 s reales | en esta máquina sobraban 25 s, así que el contenedor llegaba a sano. El fallo solo aparece en una máquina más lenta, y ahí es un bucle de reinicios |
+| 4 | la imagen de la API excluía `web/data/benchmark_vs_bet365.json`, que la API lee | `_benchmark()` es fail-soft por diseño: devuelve `None` y `/track-record` sirve un payload válido con un campo menos |
+| 5 | `web/lib/api.ts` tipaba ese campo como **no nulo** | el compilador no pedía guarda, y en desarrollo el fichero está siempre. El fallo solo existe cuando el servidor manda de verdad el nulo que el tipo negaba — y entonces no fue una tarjeta vacía: `next build` murió prerrenderizando |
+| 6 | el paquete no llevaba `understat_shots.csv` (121 MB) | `PlayerPropsModel.fit` lo toma como `if shots is None and shots_path is not None and Path(shots_path).exists()`: el modelo se ajusta, carga y tasa, y la información de penaltis simplemente no está |
+
+Los números 2, 5 y 6 son defectos **del producto**, no del empaquetado, y los
+tres tienen la misma forma: una caché que guarda un fallo, un tipo que niega un
+nulo que el servidor sí manda, y una entrada cuya ausencia se traga un
+`exists()`.
+
+### Y el método de medición tenía el mismo punto ciego que el sistema medido
+
+Esto vale más que cualquiera de los seis. El medidor instrumenta el evento
+`open`, y el memo del nivel de mercado construye su clave **haciendo `stat`** de
+cada CSV de football-data a través de un glob — y un glob es `os.scandir`, no
+`open`. Así que la herramienta que existía para descubrir dependencias ocultas
+tenía exactamente la misma ceguera que el código que auditaba: las dependencias
+consultadas-pero-no-abiertas eran invisibles a las dos.
+
+Corregido registrando también los listados de directorio (`walked` en el
+manifiesto, impreso aparte como «listed (not every file opened)»). La sesión de
+documentación del TFG midió el mismo paquete **en frío** (439 ficheros / 356 MB,
+rama `claude/settlement-audit`) y encontró el defecto 6 por el otro lado: con
+los ajustes cargando de caché, los ficheros que los CONSTRUYERON no se abren
+nunca. Dos métodos distintos, el mismo agujero — y su total también queda corto
+por el mismo motivo del glob.
+
+### Trampas de proceso y de entorno
+
 - **El plan se equivocaba en el tamaño del árbol por un orden de magnitud:**
   decía 2,7 GB y son **26,5 GB**, porque no contaba `data/raw` (23,9 GB en
-  17.256 ficheros). Medir con `du` en vez de sumar las dos carpetas que ya
-  estaban anotadas.
+  17.256 ficheros).
 - **El montaje no puede ser de solo lectura**, como el plan asumía. Servir una
   página escribe: los `raw_*.csv` de la UEFA, las cachés de pronóstico y
   goleadores por liga, las instantáneas de calendario y, en frío, el joblib de
-  28 MB. Dos mediciones consecutivas dan conjuntos de escritura distintos
-  porque esas cachés solo se reescriben cuando están rancias.
-- **`understat_shots.csv` (121 MB) no es entrada de servicio**, aunque el plan
-  lo listaba como tal. Lo lee el ajuste de props cuando ajusta; el camino de
-  servicio lee el joblib ya ajustado.
+  28 MB. Dos mediciones consecutivas dan conjuntos de escritura distintos porque
+  esas cachés solo se reescriben cuando están rancias.
 - **`requirements-lock.txt` incluye `soccerdata`**, que arrastra Selenium. La
   imagen de servicio se lo llevaba dentro mientras el comentario dos líneas
-  arriba afirmaba lo contrario. Se filtran tres entradas (`soccerdata`,
-  `matplotlib`, `pytest`) y la etapa de refresco las repone; comprobado contra
-  el conjunto de lecturas que ninguno de los 92 módulos del camino de servicio
-  las importa.
-- **La construcción de la imagen de web necesita una API viva**, porque todas
-  las páginas de datos se prerrenderizan. Con la API caída se hornea el cartel
-  de «el modelo está calentando» en HTML estático. De ahí que el primer arranque
-  sean dos pasos.
+  arriba afirmaba lo contrario.
+- **`docker compose build web` no puede construir la imagen de web.** La red del
+  host en una construcción es un *entitlement* de BuildKit, compose no tiene
+  bandera para concederlo y falla con `failed to execute bake: exit status 1` a
+  secas. La línea es
+  `docker buildx bake -f docker-compose.yml web --allow=network.host --load`.
+- **`DATA_DIR` tiene que vivir en `.env`, no en la línea de órdenes.** Pasarlo en
+  una llamada y no en la siguiente cambia la configuración del servicio, así que
+  compose **recrea** el contenedor contra otro directorio sin avisar. Así se
+  produjo el defecto 2.
+- **Docker Desktop no sigue los junctions de NTFS.** El `data/` enlazado de un
+  worktree se monta como un árbol donde `data/external` y `data/raw` existen y no
+  se pueden recorrer, así que en esta máquina la copia del paquete de servicio no
+  es una optimización: es la única forma montable de los datos.
 - **Un *bind mount* conserva el propietario del host**, y el uid 10001 de la
-  imagen no posee nada en un host Linux. Docker Desktop lo oculta por completo
-  —su compartición de ficheros hace todo escribible—, así que esto se habría
-  descubierto en el servidor.
-- **`core.autocrlf=true` está puesto a nivel de sistema** en esta máquina, así
-  que un `.sh` commiteado aquí llega a un servidor con el *shebang* terminado en
-  CR y falla con «bad interpreter». Resuelto con `.gitattributes`.
-- **El nombre del proyecto de compose venía del directorio.** A1 ya se encontró
-  con el Postgres de B1 invisible a `docker compose` desde el checkout
-  principal, porque se había arrancado desde un worktree. Fijado a
-  `mundialytics` en el fichero.
-- **`/api/revalidate` responde 401 desde el contenedor de refresco**: acepta una
-  llamada sin autenticar solo con cabecera `Host` de localhost, y desde ahí el
-  Host es `web`. El contenedor lo dice en su log al arrancar en vez de dejarlo
-  para que se descubra como un 401 silencioso.
+  imagen no posee nada en un host Linux. Docker Desktop lo oculta por completo,
+  así que esto se habría descubierto en el servidor.
+- **`core.autocrlf=true` está a nivel de sistema** en esta máquina, así que un
+  `.sh` commiteado aquí llega a un servidor con el *shebang* terminado en CR y
+  falla con «bad interpreter». Resuelto con `.gitattributes`.
+- **El nombre del proyecto de compose venía del directorio**, y A1 ya se había
+  encontrado con el Postgres de B1 invisible desde el checkout principal. Fijado
+  a `mundialytics`.
+- **Las colisiones de versión son silenciosas**: dos ramas escribieron
+  `version = "0.66.2"` el mismo día con texto idéntico y git auto-fusionó sin
+  marcar conflicto. Solo salió por el CHANGELOG, donde los títulos diferían.
