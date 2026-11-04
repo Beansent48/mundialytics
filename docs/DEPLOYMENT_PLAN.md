@@ -45,6 +45,62 @@ Consequence for the image: **the data is a volume, never an image layer.** The
 image carries code and dependencies; `data/` is mounted. An image that bakes in
 a CSV has to be rebuilt by the daily refresh, which is absurd.
 
+### 1b. The serving bundle, measured (2026-11-03)
+
+`scripts/measure_serving_bundle.py` installs an audit hook on `open`, drives the
+app over ASGI in-process — lifespan included, which is where the models are
+fitted since v0.64.0 — and calls every GET endpoint once. It talks ASGI by hand
+rather than through `fastapi.testclient`, which would need httpx.
+
+**Measure it cold, or the bundle is wrong.** A first run came out at 280 files
+and 234 MB, and among them were `engine_clubs_*.joblib` and
+`props_models_*.joblib`: the fits had loaded from `data/processed/cache`, so the
+files that *built* them were never opened. `understat_shots.csv` — 121 MB the
+table above marks as needed — did not appear at all. A server's volume starts
+empty, so that bundle would have failed on first boot. The `--cold` flag points
+`api.engine.CACHE_DIR` at a temporary directory (the real cache is untouched)
+and the fit runs for real:
+
+| | files | size |
+|---|---|---|
+| Warm, cache already built | 280 | 234 MB |
+| **Cold — the bundle** | **439** | **356 MB** |
+
+| Directory | files | MB |
+|---|---|---|
+| `data/external/advanced` | 9 | 237.7 |
+| `data/external/clubelo` | 220 | 48.7 |
+| `data/processed` | 10 | 27.0 |
+| `data/processed/logs` | 1 | 19.5 |
+| `data/raw/football_data` | 160 | 18.5 |
+| `data/processed/enriched` | 3 | 3.8 |
+| `data/processed/competition_cache` | 11 | 0.3 |
+| `data/external/uefa` | 15 | 0.1 |
+| `data/processed/fixture_calendars` | 5 | 0.1 |
+| `data/curated` | 4 | 0.0 |
+| `web/data` | 1 | 0.0 |
+| **Total** | **439** | **355.7** |
+
+**356 MB of the 2.7 GB: 13 %.** The file list is in
+`docs/serving_bundle_cold.json`, with a read count per file.
+
+Two limits of the measurement, stated so nobody takes it as exhaustive:
+
+- The crawl passed domestic slugs to `/competition/{slug}`, which serves the
+  three UEFA competitions, so those three responses were 404 and the European
+  forecast path was not exercised. Its inputs are in the bundle anyway —
+  `/track-record` pulls `data/external/uefa` through settlement, and
+  `/squadlab/historic` opens the 220 ClubElo team files — and
+  `data/processed/competition_cache` is a regenerable cache, slow to miss but
+  not fatal.
+- `/squadlab/season` and `/squadlab/deal` are POSTs and were not called. They
+  read the same card and ClubElo files the GETs already pull in.
+
+The cold run also times the first visit on an empty volume: `/track-record`
+80 s, `/squadlab/historic` 47 s, on top of a lifespan that fits the models.
+That is the measurement behind the **three-minute `start_period`** below — a
+healthcheck without one restarts the container into the same fit for ever.
+
 ## 2. The real architectural question: where does the refresh run?
 
 `scripts/update_season.py` downloads from ESPN and friends, rebuilds the
@@ -127,3 +183,12 @@ Notes that will save an afternoon:
 | Domain name, and which registrar? | Naming and payment. |
 | Is the site to be indexed by search engines, or quietly public? | Changes `robots.txt`, metadata and how much the privacy page matters. |
 | Provider: Hetzner (cheapest at this size) or another? | Payment and preference. |
+
+### Answered by the user, 2026-11-03
+
+| Question | Answer | What it changes |
+|---|---|---|
+| Where does the refresh run? | **On the server** | Chromium and Selenium live there, in a `refresh` image of their own — not in `api`, whose serving path never touches them. Pushes the VPS above the ~15 €/month originally assumed: it now needs disk for the 2.7 GB working set and memory to rebuild the foundation, not just to serve 356 MB. |
+| Domain | Not yet, will say | Caddy is wired for automatic TLS but the hostname stays an environment variable. |
+| Indexing | **Not indexed now, but ready to be** | `robots.txt` serves `noindex` by default behind a single switch, and the metadata and sitemap are built regardless, so turning it on later is a variable and not a rewrite. |
+| Provider | Undecided | The deployment steps stay provider-neutral. |
