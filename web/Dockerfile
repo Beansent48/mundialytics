@@ -14,9 +14,16 @@
 # against whatever the API answers at build time, and a build against a down API
 # bakes the "the model is warming up" box into static HTML --
 # `scripts/require-api.mjs` exists to refuse that and runs here too. That is why
-# the stack is brought up in two moves (`docker compose up -d --wait api`, then
-# `docker compose build web`); the README and docs/DEPLOYMENT_PLAN.md spell the
-# sequence out.
+# the stack is brought up in two moves: the API first, then this image.
+#
+# And the second move is NOT `docker compose build web`. The builder reaches the
+# API by borrowing the host's network, host networking in a build is a BuildKit
+# *entitlement*, and compose has no flag to grant one — it fails with a bare
+# "failed to execute bake: exit status 1". The grant is a bake flag:
+#
+#   docker buildx bake -f docker-compose.yml web --allow=network.host --load
+#
+# The README and docs/DEPLOYMENT_PLAN.md carry that line in the sequence.
 #
 # Context is `web/`; nothing outside it is needed.
 

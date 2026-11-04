@@ -104,11 +104,19 @@ services:
       # a start_period the container is marked unhealthy, restarted, and the
       # restart begins the same fit again: it never comes up.
       #
-      # The arithmetic: 119 s for a full fit on this machine (joblib cache
-      # empty), times about three for two slow vCPUs, plus the payload warm-up.
-      # 420 s, and a container that is genuinely broken still fails 4 × 15 s
-      # after it.
-      start_period: 420s
+      # The arithmetic, and the first version of it was wrong. It was sized from
+      # A1's 119 s host measurement and came to 420 s; the first container
+      # actually measured took **394.7 s** ("models ready in 394.7s", 22 vCPU),
+      # 25 seconds of margin. A1's number is a fit with the props joblib already
+      # warm, and a freshly seeded volume has no caches at all: engine fit, then
+      # the market level recomputed (28 s), then the whole props refit.
+      #
+      # So: 395 s measured cold in a container here, times about three for two
+      # slow vCPUs -> 1200 s. A container that is genuinely broken still fails
+      # 4 × 15 s after that. This is the price of a COLD seed and it is paid
+      # once: with `data/processed/cache` warm the same start is seconds, and
+      # the refresh container rebuilds those caches on its way past.
+      start_period: 1200s
       interval: 15s
       timeout: 10s
       retries: 4
@@ -146,6 +154,19 @@ services:
       # builder has no route to the compose network, so it borrows the host's
       # and talks to the port `api` publishes on loopback. This is why the API
       # publishes one at all, and why the first build is a separate step.
+      #
+      # **`docker compose build web` cannot build this**, and that is BuildKit
+      # working as designed rather than a mistake here: host networking in a
+      # build is an *entitlement*, which has to be granted explicitly, and
+      # compose has no flag for it — it fails with a bare
+      # "failed to execute bake: exit status 1". The grant is a bake flag, so
+      # the web image is built with:
+      #
+      #   docker buildx bake -f docker-compose.yml web --allow=network.host --load
+      #
+      # Measured 2026-11-03. The README and the deployment plan give that line
+      # in the bring-up sequence; everything else still builds with
+      # `docker compose build`.
       network: host
       args:
         # A path, not an origin: same-origin through Caddy, so no CORS.
