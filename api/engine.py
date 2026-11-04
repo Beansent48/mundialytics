@@ -146,6 +146,21 @@ def _market_levels(df: pd.DataFrame, k: float) -> dict[str, tuple[int, float]]:
         except Exception:
             pass
     detail = market_level_detail(df, None, k=k)
+    if not detail:
+        # Never memoise a failure. The key folds in a stamp of the football-data
+        # directory, so an empty result taken while those files were unreadable
+        # -- a mount that is not there, a permission error -- would be cached
+        # under that same empty stamp and read back by every later start: the
+        # API then serves every match with no market shift at all, in under a
+        # second, with nothing in the log but one "unavailable" line.
+        #
+        # Measured 2026-11-03 while building the A2 containers: a bind mount
+        # that could not expose data/raw/football_data produced
+        # `market_level_..._e3b0c442.json` (e3b0c442 is the hash of nothing),
+        # and three later containers served without the level because that file
+        # was a hit. Returning without writing costs a recomputation on the next
+        # start and cannot cache a wrong answer.
+        return detail
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_f.write_text(json.dumps({c: [n, m] for c, (n, m) in detail.items()}),
