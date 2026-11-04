@@ -77,12 +77,49 @@ listed as needed. The props fit reads it when it *fits*; the serving path reads
 the fitted joblib. It is a refresh input, not a serving one.
 
 `scripts/build_serving_bundle.py` turns the manifest into the directory a
-deployment mounts: **277 files, 194.5 MB — 0.7% of the tree.** It drops the
-code paths (they travel in the images) and `data/processed/cache/`, because the
-fit cache is keyed on a hash of the engine source and a container's copy of
-that source is not byte-identical to a Windows checkout's: a copied cache could
-never be hit. The container pays one cold fit on its first boot instead, which
-is what the healthcheck's `start_period` is for.
+deployment mounts. It drops the code paths (they travel in the images) and
+`data/processed/cache/`, because the fit cache is keyed on a hash of the engine
+source and a container's copy of that source is not byte-identical to a Windows
+checkout's: a copied cache could never be hit. The container pays one cold fit
+on its first boot instead, which is what the healthcheck's `start_period` is
+for.
+
+### The read set was not the whole bundle, and only the container said so
+
+The first bundle was **277 files, 194.5 MB**, and it was wrong. Running the API
+against it printed:
+
+```
+market level unavailable, lambdas left alone
+```
+
+That is the fail-soft branch of `api/engine._club_engine`, so the container
+served every match **with no market level at all** — probabilities quietly
+different from the deployed ones, out of a bundle that looked complete. The
+2026-10-17 market-level deployment is part of the published model; silently
+dropping it is exactly the kind of divergence this project does not accept.
+
+The mechanism, and it is a general trap rather than a one-off:
+
+1. `_market_levels` memoises the level on disk **inside
+   `data/processed/cache/`** — the directory the bundle deliberately excludes.
+2. Its cache key is built by *stat-ing* every file in
+   `data/raw/football_data/` through a glob.
+3. **A glob is `os.scandir`, not `open`.** With the memo warm, the measurement
+   read the memo and never opened a single football-data CSV, so they never
+   entered the read set.
+4. In the container the memo missed (no cache directory), the level recomputed,
+   and its inputs were not there.
+
+Any on-disk memo hides its own inputs this way. So the measurement script now
+records directory listings as well as opens and prints them separately —
+"listed (not every file opened)", `walked` in the manifest — which is where the
+next gap of this shape will show up before a container finds it. And
+`build_serving_bundle.py` has an explicit `ALWAYS_INCLUDE` for
+`data/raw/football_data` with the reason written next to it.
+
+**The bundle is therefore 583 files, 234.7 MB** — 201 football-data CSVs and
+41 MB more than measured, and still **0.9% of the 26.5 GB tree.**
 
     python scripts/measure_serving_bundle.py --out outputs/serving_bundle
     python scripts/build_serving_bundle.py --to outputs/bundle_data --clean
@@ -198,6 +235,26 @@ server exists.
 full suite last passed with, on 3.14. CI additionally runs the ranges in
 `requirements.txt` on 3.10 and 3.12; the image does not have to.
 
+### What the images weigh, and why
+
+Measured 2026-11-03, built in 97 s (the two Python images) on this machine:
+
+| Image | Size | Where it goes |
+|---|---|---|
+| `mundialytics-api` | **692 MB** | 386 MB dependency layer (numpy/scipy/pandas/sklearn), ~295 MB interpreter and base, **5.2 MB of this project's code** |
+| `mundialytics-refresh` | **1.01 GB** | the api image plus soccerdata |
+| `mundialytics-web` | see below | `.next/standalone` only |
+| `mundialytics-web-tools` | **1.88 GB** | the `source` stage: full `node_modules` plus sources. A one-shot that runs the migrations and exits, so its size buys nothing and costs nothing |
+
+Two numbers worth keeping. **The project's own code is 5.2 MB** of a 692 MB
+image (`api/` 180 kB, `src/` 2.25 MB, `scripts/` 2.76 MB, `config/` 33 kB) —
+everything else is the scientific Python stack, which is why there is no point
+optimising the Dockerfile and every point in keeping the data out of it.
+
+And **filtering three entries out of the lock saves 320 MB**: `soccerdata`
+brings `seleniumbase`, which brings Selenium, PyAutoGUI, behave, pytest-xdist
+and rich. The split between the `api` and `refresh` stages is that number.
+
 ### The healthcheck's `start_period`, which is load-bearing
 
 Measured by A1 on 2026-10-21: uvicorn runs the lifespan — which loads the
@@ -206,9 +263,21 @@ refused connection. Not a slow answer, not a 503: nothing to answer with. A
 healthcheck without `start_period` therefore marks the container unhealthy,
 restarts it, and the restart begins the same fit again. It never comes up.
 
-420 s = the 119 s a full fit takes on this machine, times about three for two
-slow vCPUs, plus the payload warm-up. After it, a genuinely broken container
-still fails in 4 × 15 s.
+**The first value for it was wrong, and the container said so.** 420 s was
+sized from A1's 119 s host measurement; the first container actually measured
+reported `models ready in 394.7s` — 25 seconds of margin, on a 22-vCPU machine.
+A1's 119 s is a fit with the props joblib already warm, and a freshly seeded
+volume has no caches at all: engine fit, then the market level recomputed
+(28 s), then the whole props refit. On two slow vCPUs that is minutes past
+420 s, the container would be marked unhealthy, and the restart would begin the
+same fit again — the precise failure this section exists to prevent, caused by
+sizing it from the wrong measurement.
+
+**1200 s**: 395 s measured cold in a container, times about three for two slow
+vCPUs. After it, a genuinely broken container still fails in 4 × 15 s. This is
+the price of a *cold seed* and it is paid once — with `data/processed/cache`
+warm the same start is seconds, and the refresh container rebuilds those caches
+on its way past.
 
 The probe checks `ready`, not just a 200. `/health` answers 200 while the models
 load — it has to, since a probe triggering the load was the bug A1 fixed — and a
@@ -386,23 +455,64 @@ has to be rebuilt because its pages are prerendered), then
 
 ---
 
-## 6. What has not been run
+## 6. What the containers proved, and what they corrected
 
-Honesty about the verification boundary, because this machine could not cross
-it: **a Claude session cannot start Docker here.** `com.docker.service` is on
-manual start and `OpenService` is denied without elevation, so Docker Desktop
-has to be started by hand — and it was not running while A2 was built.
+The stack was built and run on 2026-11-03/04. That mattered more than expected:
+**six defects turned up that reading the code had not**, and not one of them
+raised an exception. Every one left the system answering with a credible number,
+which is the only reason they had survived.
 
-Verified by execution:
+| # | What was wrong | How it looked |
+|---|---|---|
+| 1 | the measured bundle could not recompute the market level (41 MB of inputs hidden behind a memo keyed by `scandir`) | one log line, every match priced with no market shift |
+| 2 | `_market_levels` **memoised that failure** under a key describing the missing files | later starts "succeeded" in under a second, still with no level |
+| 3 | `start_period` 420 s against a 394.7 s and then 544.1 s cold start | 25 s of margin; on a slow VPS, a restart loop |
+| 4 | the API image excluded `web/data/benchmark_vs_bet365.json`, which the API reads | `/track-record` served `benchmark: null` |
+| 5 | `web/lib/api.ts` typed that nullable field as non-nullable | `/en/results` threw during prerender: **the web image could not be built** |
+| 6 | the props bundle was missing `understat_shots.csv`, tolerated by `if ... .exists()` | both prop models load, every price plausible, the pen-taker split gone |
 
-- the serving bundle and the write set (section 1), measured on the real app;
-- `docker compose config` parses the whole stack, with the pinned project name;
-- the schedule arithmetic and the `last_run.json` contract of the refresh loop
-  (`tests/test_refresh_loop.py`), and the three CORS cases
-  (`tests/test_cors_origins.py`);
-- the full suite, `npm run lint` and `npx tsc --noEmit` after the web changes.
+Numbers 2, 5 and 6 are product defects rather than packaging ones, and they are
+in this document because the pattern is the point: a cache that stores a
+failure, a type that denies a null the server really sends, and an input whose
+absence is swallowed by an `exists()` check.
 
-**Not yet verified, and needing one `docker compose up`:** that the images
-build, their sizes, that the stack comes up healthy, that the site works end to
-end through the proxy with accounts, and that a serving bundle mount is
-sufficient. Each is a command in this document; none is a design question.
+### What the running stack does
+
+```
+docker compose ps        api/web/postgres/caddy/refresh healthy, migrate exited 0
+all-healthy, caches warm                      21 s   (models ready in 2.0s)
+all-healthy, cold seed                 394.7 / 544.1 s
+market level, in-container      Bundesliga x1.0257 · LaLiga x1.0451 · Ligue 1
+                                x1.0316 · Premier League x1.0369 · Serie A x1.0546
+/engine/health            200 through Caddy, on the site's own origin
+/engine/fixtures/day      200, today's card priced
+/ , /es, /es/{results,matchday,leagues,squadlab,awards,competitions}
+                          200, 58-111 KB of real content each
+/robots.txt               200, 27 bytes — the Disallow
+sign-up through the proxy 200, user row created, session cookie resolves
+migrations                applied by the one-shot, exit 0, gating web
+```
+
+`/en` answers 307 to `/`, which is `localePrefix: "as-needed"` with
+`defaultLocale: "en"` doing what it is configured to do, not a proxy fault.
+
+### Two local traps worth knowing
+
+- **`DATA_DIR` belongs in `.env`, not on the command line.** Passing it to one
+  compose call and not the next changes the service's configuration, so compose
+  silently *recreates* the container against the other directory. That is how
+  defect 2 was produced: a container that mounted the wrong tree wrote the
+  poisoned memo.
+- **Docker Desktop does not follow NTFS junctions.** A worktree whose `data/` is
+  junctioned to the main checkout (which is how a worktree gets the 26.5 GB at
+  all) mounts as a tree where `data/external` and `data/raw` exist and cannot be
+  traversed. So on this machine the serving-bundle copy is not an optimisation,
+  it is the only mountable form of the data.
+
+### Still not done
+
+- **The refresh container has not run a refresh.** It starts, schedules and
+  logs; `REFRESH_ON_START=1` against a real season download was not run, and
+  the bundle is a serving bundle, so it would be the wrong input anyway
+  (section 2). That is the one piece of A2 still owed a measurement.
+- Nothing is deployed. No VPS, no domain, no push of an image anywhere.
