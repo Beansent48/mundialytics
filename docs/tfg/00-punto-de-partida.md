@@ -199,6 +199,13 @@ con su medición:
 | Siete clubes europeos inencontrables por nombre | `københavn` se escribía `k benhavn` | `ä` sí se transliteraba, así que parecía arbitrario |
 | 25 partidos europeos registrados dos veces | `porto vs man city` y `fc porto vs manchester city` | un control de duplicados por texto no ve ninguno |
 
+Esta tabla es solo de defectos **corregidos**. Hay además **siete hallazgos
+anotados y vivos**, con mecanismo y escenario de fallo, en
+[`registro/2026-11-04-hallazgos-sin-arreglar.md`](registro/2026-11-04-hallazgos-sin-arreglar.md):
+cinco del mismo patrón silencioso y dos de puro desperdicio. Van aparte a
+propósito, porque sumarlos aquí daría una cuenta falsa de lo corregido. Para la
+memoria alimentan el 4.7 (amenazas a la validez) y el trabajo futuro, no el 5.0.
+
 El patrón se repite y es el material de la memoria: **ninguno de estos fallos
 levantaba una excepción**. Todos dejaban el sistema respondiendo con una cifra
 creíble. Por eso la respuesta no puede ser «arreglarlos», sino construir lo que
