@@ -583,7 +583,7 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from
 web/                    Next.js front end — see web/README.md
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  629 tests green on a clean checkout; 111 more
+tests/                  637 tests green on a clean checkout; 112 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```
