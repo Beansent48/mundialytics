@@ -53,6 +53,12 @@ export async function generateMetadata({
       type: "website",
       locale,
     },
+    // Public but quiet, which is the user's decision for the first deployment
+    // (2026-11-02): the link can be shown to anybody, and a search engine does
+    // not find it on its own. `app/robots.ts` says the same thing in the file
+    // crawlers read first; this is the half that survives a direct link.
+    // SITE_INDEXABLE=1 flips both.
+    robots: process.env.SITE_INDEXABLE === "1" ? undefined : { index: false, follow: false },
   };
 }
 

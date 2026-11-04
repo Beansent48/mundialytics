@@ -23,6 +23,8 @@ These came from the user and are not open for a session to revisit on its own.
 | Login | **Google + email, via a library** (Auth.js / Better Auth) inside Next.js, users in **our own Postgres**. Not Clerk, not Supabase. |
 | What the account stores | Favourites and settings, SquadLab progress, match alerts — and, later, **achievements, goals and user levels to gamify SquadLab**. |
 | Order | Performance → accounts → Docker/deploy. |
+| Where the daily refresh runs *(2026-11-02)* | **Inside the stack**, as its own container — against the deployment plan's own recommendation of keeping it on the PC. The site is to be self-sufficient. |
+| Indexed by search engines? *(2026-11-02)* | **Not yet.** Public and readable by anyone with the link; `robots.txt` disallows and the pages send `noindex`. One variable flips it. |
 
 The gamification intent matters now even though it is built last: the SquadLab
 schema in task **B2** has to be born with somewhere to hang an achievement, or
@@ -37,7 +39,7 @@ it gets rewritten six months later.
 | **A1** | Cold start: measure and fix | started 2026-10-21 | — | [COLD_START_DIAGNOSIS.md](COLD_START_DIAGNOSIS.md) |
 | **B1** | Accounts: auth + Postgres foundation | built 2026-10-23 (v0.65.0) | A1 (touches `web/` layout and config) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §1-3, and §8-9 for what was built |
 | **B2** | User data on the server: favourites, settings, SquadLab progress | built 2026-10-23 (v0.66.0) | B1 (needs a session and a user id) | [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) §4-6, and §10 for what was built |
-| **A2** | Dockerisation and deployment | queued | A1 (what warm start needs decides the entrypoint), B1 (Postgres is a container) | [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) |
+| **A2** | Dockerisation and deployment | built 2026-11-03 (v0.67.0) | A1 (what warm start needs decides the entrypoint), B1 (Postgres is a container) | [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md), and §1-4 for what was built |
 
 A1 was started on 2026-10-21; B1, B2 and A2 exist as task cards in Claude Code
 waiting to be started, and those cards expire in a week. **These files, not the
@@ -74,17 +76,25 @@ Not sessions yet. They are written down so they are not re-discovered.
    the award rules on top.
 3. **Own-bet tracking.** Deliberately left out of the account scope for now: it
    is a new module, not persistence of something that already exists.
-4. **`outputs/` is 7.6 GB** and `data/external/` is 2.2 GB, most of it never
-   read by the serving path. A2 has to answer this to produce an image that is
-   not absurd; see the serving-bundle section of the deployment plan.
+4. ~~**`outputs/` is 7.6 GB** and `data/external/` is 2.2 GB, most of it never
+   read by the serving path.~~ **Answered by A2**, and the numbers were worse
+   than this said: `data/` is 26.5 GB, because `data/raw` is 23.9 GB. The
+   serving path opens 277 files and 194.5 MB of it, measured by
+   `scripts/measure_serving_bundle.py`. Neither directory is in an image; the
+   data is a mount. What is still open is the user's own housekeeping question:
+   7.6 GB of `outputs/` and 23.9 GB of `data/raw` are research material on a
+   laptop's disk, and nothing but the user can decide what to delete.
 
 ---
 
 ## What is true today, for whoever picks these up
 
-- **Two processes, by hand.** `uvicorn api.main:app --port 8000` and
-  `npm --prefix web run dev`. There is no production build in the loop, and
-  `.claude/launch.json` starts the web in dev mode too.
+- **Two processes by hand, or six containers.** `uvicorn api.main:app --port
+  8000` plus `npm --prefix web run prod` is still how it is developed; since
+  A2 (v0.67.0) `docker compose up` brings up the whole site — proxy, web, API,
+  database, migrations and the daily refresh — with the data mounted. The
+  first bring-up is two moves, because the web image's build prerenders every
+  data page and therefore needs the API already up.
 - **The API is stateless and anonymous.** 3,000 lines over `api/`, reading CSVs
   and joblib-cached fits. It has no concept of a user and, if the plan in
   [USER_ACCOUNTS_DESIGN.md](USER_ACCOUNTS_DESIGN.md) holds, it never will:
