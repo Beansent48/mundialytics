@@ -41,6 +41,42 @@ ROOT = Path(__file__).resolve().parents[1]
 # Read while serving but deliberately left out of a bundle.
 SKIP_PREFIXES = ("data/processed/cache/",)
 
+# Needed to serve correctly and NOT in the read set, which is a distinction the
+# first version of this script got wrong. Found on 2026-11-03 by running the
+# container: the API came up and printed "market level unavailable, lambdas left
+# alone", which is the fail-soft branch, so it served every match with no market
+# shift at all -- probabilities quietly different from the deployed ones, out of
+# a bundle that looked complete.
+#
+# The chain: `api/engine._market_levels` memoises the level on disk under
+# `data/processed/cache/` (excluded above, for good reason -- its key includes a
+# hash of the engine source, which differs in a container), and its key is built
+# by *stat-ing* every football-data CSV through a glob. A glob is `os.scandir`,
+# not `open`, so with the memo warm the measurement neither opened those files
+# nor needed them. In the container the memo missed, the level recomputed, and
+# its inputs were not there.
+#
+# 41 MB and 201 files, against 194.5 MB of measured reads. The measurement
+# script now reports directories it listed without opening (`walked` in the
+# manifest) so the next gap of this shape shows up before a container does.
+ALWAYS_INCLUDE = (
+    "data/raw/football_data",
+    # And the same shape of gap one layer along, found the same day and
+    # corroborated by a parallel session that measured the bundle *cold*
+    # (439 files / 356 MB, branch `claude/settlement-audit`): with the props
+    # joblib warm, the files that BUILT it are never opened.
+    #
+    # `understat_shots.csv` is 121 MB and `PlayerPropsModel.fit` takes it as
+    #   `if shots is None and shots_path is not None and Path(shots_path).exists()`
+    # — so its absence is tolerated in silence, and the penalty information it
+    # carries (the pen-taker split) simply is not in the model. Verified in the
+    # container on 2026-11-03: a cold refit without it returned a working
+    # `PlayerPropsModel`, every price plausible, the feature gone. The 2026-10-21
+    # plan called this file a props-fit input and it was right; the warm
+    # measurement is what said otherwise.
+    "data/external/advanced/understat/understat_shots.csv",
+)
+
 
 def human(n: float) -> str:
     for unit in ("B", "KB", "MB", "GB"):
@@ -75,6 +111,14 @@ def main() -> int:
 
     wanted = [rel for rel in data.get("files", {})
               if rel.startswith("data/") and not rel.startswith(SKIP_PREFIXES)]
+    for extra in ALWAYS_INCLUDE:
+        base = ROOT / extra
+        if not base.is_dir():
+            print(f"warning: {extra} is not in this checkout", file=sys.stderr)
+            continue
+        wanted += [f.relative_to(ROOT).as_posix() for f in sorted(base.rglob("*"))
+                   if f.is_file()]
+    wanted = sorted(set(wanted))
     missing = [rel for rel in wanted if not (ROOT / rel).is_file()]
     total = sum((ROOT / rel).stat().st_size for rel in wanted if (ROOT / rel).is_file())
 

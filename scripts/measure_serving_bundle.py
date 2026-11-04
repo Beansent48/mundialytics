@@ -52,14 +52,56 @@ for entry in (str(ROOT), str(ROOT / "src")):
 
 READS: dict[str, int] = {}      # repo-relative path -> times opened for reading
 WRITES: dict[str, int] = {}     # repo-relative path -> times opened for writing
+WALKED: dict[str, int] = {}     # repo-relative directory -> times listed
 _RECORDING = threading.Event()
+
+# Why directory listings are recorded and not just opens, which cost an
+# afternoon on 2026-11-03: the market level is memoised on disk under
+# `data/processed/cache/`, and its key is built by *stat-ing* every file in
+# `data/raw/football_data/` through a glob. A glob is `os.scandir`, not `open`.
+# So a measurement taken with the memo warm reads the memo, never opens a single
+# football-data CSV, and reports a bundle that cannot recompute the level -- in
+# which case the engine fails soft and serves lambdas with no market shift at
+# all. Silently different probabilities, from a bundle that looked complete.
+_DIR_EVENTS = {"os.listdir", "os.scandir"}
 
 
 _ROOT_PREFIX = str(ROOT).lower().replace("\\", "/")
 
 
+def _rel(path) -> str | None:
+    """A repo-relative posix path, or None for anything outside the repo."""
+    try:
+        raw = os.fsdecode(path).replace("\\", "/")
+    except (TypeError, ValueError):
+        return None
+    if raw.lower().startswith(_ROOT_PREFIX):
+        return raw[len(_ROOT_PREFIX):].lstrip("/") or None
+    if os.path.isabs(raw):
+        return None
+    try:
+        return Path(raw).resolve().relative_to(ROOT).as_posix()
+    except (ValueError, OSError):
+        return None
+
+
+def _record_dir(path) -> None:
+    if path is None:
+        return
+    # A scandir of a file's parent is normal plumbing; what matters is a
+    # directory whose *contents* the serving path inspects.
+    rel = _rel(path)
+    if rel:
+        WALKED[rel] = WALKED.get(rel, 0) + 1
+
+
 def _record(event: str, args) -> None:
-    if event != "open" or not _RECORDING.is_set():
+    if not _RECORDING.is_set():
+        return
+    if event in _DIR_EVENTS:
+        _record_dir(args[0] if args else None)
+        return
+    if event != "open":
         return
     path, mode, _flags = args
     if path is None:
@@ -301,6 +343,20 @@ def main() -> int:
         for rel, n in sorted(writes.items()):
             print(f"  x{n:<4} {rel}")
 
+    # Directories whose contents are inspected without every file being opened.
+    # A disk memo keyed on those contents hides its own inputs from the read set
+    # (see the note on _DIR_EVENTS), so this list is where to look for a bundle
+    # that serves today and stops serving the moment a memo expires.
+    walked = {d: n for d, n in WALKED.items()
+              if d.startswith("data/") and not set(by_dir) & {d}}
+    if walked:
+        print("\nlisted (not every file opened) -- check these before trusting the bundle:")
+        for rel, n in sorted(walked.items(), key=lambda kv: -_tree_size(ROOT / kv[0])):
+            tree = _tree_size(ROOT / rel)
+            opened = sum(1 for r in reads if r.startswith(rel + "/"))
+            total = sum(1 for _ in (ROOT / rel).glob("*")) if (ROOT / rel).is_dir() else 0
+            print(f"  x{n:<3} {rel:<44} {opened}/{total} opened, {_human(tree)} on disk")
+
     if failures:
         print("\nFAILURES (the read set is incomplete without these):")
         for f in failures:
@@ -321,6 +377,7 @@ def main() -> int:
             "total_bytes": total,
             "files": {k: bundle[k] for k in sorted(bundle)},
             "writes": dict(sorted(writes.items())),
+            "walked": dict(sorted(WALKED.items())),
         }, indent=2) + "\n", encoding="utf-8")
         print(f"\nwrote {out}/reads.txt, writes.txt, manifest.json")
 
