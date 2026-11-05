@@ -58,6 +58,18 @@ from mundialytics.props import half_time as HT  # noqa: E402
 from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
     DEPLOYED_CLUB_ENGINE_KWARGS as K, markets_from_lambdas)
 
+# THE LAMBDA CACHE READ BELOW IS A FROZEN ARTIFACT. Its stored ph/pd/pa were
+# produced with this exact triple and the POWER map -- verified: that combination
+# reproduces the stored trio to 3.3e-16, while gamma 1.20 is off by 2.7e-02, the
+# contrast map by 2.6e-02 and rho -0.03 by 1.1e-02. Pinned literally and NOT read
+# from DEPLOYED_CLUB_ENGINE_KWARGS, because this experiment's baseline IS the
+# chain as it was served while it ran: reading the live config would silently
+# re-point that baseline and change what every delta in this file means, without
+# any test failing. v0.63.0 moved the deployed trio map; rho wants to move next
+# (see scripts/draw_deficit/README.md). scripts/draw_deficit/score_trio_forms.py
+# imports these rather than keeping a second copy.
+CACHE_GAMMA, CACHE_RHO, CACHE_TEMPER = 1.3, -0.06, 1.05
+
 WF_REL = "data/processed/enriched/understat_xg/walkforward_preds_deployed.csv"
 FOUND_REL = "data/processed/foundation_big5_multi_season.csv"
 N_GOALS = 10          # the deployed grid is 0..10 per side
@@ -407,10 +419,10 @@ def cells_oe(df: pd.DataFrame, which: str, param: float, top: int = 4) -> None:
     lh, la = df.lh.to_numpy(float), df.la.to_numpy(float)
     if which == "deployed":
         m = reweight_to_trio(
-            joint(lh, la, "dixon_coles", param, temper=K["goal_temper"], fix_marginals=False),
+            joint(lh, la, "dixon_coles", param, temper=CACHE_TEMPER, fix_marginals=False),
             df[["ph", "pd", "pa"]].to_numpy(float))
     else:
-        m = joint(lh, la, which, param, temper=K["goal_temper"])
+        m = joint(lh, la, which, param, temper=CACHE_TEMPER)
     exp = m.sum(axis=0)
     obs = np.zeros_like(exp)
     h = np.minimum(df.hg.to_numpy(int), N_GOALS)
@@ -484,17 +496,17 @@ def cmd_corr(df: pd.DataFrame, data_root: Path) -> None:
     print("  diagonal; a low-score effect would sit in one corner:")
     cells_oe(df, "independent", 0.0)
     print("\n  and the same table under the deployed matrix (Dixon-Coles + coherent):")
-    cells_oe(df, "deployed", K["outcome_rho"])
+    cells_oe(df, "deployed", CACHE_RHO)
 
     print("\n  what the DEPLOYED chain already implies (sampled 1 in 13 matches):")
     idx = np.arange(0, len(df), 13)
     for label, kw in (("power-map matrix (rho -0.06, temper 1.05, coherent) -- what was "
                        "published when this ran; v0.63.0 serves the contrast map",
-                       dict(rho=K["outcome_rho"], temper=K["goal_temper"],
-                            sharpen_gamma=K["sharpen_gamma_1x2"],
+                       dict(rho=CACHE_RHO, temper=CACHE_TEMPER,
+                            sharpen_gamma=CACHE_GAMMA,
                             sharpen_contrast_only=False, coherent=True)),
                       ("Dixon-Coles + temper only, no 1X2 sharpening",
-                       dict(rho=K["outcome_rho"], temper=K["goal_temper"],
+                       dict(rho=CACHE_RHO, temper=CACHE_TEMPER,
                             sharpen_gamma=1.0, coherent=False)),
                       ("pure independent Poisson", dict(rho=0.0, temper=1.0,
                                                         sharpen_gamma=1.0, coherent=False))):
@@ -515,7 +527,7 @@ def fit_param(sub: pd.DataFrame, family: str) -> tuple[float, float]:
     rows = np.arange(len(sub))
 
     def nll(p: float) -> float:
-        m = joint(lh, la, family, float(p), temper=K["goal_temper"])
+        m = joint(lh, la, family, float(p), temper=CACHE_TEMPER)
         return nll_cell(m[rows, hg, ag])
 
     base = nll(0.0)
@@ -553,7 +565,7 @@ def cmd_fit(df: pd.DataFrame, fits: dict | None = None) -> dict:
         p = fits[fam]["full"]
         cov = np.mean([D.implied_covariance(joint(
             df.lh.to_numpy(float)[i:i + 1], df.la.to_numpy(float)[i:i + 1], fam, p,
-            temper=K["goal_temper"])[0]) for i in range(0, len(df), 97)])
+            temper=CACHE_TEMPER)[0]) for i in range(0, len(df), 97)])
         print(f"  {fam:19s} param {p:+.4f}   implied Cov {cov:+.4f}   "
               f"log-lik gain {fits[fam]['full_gain']:+.6f} / match")
     print("\nthe RAW trio, before the 1X2 sharpening and before any reweighting --")
@@ -567,10 +579,10 @@ def cmd_fit(df: pd.DataFrame, fits: dict | None = None) -> dict:
     lh, la = df.lh.to_numpy(float), df.la.to_numpy(float)
     hg, ag = df.hg.to_numpy(int), df.ag.to_numpy(int)
     tot, both = (hg + ag >= 3).astype(float), ((hg > 0) & (ag > 0)).astype(float)
-    for fam, p in [("independent", 0.0), ("dixon_coles", K["outcome_rho"]),
+    for fam, p in [("independent", 0.0), ("dixon_coles", CACHE_RHO),
                    ("dixon_coles", fits["dixon_coles"]["full"])] + \
                   [(f, fits[f]["full"]) for f in CANDIDATES]:
-        m = joint(lh, la, fam, p, temper=K["goal_temper"],
+        m = joint(lh, la, fam, p, temper=CACHE_TEMPER,
                   fix_marginals=(fam != "dixon_coles"))
         trio = trio_of(m)
         gm = goal_markets(m, hg, ag)
@@ -656,12 +668,12 @@ def arm_scores(df: pd.DataFrame, family: str, params: np.ndarray | float,
     paths = np.empty((len(df), 9)) if with_htft else None
     for p in uniq:
         sel = np.ones(len(df), bool) if len(p_arr) == 1 else (p_arr == p)
-        m[sel] = joint(lh[sel], la[sel], family, float(p), temper=K["goal_temper"])
+        m[sel] = joint(lh[sel], la[sel], family, float(p), temper=CACHE_TEMPER)
         if with_htft:
             trio_h = None if own_1x2 else trio_pub[sel]
             paths[sel] = htft_paths(lh[sel], la[sel], family, float(p), trio_h)
     if own_1x2:
-        trio = sharpen(trio_of(m), K["sharpen_gamma_1x2"])
+        trio = sharpen(trio_of(m), CACHE_GAMMA)
         m = reweight_to_trio(m, trio)
         if with_htft:
             for p in uniq:
@@ -677,7 +689,7 @@ def deployed_scores(df: pd.DataFrame) -> dict[str, np.ndarray]:
     """The baseline: the matrix and the HT/FT paths exactly as served."""
     lh, la = df.lh.to_numpy(float), df.la.to_numpy(float)
     trio = df[["ph", "pd", "pa"]].to_numpy(float)
-    m = joint(lh, la, "dixon_coles", K["outcome_rho"], temper=K["goal_temper"],
+    m = joint(lh, la, "dixon_coles", CACHE_RHO, temper=CACHE_TEMPER,
               fix_marginals=False)
     m = reweight_to_trio(m, trio)
     paths = htft_paths(lh, la, "independent", 0.0, trio)
@@ -700,12 +712,12 @@ def verify_against_engine(df: pd.DataFrame, n: int = 200) -> tuple[float, float]
     sub = df.iloc[idx]
     lh, la = sub.lh.to_numpy(float), sub.la.to_numpy(float)
     mine = reweight_to_trio(
-        joint(lh, la, "dixon_coles", K["outcome_rho"], temper=K["goal_temper"],
+        joint(lh, la, "dixon_coles", CACHE_RHO, temper=CACHE_TEMPER,
               fix_marginals=False), sub[["ph", "pd", "pa"]].to_numpy(float))
     err_m = 0.0
     for k, (h, a) in enumerate(zip(lh, la)):
-        _, dist = markets_from_lambdas(h, a, rho=K["outcome_rho"], temper=K["goal_temper"],
-                                       sharpen_gamma=K["sharpen_gamma_1x2"],
+        _, dist = markets_from_lambdas(h, a, rho=CACHE_RHO, temper=CACHE_TEMPER,
+                                       sharpen_gamma=CACHE_GAMMA,
                                        sharpen_contrast_only=False, coherent=True)
         err_m = max(err_m, float(np.abs(mine[k] - dist.matrix.to_numpy()).max()))
     htm = HT.HalfTimeModel()
@@ -813,7 +825,7 @@ def cmd_sweep(df: pd.DataFrame) -> None:
             tot = aggregate(df, sc)
             cov = np.mean([D.implied_covariance(joint(
                 df.lh.to_numpy(float)[i:i + 1], df.la.to_numpy(float)[i:i + 1],
-                fam, float(p), temper=K["goal_temper"])[0])
+                fam, float(p), temper=CACHE_TEMPER)[0])
                 for i in range(0, len(df), 97)])
             cells = "  ".join(f"{tot[k] - allb[k]:+9.5f}"
                               for k in MARKETS if k not in ("1x2_rps", "1x2_ll"))
@@ -831,7 +843,7 @@ def cmd_sweep(df: pd.DataFrame) -> None:
         print(f"\n    {fam}:  {'param':>8s} {'P(draw)':>9s} {'O/E draws':>10s} "
               f"{'RPS':>9s} {'log loss':>10s}")
         for p in GRIDS[fam]:
-            trio = trio_of(joint(lh, la, fam, float(p), temper=K["goal_temper"],
+            trio = trio_of(joint(lh, la, fam, float(p), temper=CACHE_TEMPER,
                                  fix_marginals=(fam != "dixon_coles")))
             pdw = float(trio[:, 1].mean())
             print(f"    {'':>{len(fam) + 2}s}{p:+8.4f} {pdw:9.4f} {obs_draw / pdw:10.4f} "
@@ -849,10 +861,10 @@ def cmd_coherence(df: pd.DataFrame) -> None:
     lh, la = sub.lh.to_numpy(float), sub.la.to_numpy(float)
     print(f"\nchecked on {len(sub):,} matches (every 7th)")
     worst_overall = 0.0
-    for fam, p in [("independent", 0.0), ("dixon_coles", K["outcome_rho"]),
+    for fam, p in [("independent", 0.0), ("dixon_coles", CACHE_RHO),
                    ("bivariate_poisson", 0.05), ("frank_copula", 0.5),
                    ("gaussian_copula", 0.08)]:
-        m = reweight_to_trio(joint(lh, la, fam, p, temper=K["goal_temper"]), trio)
+        m = reweight_to_trio(joint(lh, la, fam, p, temper=CACHE_TEMPER), trio)
         err_t = float(np.abs(trio_of(m) - trio).max())
         err_s = float(np.abs(m.sum(axis=(1, 2)) - 1.0).max())
         paths = htft_paths(lh, la, fam, p, trio)
