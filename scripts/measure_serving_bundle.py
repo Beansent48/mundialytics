@@ -265,6 +265,8 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=None,
                     help="directory to write the manifest and the file lists into")
     ap.add_argument("--quiet", action="store_true", help="only the summary")
+    ap.add_argument("--cold", action="store_true",
+                    help="measure with no fit caches, which is what a server has")
     args = ap.parse_args()
 
     def log(msg: str) -> None:
@@ -272,6 +274,27 @@ def main() -> int:
             print(msg, flush=True)
 
     import uvicorn
+
+    if args.cold:
+        # A server's volume starts with no fits on it, and a fit loaded from
+        # cache never opens the files that BUILT it: measured warm, this script
+        # misses `understat_shots.csv` (121 MB) entirely, and the props model
+        # that a bundle without it produces is a working model with the penalty
+        # information silently absent. So point the cache somewhere empty --
+        # never deleting the real one, which costs two minutes to rebuild -- and
+        # let the fits actually run. ~10 minutes against ~1.
+        #
+        # The mechanism is a parallel session's (branch
+        # `claude/settlement-audit`, which measured 439 files / 356 MB this way);
+        # it belongs here because a measurement taken warm publishes an
+        # incomplete volume.
+        import tempfile
+
+        from api import engine as _engine
+
+        cold_dir = Path(tempfile.mkdtemp(prefix="mundialytics-cold-cache-"))
+        _engine.CACHE_DIR = cold_dir
+        log(f"cold: fit cache redirected to {cold_dir} (the real one is untouched)")
 
     _RECORDING.set()
     log("importing the app (module-level reads count too)...")

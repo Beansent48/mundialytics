@@ -113,11 +113,17 @@ def main() -> int:
               if rel.startswith("data/") and not rel.startswith(SKIP_PREFIXES)]
     for extra in ALWAYS_INCLUDE:
         base = ROOT / extra
-        if not base.is_dir():
+        # Entries are directories or single files. The first version only
+        # handled directories and skipped `understat_shots.csv` with a warning
+        # that read like a missing-file problem -- so the gap it was added to
+        # close stayed open for another cold start.
+        if base.is_file():
+            wanted.append(base.relative_to(ROOT).as_posix())
+        elif base.is_dir():
+            wanted += [f.relative_to(ROOT).as_posix() for f in sorted(base.rglob("*"))
+                       if f.is_file()]
+        else:
             print(f"warning: {extra} is not in this checkout", file=sys.stderr)
-            continue
-        wanted += [f.relative_to(ROOT).as_posix() for f in sorted(base.rglob("*"))
-                   if f.is_file()]
     wanted = sorted(set(wanted))
     missing = [rel for rel in wanted if not (ROOT / rel).is_file()]
     total = sum((ROOT / rel).stat().st_size for rel in wanted if (ROOT / rel).is_file())
