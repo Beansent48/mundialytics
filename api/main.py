@@ -32,7 +32,9 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from api import catalogue as cat  # noqa: E402
-from api.engine import club_engine, data_version, props_models  # noqa: E402
+from api.engine import (  # noqa: E402
+    _club_engine, _props_models, club_engine, data_version, props_models,
+)
 from mundialytics.props.player_props import likely_xi  # noqa: E402
 
 # ── Model readiness ───────────────────────────────────────────────────────────
@@ -48,18 +50,22 @@ _READY: float | None = None
 _READY_INFO: dict = {}
 
 
-def _ready() -> None:
+def _ready(version: float | None = None) -> float:
     """Make sure the models for the data on disk are loaded. 503 if busy.
 
     Only one caller does the loading. Everyone who arrives while it is working
     gets a 503 with a Retry-After instead of a held connection: the old
     behaviour queued them all behind the same lru_cache lock, and a browser
     with four tabs open waited four times for nothing.
+
+    Returns the version it loaded, so callers can forward it without a second
+    stat() call (finding #4).
     """
     global _READY, _READY_INFO
-    version = data_version()
+    if version is None:
+        version = data_version()
     if _READY == version:
-        return
+        return version
     if not _LOAD.acquire(blocking=False):
         raise HTTPException(
             503, "The model is still loading. Try again in a few seconds.",
@@ -68,23 +74,30 @@ def _ready() -> None:
     try:
         _, _, df = club_engine()
         props_models()
-        # kept so /health can describe the load without triggering one
         _READY_INFO = {"matches": int(len(df)), "dataThrough": str(df["date"].max())[:10]}
         _READY = version
     finally:
         _LOAD.release()
+    return version
 
 
 def _models():
-    """The club engine, teams and foundation — once the models are ready."""
-    _ready()
-    return club_engine()
+    """The club engine, teams and foundation — once the models are ready.
+
+    Reads data_version() once and forwards it: a second stat() between _ready
+    and club_engine could see a refresh that _ready did not, causing a cache
+    miss and a full in-line refit (finding #4).
+    """
+    v = data_version()
+    _ready(v)
+    return _club_engine(v)
 
 
 def _props():
     """The team and player prop models — once the models are ready."""
-    _ready()
-    return props_models()
+    v = data_version()
+    _ready(v)
+    return _props_models(v)
 
 
 def _warm_payloads() -> None:
@@ -303,12 +316,9 @@ def catalogue() -> list[dict]:
 # carries the dataset's last date, so a refresh invalidates it without a deploy.
 _CACHE: dict[tuple, tuple[float, dict]] = {}
 _TTL_SECONDS = 600
-# One builder per key. The matchday screen fires /fixtures/day and
-# /fixtures/calendar together, the startup warm-up may be on the same answer,
-# and FastAPI runs sync endpoints in a threadpool -- so without this they all
-# built the same payload at the same time and each took as long as all of them.
 _CACHE_LOCKS: dict[tuple, threading.Lock] = {}
 _CACHE_GUARD = threading.Lock()
+_MAX_LOCKS = 128
 
 
 def _cached(key: tuple, build):
@@ -316,9 +326,14 @@ def _cached(key: tuple, build):
     if hit and time.time() - hit[0] < _TTL_SECONDS:
         return hit[1]
     with _CACHE_GUARD:
+        if len(_CACHE_LOCKS) > _MAX_LOCKS:
+            live = set(_CACHE)
+            for k in list(_CACHE_LOCKS):
+                if k not in live:
+                    del _CACHE_LOCKS[k]
         lock = _CACHE_LOCKS.setdefault(key, threading.Lock())
     with lock:
-        hit = _CACHE.get(key)           # whoever held the lock may have built it
+        hit = _CACHE.get(key)
         if hit and time.time() - hit[0] < _TTL_SECONDS:
             return hit[1]
         value = build()

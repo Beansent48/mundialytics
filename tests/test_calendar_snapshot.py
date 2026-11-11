@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 from datetime import date
 from pathlib import Path
@@ -207,3 +208,61 @@ def test_a_dead_provider_is_retried_at_most_once_per_window(snapshots, monkeypat
     for _ in range(4):
         assert cat.season_calendar("Serie A", "2026-2027").empty
     assert len(calls) == 1
+
+
+# ── finding #3: unique temp file name ────────────────────────────────────────
+def test_temp_file_uses_a_unique_name(snapshots, monkeypatch):
+    """Two processes writing the same league must not share a .csv.tmp name."""
+    written = []
+    real_to_csv = pd.DataFrame.to_csv
+
+    def spy_to_csv(self, path, **kwargs):
+        written.append(str(path))
+        return real_to_csv(self, path, **kwargs)
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", spy_to_csv)
+    monkeypatch.setattr(cat, "_fetch_calendar", lambda c, s: _calendar())
+    cat.refresh_calendar("LaLiga", "2026-2027", max_age=0.0)
+    assert written, "nothing was written"
+    assert ".csv.tmp" not in written[0], "the temp name should include PID/timestamp"
+    assert ".tmp" in written[0]
+
+
+# ── finding #5: calendar copy ────────────────────────────────────────────────
+def test_season_calendar_returns_a_copy(snapshots, monkeypatch):
+    """Callers must not mutate the cached frame."""
+    monkeypatch.setattr(cat, "_fetch_calendar", lambda c, s: _calendar())
+    cat.refresh_calendar("LaLiga", "2026-2027")
+
+    a = cat.season_calendar("LaLiga", "2026-2027")
+    b = cat.season_calendar("LaLiga", "2026-2027")
+    assert a is not b, "two calls returned the exact same object"
+    a["extra"] = 1
+    c = cat.season_calendar("LaLiga", "2026-2027")
+    assert "extra" not in c.columns, "a mutation leaked into the cache"
+
+
+# ── finding #6: no duplicate threads on stale calendar ───────────────────────
+def test_stale_calendar_does_not_spawn_duplicate_threads(snapshots, monkeypatch):
+    """_LAST_TRY written before the thread launches, so concurrent callers see
+    that a refresh is already in flight."""
+    monkeypatch.setattr(cat, "_fetch_calendar", lambda c, s: _calendar())
+    cat.refresh_calendar("LaLiga", "2026-2027")
+    path = cat._snapshot_path("LaLiga", "2026-2027")
+    old = time.time() - (cat.CALENDAR_TTL_SECONDS + 60)
+    os.utime(path, (old, old))
+
+    threads = []
+    real_start = threading.Thread.start
+
+    def spy_start(self):
+        threads.append(self.name)
+        return real_start(self)
+
+    monkeypatch.setattr(threading.Thread, "start", spy_start)
+    monkeypatch.setattr(cat, "_fetch_calendar", lambda c, s: _calendar())
+
+    cat.season_calendar("LaLiga", "2026-2027")
+    cat.season_calendar("LaLiga", "2026-2027")
+    calendar_threads = [t for t in threads if "calendar" in t]
+    assert len(calendar_threads) <= 1, f"spawned {len(calendar_threads)} refresh threads"

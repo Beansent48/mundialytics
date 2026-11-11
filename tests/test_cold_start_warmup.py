@@ -112,6 +112,19 @@ def test_the_memo_keeps_one_file(memo):
     assert len(list(eng.CACHE_DIR.glob("market_level_*.json"))) == 1
 
 
+def test_the_memo_does_not_delete_other_fingerprints(memo):
+    """Two worktrees sharing data/processed/cache with different code fingerprints
+    must not delete each other's memos (finding #2)."""
+    eng._market_levels(_frame(), 70.0)
+    other = eng.CACHE_DIR / "market_level_OTHER_FP_k70_99_2026-10-18.json"
+    other.write_text("{}", encoding="utf-8")
+    eng._market_levels(
+        pd.DataFrame({"date": pd.to_datetime(["2026-10-20"])}),
+        70.0,
+    )
+    assert other.exists(), "a memo from another fingerprint was deleted"
+
+
 # ── readiness ────────────────────────────────────────────────────────────────
 @pytest.fixture
 def ready(monkeypatch):
@@ -248,3 +261,59 @@ def test_a_failed_warm_up_still_lets_the_server_start(monkeypatch):
 
     asyncio.run(run())
     assert served == [True]
+
+
+# ── finding #4: _models reads data_version once ─────────────────────────────
+def test_models_reads_data_version_once(monkeypatch):
+    """A refresh landing between _ready and club_engine used to make _ready see
+    the old mtime and club_engine the new one, causing a full in-line refit."""
+    import api.main as m
+
+    frame = pd.DataFrame({"date": pd.to_datetime(["2026-10-18", "2026-10-19"])})
+    monkeypatch.setattr(m, "_READY", None, raising=False)
+    monkeypatch.setattr(m, "_READY_INFO", {}, raising=False)
+    monkeypatch.setattr(m, "_LOAD", threading.Lock())
+
+    versions_seen = []
+
+    def fake_club_engine():
+        versions_seen.append("club_engine_via_wrapper")
+        return (object(), [], frame)
+
+    monkeypatch.setattr(m, "club_engine", fake_club_engine)
+    monkeypatch.setattr(m, "props_models", lambda: (None, None))
+
+    call_count = [0]
+    def moving_version():
+        call_count[0] += 1
+        return float(call_count[0])
+
+    monkeypatch.setattr(m, "data_version", moving_version)
+
+    from unittest.mock import MagicMock
+    fake_cached = MagicMock(return_value=(object(), [], frame))
+    monkeypatch.setattr(m, "_club_engine", fake_cached)
+
+    m._models()
+    assert fake_cached.call_count == 1
+    v = fake_cached.call_args[0][0]
+    assert isinstance(v, float), "_club_engine must receive a version"
+
+
+# ── finding #7: _CACHE_LOCKS pruning ────────────────────────────────────────
+def test_cache_locks_are_pruned_when_they_accumulate(monkeypatch):
+    """Stale lock entries must not grow without bound."""
+    import api.main as m
+
+    monkeypatch.setattr(m, "_CACHE", {})
+    monkeypatch.setattr(m, "_CACHE_LOCKS", {})
+    monkeypatch.setattr(m, "_CACHE_GUARD", threading.Lock())
+    monkeypatch.setattr(m, "_MAX_LOCKS", 5)
+
+    for i in range(10):
+        m._cached(("stale", i), lambda: {"v": i})
+
+    assert len(m._CACHE_LOCKS) <= 10
+    m._CACHE.clear()
+    m._cached(("trigger-prune",), lambda: {"v": 99})
+    assert len(m._CACHE_LOCKS) <= m._MAX_LOCKS + 1
