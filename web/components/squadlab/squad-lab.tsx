@@ -22,10 +22,12 @@ import { SavedRuns } from "@/components/squadlab/saved-runs";
 import { ShareCard } from "@/components/squadlab/share-card";
 import { TeamSheet } from "@/components/squadlab/team-sheet";
 import { useSession } from "@/lib/auth-client";
+import { rewardsForLevel } from "@/lib/gamification";
 import {
   loadRun,
   mintRunId,
   saveRun as saveRunToServer,
+  type GamificationResult,
 } from "@/lib/squadlab-runs";
 import {
   api,
@@ -134,8 +136,18 @@ export function SquadLab() {
   // one row, not two.
   const [runId, setRunId] = useState<string | null>(null);
   const [resumeError, setResumeError] = useState(false);
+  const [gamification, setGamification] = useState<GamificationResult>(null);
   const { data: authSession } = useSession();
   const signedIn = Boolean(authSession);
+  const [userLevel, setUserLevel] = useState(1);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    fetch("/api/user/progress", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.level) setUserLevel(d.level); })
+      .catch(() => {});
+  }, [signedIn]);
 
   // Signed in, the draft is a row and leaving costs nothing. Signed out,
   // nothing is stored and leaving still loses the team — which is why the
@@ -182,6 +194,7 @@ export function SquadLab() {
     setSeed(mintSeed());
     setSeason(null);
     setRunId(signedIn ? mintRunId() : null);
+    setGamification(null);
     try {
       setPool(await api.squadPool());
       // the first slot opens itself: an empty pitch with no prompt is a puzzle
@@ -190,6 +203,13 @@ export function SquadLab() {
       setPoolError(true);
     }
   }
+
+  const levelRewards = useMemo(() => rewardsForLevel(userLevel), [userLevel]);
+  const gatedFormations = useMemo(() => {
+    if (!pool?.formations) return levelRewards.formations;
+    return pool.formations.filter((f) => levelRewards.formations.includes(f));
+  }, [pool, levelRewards]);
+  const gatedMaxRerolls = Math.min(pool?.maxRerolls ?? 3, levelRewards.maxRerolls);
 
   const slots = useMemo(
     () => (pool ? buildSlots(pool.slots, pool.benchSlots) : []),
@@ -286,7 +306,7 @@ export function SquadLab() {
       // this is the save that actually matters, and the row is final once it
       // lands.
       if (signedIn && runId) {
-        void saveRunToServer({
+        saveRunToServer({
           id: runId,
           mode,
           seed,
@@ -294,6 +314,11 @@ export function SquadLab() {
           rerolls,
           status: "finished",
           result,
+        }).then((res) => {
+          if (res.gamification) {
+            setGamification(res.gamification);
+            if (res.gamification.newLevel > userLevel) setUserLevel(res.gamification.newLevel);
+          }
         });
       }
     } catch {
@@ -345,6 +370,7 @@ export function SquadLab() {
     setRerolls({});
     setDealt({});
     setOpenSlot(null);
+    setGamification(null);
   }
 
   if (phase === "historic") {
@@ -359,6 +385,7 @@ export function SquadLab() {
         revealed={revealed}
         setRevealed={setRevealed}
         onReset={reset}
+        gamification={gamification}
       />
     );
   }
@@ -428,7 +455,7 @@ export function SquadLab() {
       <LineupEditor
         lineup={lineup}
         setLineup={setLineup}
-        formations={pool.formations ?? ["4-3-3"]}
+        formations={gatedFormations}
         roleWeights={pool.roleWeights}
         substatLabels={pool.substatLabels}
         onBack={() => setPhase("building")}
@@ -443,7 +470,7 @@ export function SquadLab() {
   // The cap is served, not hardcoded: unlimited rerolls make rarity pointless,
   // because you just spin until the icon turns up.
   const rerollsLeft = openSlotObj
-    ? (pool?.maxRerolls ?? 3) - (rerolls[openSlotObj.key] ?? 0)
+    ? gatedMaxRerolls - (rerolls[openSlotObj.key] ?? 0)
     : 0;
   // Derived, not stored: a hand is "on its way" exactly while its key has no
   // entry yet, and an effect that sets state on its own way in trips the
@@ -827,12 +854,14 @@ function SeasonView({
   revealed,
   setRevealed,
   onReset,
+  gamification,
 }: {
   season: SquadSeason;
   squad: SquadPlayer[];
   revealed: number;
   setRevealed: (n: number) => void;
   onReset: () => void;
+  gamification: GamificationResult;
 }) {
   const t = useTranslations("squadlab");
   const locale = useLocale();
@@ -935,6 +964,35 @@ function SeasonView({
               <Share2 className="size-4" />
               {t("shareSeason")}
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {done && gamification ? (
+        <div className="mt-5 overflow-hidden rounded-[14px] border border-brand/30 bg-brand-ghost">
+          <div className="px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-brand/15">
+                <Trophy className="size-5 text-brand" />
+              </div>
+              <div>
+                <p className="text-[0.88rem] font-semibold">
+                  +{gamification.xpEarned} XP
+                  {gamification.levelUp ? (
+                    <span className="ml-2 rounded-full bg-brand px-2 py-0.5 text-[0.68rem] font-semibold text-brand-contrast">
+                      Lv. {gamification.newLevel}!
+                    </span>
+                  ) : null}
+                </p>
+                {gamification.newAchievements.length > 0 ? (
+                  <p className="mt-0.5 text-[0.78rem] text-muted">
+                    {gamification.newAchievements.length === 1
+                      ? t("achievementUnlocked")
+                      : t("achievementsUnlocked", { n: gamification.newAchievements.length })}
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

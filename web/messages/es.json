@@ -20,7 +20,8 @@
     "signUp": "Crear cuenta",
     "settings": "Ajustes",
     "favorites": "Favoritos",
-    "soon": "Muy pronto"
+    "soon": "Muy pronto",
+    "profile": "Perfil y logros"
   },
   "auth": {
     "signInTitle": "Iniciar sesión",
@@ -589,6 +590,45 @@
       "favouritesNote": "Probabilidad de ganar el mismo cuadro, en 600 simulaciones.",
       "wasChampion": "Campeón de Europa ese año",
       "start": "Ir a la Champions histórica"
+    },
+    "achievementUnlocked": "Nuevo logro desbloqueado",
+    "achievementsUnlocked": "{n} logros desbloqueados"
+  },
+  "profile": {
+    "signedOutTitle": "Perfil",
+    "signedOutBody": "Inicia sesión para ver tu perfil, logros y álbum de cartas.",
+    "signIn": "Iniciar sesión",
+    "statRuns": "Partidas",
+    "statWins": "Victorias",
+    "statWinRate": "% victoria",
+    "statGoals": "Goles",
+    "statBestStage": "Mejor ronda",
+    "statBestRating": "Mejor media",
+    "statBestGoals": "Máx. goles",
+    "statLevel": "Nivel",
+    "album": "Álbum de cartas",
+    "albumCards": "cartas",
+    "albumEmpty": "Todavía no has coleccionado ninguna carta. Juega una partida de Draft para empezar.",
+    "tab": {
+      "achievements": "Logros",
+      "album": "Álbum"
+    },
+    "category": {
+      "tournament": "Torneo",
+      "match": "Partido",
+      "squad": "Plantilla",
+      "collection": "Colección"
+    },
+    "hiddenHint": "Sigue jugando para descubrirlo",
+    "levelRewards": "Recompensas por nivel",
+    "titles": {
+      "novice": "Novato",
+      "aspirant": "Aspirante",
+      "competitor": "Competidor",
+      "strategist": "Estratega",
+      "veteran": "Veterano",
+      "legend": "Leyenda",
+      "master": "Maestro"
     }
   }
 }

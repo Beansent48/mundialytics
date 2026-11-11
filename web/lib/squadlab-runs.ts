@@ -85,6 +85,18 @@ export async function loadRun(id: string): Promise<SavedRun | null> {
   }
 }
 
+export type GamificationResult = {
+  xpEarned: number;
+  newLevel: number;
+  levelUp: boolean;
+  newAchievements: string[];
+} | null;
+
+export type SaveRunResult = {
+  ok: boolean;
+  gamification: GamificationResult;
+};
+
 /**
  * Save, and say whether it landed.
  *
@@ -93,7 +105,7 @@ export async function loadRun(id: string): Promise<SavedRun | null> {
  * For a finished tournament it is worth telling the person, because that one
  * cannot be recreated by playing again.
  */
-export async function saveRun(input: RunInput): Promise<boolean> {
+export async function saveRun(input: RunInput): Promise<SaveRunResult> {
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
@@ -101,9 +113,11 @@ export async function saveRun(input: RunInput): Promise<boolean> {
       body: JSON.stringify(input),
       cache: "no-store",
     });
-    return res.ok;
+    if (!res.ok) return { ok: false, gamification: null };
+    const body = await res.json();
+    return { ok: true, gamification: body.gamification ?? null };
   } catch {
-    return false;
+    return { ok: false, gamification: null };
   }
 }
 

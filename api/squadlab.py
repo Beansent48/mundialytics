@@ -232,6 +232,7 @@ def _card_entry(c) -> dict:
         "substats": _substats_for(c.player) if c.kind == "actual" else None,
         # Curated "why this card" line for prime/icono; None for actual cards.
         "highlight": _highlight_for(c),
+        "league": getattr(c, "league", None),
     }
 
 

@@ -1,4 +1,5 @@
 import { engineFingerprint } from "@/lib/engine-fingerprint";
+import { processFinishedRun } from "@/lib/gamification-data";
 import { listRuns, saveRun, type RunStatus } from "@/lib/user-data";
 import { BadRequest, readJson, withUser } from "@/lib/user-route";
 
@@ -72,5 +73,19 @@ export const POST = withUser(async (userId, request) => {
     engineFingerprint: await engineFingerprint(),
   });
 
-  return { id: run?.id ?? null, status: run?.status ?? null };
+  // When a run finishes, process gamification: XP, achievements, album.
+  let gamification = null;
+  if (status === "finished" && result && run?.status === "finished") {
+    try {
+      gamification = await processFinishedRun(
+        userId,
+        result as Parameters<typeof processFinishedRun>[1],
+        record(payload, "squad") as Parameters<typeof processFinishedRun>[2],
+      );
+    } catch {
+      // Gamification is best-effort: a failure here must not break saving.
+    }
+  }
+
+  return { id: run?.id ?? null, status: run?.status ?? null, gamification };
 });

@@ -10,6 +10,7 @@ import {
   Moon,
   Settings,
   Sun,
+  Trophy,
   UserPlus,
   UserRound,
 } from "lucide-react";
@@ -103,6 +104,12 @@ export function AccountMenu() {
               <div className="truncate px-2.5 pb-1 pt-2 text-[0.72rem] text-dim">
                 {session.user.email}
               </div>
+              <DropdownMenu.Item className={itemClass} asChild>
+                <Link href="/profile">
+                  <Trophy className="size-4" />
+                  {t("profile")}
+                </Link>
+              </DropdownMenu.Item>
               <DropdownMenu.Item className={itemClass} asChild>
                 <Link href="/account">
                   <UserRound className="size-4" />

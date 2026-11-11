@@ -339,6 +339,8 @@ export type SquadPlayer = {
   substats: Record<string, number> | null;
   /** Curated "why this card" line for prime/icono; null for actual. */
   highlight: { stat: string; note: string } | null;
+  /** The league the card belongs to (e.g. "LaLiga", "Premier League"). */
+  league: string | null;
 };
 
 export type SquadPool = {

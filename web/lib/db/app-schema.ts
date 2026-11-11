@@ -173,13 +173,46 @@ export const userProgress = pgTable("user_progress", {
     .notNull(),
 });
 
-/** The catalogue of awards. Seeded by whoever designs them; not user data. */
+/** The catalogue of awards. Seeded at deploy time; not user data. */
 export const achievement = pgTable("achievement", {
   code: text("code").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
+  /** XP awarded when the achievement is unlocked. */
   points: integer("points").default(0).notNull(),
+  /** Grouping for the profile page: tournament, match, squad, collection. */
+  category: text("category").notNull(),
+  /** Lucide icon name for the trophy case. */
+  icon: text("icon").notNull(),
+  /** Hidden achievements show as "???" until unlocked. */
+  hidden: integer("hidden").default(0).notNull(),
 });
+
+/**
+ * Every card a person has ever drafted, across all runs.
+ *
+ * The album is additive: once a card is here it stays. `count` tracks how many
+ * times the same card was drafted (a statistic, not a currency).
+ */
+export const userCard = pgTable(
+  "user_card",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    cardId: text("card_id").notNull(),
+    kind: text("kind").notNull(),
+    display: text("display").notNull(),
+    position: text("position").notNull(),
+    overall: integer("overall").notNull(),
+    count: integer("count").default(1).notNull(),
+    firstDraftedAt: timestamp("first_drafted_at").defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.cardId] }),
+    index("user_card_user_idx").on(table.userId),
+  ],
+);
 
 export const userAchievement = pgTable(
   "user_achievement",

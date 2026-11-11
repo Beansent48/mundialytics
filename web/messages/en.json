@@ -20,7 +20,8 @@
     "signUp": "Create account",
     "settings": "Settings",
     "favorites": "Favourites",
-    "soon": "Coming soon"
+    "soon": "Coming soon",
+    "profile": "Profile & achievements"
   },
   "auth": {
     "signInTitle": "Sign in",
@@ -589,6 +590,45 @@
       "favouritesNote": "Chance of winning the same field, over 600 simulations.",
       "wasChampion": "European champion that year",
       "start": "Go to the all-time Champions League"
+    },
+    "achievementUnlocked": "New achievement unlocked",
+    "achievementsUnlocked": "{n} achievements unlocked"
+  },
+  "profile": {
+    "signedOutTitle": "Profile",
+    "signedOutBody": "Sign in to see your profile, achievements and card album.",
+    "signIn": "Sign in",
+    "statRuns": "Runs",
+    "statWins": "Wins",
+    "statWinRate": "Win %",
+    "statGoals": "Goals",
+    "statBestStage": "Best stage",
+    "statBestRating": "Best rating",
+    "statBestGoals": "Max goals",
+    "statLevel": "Level",
+    "album": "Card album",
+    "albumCards": "cards",
+    "albumEmpty": "You have not collected any cards yet. Play a Draft run to get started.",
+    "tab": {
+      "achievements": "Achievements",
+      "album": "Album"
+    },
+    "category": {
+      "tournament": "Tournament",
+      "match": "Match",
+      "squad": "Squad",
+      "collection": "Collection"
+    },
+    "hiddenHint": "Keep playing to discover this one",
+    "levelRewards": "Level rewards",
+    "titles": {
+      "novice": "Novice",
+      "aspirant": "Aspirant",
+      "competitor": "Competitor",
+      "strategist": "Strategist",
+      "veteran": "Veteran",
+      "legend": "Legend",
+      "master": "Master"
     }
   }
 }
