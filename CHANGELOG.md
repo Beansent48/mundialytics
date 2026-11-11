@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.67.2 — Lineup watcher retries the ESPN schedule on network failure (2026-11-11)
+
+### Fixed
+- **The lineup watcher died on a DNS or ESPN outage at start-up.**
+  `watch()` fetched the day's kick-offs once, outside any retry loop, so a
+  transient network failure killed the watcher for the entire day (observed
+  2026-09-29, ~1 h DNS outage). A new `_fetch_schedule()` now retries every
+  `POLL_MIN` minutes until the schedule arrives or the last known kick-off
+  has passed, keeping the lock in the existing `try/finally`.
+
+### Tests
+- 4 new tests covering schedule-retry, give-up-after-deadline, last-logged-
+  kickoff bound, and no-fixture-logged scenarios.
+
 ## v0.67.1 — Seven cold-start findings fixed (2026-11-11)
 
 The cold-start review (v0.64.0, PR #29) found eleven issues; four were fixed in
