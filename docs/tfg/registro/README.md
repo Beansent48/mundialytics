@@ -1,7 +1,7 @@
 # Registro de trabajo del TFG
 
-Una ficha por pieza de trabajo, desde el corte (`0114c24`, 2026-10-20) en
-adelante. El anexo A de la memoria se genera desde aquí, así que una ficha que no
+Una ficha por pieza de trabajo, desde el corte (`a9c90c8` / tag `tfg-baseline`,
+2026-10-20) en adelante. El anexo A de la memoria se genera desde aquí, así que una ficha que no
 se escribe es trabajo que no se podrá defender.
 
 ## La regla
@@ -45,5 +45,6 @@ registro existe para que la memoria no herede ese problema.
 | 2026-10-21 | [Arranque en frío](2026-10-21-arranque-en-frio.md) | desplegado |
 | 2026-11-03 | [Liquidación de predicciones y su auditoría](2026-11-03-liquidacion-predicciones.md) | desplegado |
 | 2026-11-04 | [Siete hallazgos anotados y no corregidos](2026-11-04-hallazgos-sin-arreglar.md) | anotado, sin tocar |
+| 2026-11-11 | [Evaluación en vivo 2026/27 por era de modelo](2026-11-11-track-record-eras.md) | material listo |
 
 Mantén la tabla al día: es el borrador del anexo A.
