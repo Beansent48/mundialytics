@@ -32,7 +32,7 @@ five silent defects and two performance wastes.
   the dict exceeds 128 keys.
 
 ### Tests
-- 6 new tests pinning the seven fixes (649 total, 0 failures).
+- 6 new tests pinning the seven fixes (652 total, 0 failures).
 
 ## v0.67.0 — The whole site as one compose stack (2026-11-03)
 
