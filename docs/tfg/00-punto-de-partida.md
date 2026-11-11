@@ -7,17 +7,24 @@ empezar el TFG, con qué cifras, y cómo se comprueba.
 
 |  |  |
 |---|---|
-| Commit | `0114c249d7b8d14745c5411f9815c58534fd3ed8` (`0114c24`) |
+| Commit | `a9c90c89da2da5a602c5fa5fe59ab001009b188d` (`a9c90c8`) |
 | Fecha | 2026-10-20 |
 | Asunto | *Track record: drift report 2026-10-19* |
 | Versión publicada entonces | v0.63.0 |
-| Commits previos | 304 de 339 |
-| Commits del TFG | 35 a 2026-10-31, y creciendo |
+| Commits previos | 304 de 358 |
+| Commits del TFG | 54 a 2026-11-11, y creciendo |
+| Tag | `tfg-baseline` (apunta a este commit) |
 
 Es el último commit antes de que arranque el trabajo de plataforma: al día
-siguiente llega `17d6c77`, *Plan the platform work, and measure what the cold
-start costs*. El corte separa limpiamente **el modelo, que queda detrás**, de
-**la industrialización, que es el TFG**.
+siguiente llega el plan de plataforma y la medición del arranque en frío. El
+corte separa limpiamente **el modelo, que queda detrás**, de **la
+industrialización, que es el TFG**.
+
+**Nota sobre los SHA.** El 5 de noviembre de 2026 se reescribió la historia
+completa del repositorio para eliminar trailers de coautoría de 335 de 382
+commits (árboles y autores verificados idénticos). El SHA original del corte era
+`0114c24`; el reescrito es el que aparece arriba. La etiqueta `tfg-baseline` se
+creó sobre el reescrito y es la referencia fiable.
 
 El repositorio arranca el 2026-06-29 ya en la versión v0.50, y el `CHANGELOG.md`
 conserva historia hasta v0.49.4: hubo desarrollo anterior incluso sin control de
@@ -26,17 +33,18 @@ versiones. El encuadre de «proyecto previo» es demostrable.
 ### Cómo se verifica
 
 ```bash
-git log -1 --format='%H %ad %s' --date=short 0114c24
-git rev-list --count 0114c24
-git rev-list --count 0114c24..HEAD
-git show 0114c24:README.md
+git log -1 --format='%H %ad %s' --date=short tfg-baseline
+git rev-list --count tfg-baseline
+git rev-list --count tfg-baseline..HEAD
+git show tfg-baseline:README.md
 ```
 
 Clava el corte con una etiqueta, para que el tribunal compruebe el límite en
 lugar de creérselo:
 
 ```bash
-git tag -a tfg-baseline 0114c24 -m "Punto de partida del TFG"
+git tag -a tfg-baseline a9c90c8 -m "Punto de partida del TFG"
+# Ya creada; verificar con: git log -1 tfg-baseline
 ```
 
 ## La línea base, y el problema que plantea
@@ -134,7 +142,7 @@ computación de datos— pero no se reclama como trabajo de TFG.
 
 ## Qué entra: la aportación del TFG
 
-Hecho a 31 de octubre de 2026:
+Hecho a 11 de noviembre de 2026:
 
 1. **Arranque en frío** (21-oct, v0.64.0). De 28-56 s a 5-14 s por endpoint, y un
    cambio de motor de 115 s en la primera visita a 0.06 s. Medido con cronómetro,
@@ -149,13 +157,24 @@ Hecho a 31 de octubre de 2026:
    preferencias que siguen a la persona entre dispositivos, partidas de SquadLab
    guardadas y limitador de peticiones.
 3. **Licencia** (27-oct, v0.66.1). PolyForm Noncommercial 1.0.0.
+4. **Catálogo reproducible de cartas** (1-4 nov, v0.66.2). Reservas de plantilla
+   (#33) y catálogo determinista (#34): mismas entradas producen la misma carta.
+   Nombres europeos resueltos al 100 %, duplicados de fixture eliminados, primera
+   parte europea reconstruida desde ESPN.
+5. **Auditoría de liquidación** (3-4 nov, v0.66.3, #36). Las predicciones
+   comprobadas pasaron de 192 a 309 de 412 (cero sin comprobar con resultado
+   disponible). Seis bugs de liquidación corregidos: ficha en
+   `registro/2026-11-03-liquidacion-predicciones.md`. Siete hallazgos más
+   catalogados y sin corregir: ficha en
+   `registro/2026-11-04-hallazgos-sin-arreglar.md`.
 
 Por hacer:
 
-4. **Contenerización completa** y composición reproducible de todo el sistema.
-5. **Publicación de la web** en un VPS, con lo que eso arrastra: dominio, TLS,
+6. **Contenerización completa** y composición reproducible de todo el sistema
+   (PR #35 abierto, con conflictos por resolver).
+7. **Publicación de la web** en un VPS, con lo que eso arrastra: dominio, TLS,
    copias de seguridad, secretos, despliegue repetible.
-6. **Los tres pilares** de la sección anterior.
+8. **Los tres pilares** de la sección anterior.
 
 ## Volumen, con honestidad
 

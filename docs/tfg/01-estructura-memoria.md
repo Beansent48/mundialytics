@@ -91,8 +91,8 @@ resultado bonito.
 | 5.0 | **Catálogo de defectos**: qué tenía de prototipo el sistema de partida, con el síntoma y la causa de cada fallo | tabla en `00-punto-de-partida.md` y las fichas de `registro/` *(se llena solo)* |
 | 5.1 | Diagnóstico y corrección del arranque en frío, con medición antes y después | `docs/COLD_START_DIAGNOSIS.md` *(listo)* |
 | 5.2 | Capa de cuentas: modelo de datos, autenticación, aislamiento por usuario, borrado en cascada | `docs/USER_ACCOUNTS_DESIGN.md` *(listo)* |
-| 5.3 | Contenerización: composición reproducible de API, web y base de datos | *(por hacer)* |
-| 5.4 | Despliegue: VPS, dominio, TLS, secretos, copias de seguridad, despliegue repetible | *(por hacer)* |
+| 5.3 | Contenerización: composición reproducible de API, web y base de datos | PR #35 *(construido y verificado en contenedor, pendiente de merge)* |
+| 5.4 | Despliegue: VPS, dominio, TLS, secretos, copias de seguridad, despliegue repetible | *(por hacer, depende de 5.3)* |
 | 5.5 | Integración continua y la suite de tests como verja | *(generar cifras en checkout limpio)* |
 
 Encuádralo como ingeniería de datos y MLOps: de prototipo de un usuario en un
@@ -100,9 +100,9 @@ portátil a servicio multiusuario reproducible y publicado. No como «hacer la w
 
 El 5.0 es el apartado que **justifica el capítulo entero**, y conviene abrirlo con
 él. Sin el catálogo, industrializar parece una decisión de gusto; con él, es la
-respuesta a diecisiete defectos reales, fechados y medidos, de los cuales **ninguno
-levantaba una excepción**: todos dejaban el sistema respondiendo con una cifra
-creíble. Ese es el argumento, y la tabla está montada en
+respuesta a diecisiete defectos corregidos más siete vivos, fechados y medidos,
+de los cuales **ninguno levantaba una excepción**: todos dejaban el sistema
+respondiendo con una cifra creíble. Ese es el argumento, y la tabla está montada en
 `00-punto-de-partida.md`. Cada defecto nuevo que aparezca mientras trabajas suma
 una fila, así que no lo dejes para el final: ve añadiéndolo.
 
