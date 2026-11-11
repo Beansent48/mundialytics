@@ -258,6 +258,10 @@ def load_2526() -> pd.DataFrame:
     and progressive passes have no equivalent in this dump; they are left blank
     and the older FBref season carries them. Provider scale does not matter: the
     level standardises each season within itself before blending.
+
+    Players with FBref 90s but no Understat minutes are recovered using FBref
+    counting stats and SofaScore xG where available, so they enter the pipeline
+    instead of falling through to pure role projection.
     """
     p = SRC / "scouting_2526.csv"
     if not p.exists():
@@ -271,33 +275,81 @@ def load_2526() -> pd.DataFrame:
     d["_n90u"] = pd.to_numeric(d["minutes_under"], errors="coerce") / 90.0
     d["_fb90"] = pd.to_numeric(d["90s_"], errors="coerce")
     d = d.sort_values("_fb90", ascending=False).drop_duplicates("player")
-    den = d["_n90u"].clip(lower=0.5)
-    npg = pd.to_numeric(d["np_goals_under"], errors="coerce")
-    npxg = pd.to_numeric(d["np_xg_under"], errors="coerce")
-    ast = pd.to_numeric(d["assists_under"], errors="coerce")
-    shots = pd.to_numeric(d["shots_under"], errors="coerce")
-    return pd.DataFrame({
-        "player": d["player"], "club": d["team"],
-        "league": d["league"].map(LEAGUE_2526).fillna(d["league"]),
-        "season": "2526", "position": d["pos_"].map(_pos), "n90": d["_n90u"],
-        "birth_year": pd.to_numeric(d["born_"], errors="coerce"),
-        "npxg_p90": npxg / den,
-        "xag_p90": pd.to_numeric(d["xa_under"], errors="coerce") / den,
-        "sca_p90": np.nan,          # no SCA here -> the 24/25 FBref season carries it
+
+    has_u = d["_n90u"].fillna(0) >= MIN_90S
+    n_sofa = 0
+
+    # ── primary path: players WITH Understat minutes ────────────────────────
+    u = d[has_u].copy()
+    den_u = u["_n90u"].clip(lower=0.5)
+    npg_u = pd.to_numeric(u["np_goals_under"], errors="coerce")
+    npxg_u = pd.to_numeric(u["np_xg_under"], errors="coerce")
+    ast_u = pd.to_numeric(u["assists_under"], errors="coerce")
+    shots_u = pd.to_numeric(u["shots_under"], errors="coerce")
+    rows_u = pd.DataFrame({
+        "player": u["player"].values, "club": u["team"].values,
+        "league": u["league"].map(LEAGUE_2526).fillna(u["league"]).values,
+        "season": "2526", "position": u["pos_"].map(_pos).values, "n90": u["_n90u"].values,
+        "birth_year": pd.to_numeric(u["born_"], errors="coerce").values,
+        "npxg_p90": (npxg_u / den_u).values,
+        "xag_p90": (pd.to_numeric(u["xa_under"], errors="coerce") / den_u).values,
+        "sca_p90": np.nan,
         "gca_p90": np.nan,
-        "npxg_per_shot": npxg / shots.replace(0, np.nan),
-        "finishing_p90": (npg - npxg) / den,
-        "goals_p90": npg / den,
-        "kp_p90": pd.to_numeric(d["key_passes_under"], errors="coerce") / den,
-        "prog_passes_p90": np.nan,  # no PrgP here -> the 24/25 FBref season carries it
-        "assists_p90": ast / den,
-        "ga_p90": (npg + ast) / den,
-        # possession craft from SofaScore (percentages need no denominator)
-        "pass_pct": pd.to_numeric(d["accuratePassesPercentage"], errors="coerce"),
-        "dribble_pct": pd.to_numeric(d["successfulDribblesPercentage"], errors="coerce"),
-        "dribble_att": pd.to_numeric(d["totalContest"], errors="coerce"),
-        "dispossessed_p90": pd.to_numeric(d["dispossessed"], errors="coerce") / den,
+        "npxg_per_shot": (npxg_u / shots_u.replace(0, np.nan)).values,
+        "finishing_p90": ((npg_u - npxg_u) / den_u).values,
+        "goals_p90": (npg_u / den_u).values,
+        "kp_p90": (pd.to_numeric(u["key_passes_under"], errors="coerce") / den_u).values,
+        "prog_passes_p90": np.nan,
+        "assists_p90": (ast_u / den_u).values,
+        "ga_p90": ((npg_u + ast_u) / den_u).values,
+        "pass_pct": pd.to_numeric(u["accuratePassesPercentage"], errors="coerce").values,
+        "dribble_pct": pd.to_numeric(u["successfulDribblesPercentage"], errors="coerce").values,
+        "dribble_att": pd.to_numeric(u["totalContest"], errors="coerce").values,
+        "dispossessed_p90": (pd.to_numeric(u["dispossessed"], errors="coerce") / den_u).values,
     })
+
+    # ── recovery path: players with FBref 90s but no Understat ──────────────
+    # SofaScore xG stands in for Understat npxG; FBref counting stats for goals
+    # and assists. The denominator is FBref's own 90s, which is the same minute
+    # basis SofaScore totals were accumulated over.
+    s = d[~has_u & (d["_fb90"].fillna(0) >= MIN_90S)].copy()
+    if len(s):
+        den_s = s["_fb90"].clip(lower=0.5)
+        gls_s = pd.to_numeric(s["Performance_Gls"], errors="coerce")
+        pens_s = pd.to_numeric(s["Performance_PK"], errors="coerce").fillna(0)
+        npg_s = gls_s - pens_s
+        ast_s = pd.to_numeric(s["Performance_Ast"], errors="coerce")
+        sh_s = pd.to_numeric(s["Standard_Sh"], errors="coerce")
+        sofa_xg = pd.to_numeric(s["expectedGoals"], errors="coerce")
+        sofa_kp = pd.to_numeric(s["keyPasses"], errors="coerce")
+        npxg_s = sofa_xg - pens_s.clip(lower=0) * 0.79  # penalty xG ≈ 0.79
+        rows_s = pd.DataFrame({
+            "player": s["player"].values, "club": s["team"].values,
+            "league": s["league"].map(LEAGUE_2526).fillna(s["league"]).values,
+            "season": "2526", "position": s["pos_"].map(_pos).values, "n90": s["_fb90"].values,
+            "birth_year": pd.to_numeric(s["born_"], errors="coerce").values,
+            "npxg_p90": (npxg_s / den_s).values,
+            "xag_p90": np.nan,
+            "sca_p90": np.nan,
+            "gca_p90": np.nan,
+            "npxg_per_shot": (npxg_s / sh_s.replace(0, np.nan)).values,
+            "finishing_p90": ((npg_s - npxg_s.fillna(npg_s)) / den_s).values,
+            "goals_p90": (npg_s / den_s).values,
+            "kp_p90": (sofa_kp / den_s).values,
+            "prog_passes_p90": np.nan,
+            "assists_p90": (ast_s / den_s).values,
+            "ga_p90": ((npg_s + ast_s) / den_s).values,
+            "pass_pct": pd.to_numeric(s["accuratePassesPercentage"], errors="coerce").values,
+            "dribble_pct": pd.to_numeric(s["successfulDribblesPercentage"], errors="coerce").values,
+            "dribble_att": pd.to_numeric(s["totalContest"], errors="coerce").values,
+            "dispossessed_p90": (pd.to_numeric(s["dispossessed"], errors="coerce") / den_s).values,
+        })
+        n_sofa = int(sofa_xg.notna().sum())
+        rows_u = pd.concat([rows_u, rows_s], ignore_index=True)
+        print(f"  2526 recovery: {len(s)} players with FBref 90s but no Understat "
+              f"({n_sofa} with SofaScore xG)")
+
+    return rows_u
 
 
 def season_std_composite(full: pd.DataFrame, wdict: dict) -> pd.Series:

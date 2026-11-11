@@ -807,6 +807,54 @@ def buildup_index() -> tuple:
     return _fbref_index(q, "build_z", squad_positions())
 
 
+def espn_attack_fallback(squads: pd.DataFrame, fb_att, bz) -> dict:
+    """ESPN goals+assists per 90 as a fallback attack signal.
+
+    Returns {player_name: (percentile, starts)} for FW/MF with enough starts
+    whose FBref lookup returns None. The percentile is computed against the
+    FBref-measured population in the same position, so the same percentile ->
+    the same axis value when `measured_axis` processes it.
+    """
+    if squads.empty or fb_att is None:
+        return {}
+    sq = squads.copy()
+    sq["_starts"] = pd.to_numeric(sq.get("starts", pd.Series(dtype=float)), errors="coerce").fillna(0)
+    sq["_goals"] = pd.to_numeric(sq.get("goals", pd.Series(dtype=float)), errors="coerce").fillna(0)
+    sq["_assists"] = pd.to_numeric(sq.get("assists", pd.Series(dtype=float)), errors="coerce").fillna(0)
+    sq["_apps"] = pd.to_numeric(sq.get("apps", pd.Series(dtype=float)), errors="coerce").fillna(0)
+    mins_col = sq.get("minutes", sq.get("mins", pd.Series(dtype=float)))
+    sq["_mins"] = pd.to_numeric(mins_col, errors="coerce").fillna(sq["_apps"] * 75.0)
+    sq["_n90"] = sq["_mins"] / 90.0
+    sq["_ga90"] = (sq["_goals"] + sq["_assists"]) / sq["_n90"].clip(lower=0.5)
+
+    ref_ga = {}
+    if ATTACK_FBREF.exists():
+        ref = pd.read_csv(ATTACK_FBREF)
+        for pos in ESPN_ATT_POSITIONS:
+            sub = ref[ref["position"] == pos]
+            ga = pd.to_numeric(sub.get("ga_p90", pd.Series(dtype=float)), errors="coerce").dropna()
+            if len(ga) >= 20:
+                ref_ga[pos] = ga.sort_values().values
+
+    out = {}
+    for _, r in sq.iterrows():
+        pos = str(r.get("pos_group", ""))
+        if pos not in ESPN_ATT_POSITIONS:
+            continue
+        if r["_starts"] < ESPN_ATT_MIN_STARTS:
+            continue
+        who = str(r["player"])
+        if fb_att.lookup(who, birth=bz(who)) is not None:
+            continue
+        ga90 = float(r["_ga90"])
+        if pos in ref_ga and len(ref_ga[pos]):
+            pct = float(np.searchsorted(ref_ga[pos], ga90)) / len(ref_ga[pos])
+        else:
+            pct = 0.5
+        out[who] = (pct, float(r["_starts"]))
+    return out
+
+
 def _season_code(x: object) -> str:
     """'2015/2016', '15/16', '2324' -> a comparable four-digit code."""
     s = "".join(ch for ch in str(x) if ch.isdigit())
@@ -1110,6 +1158,17 @@ FORM_PROD_MAX = 2.5        # most that current production can add
 FORM_RAMP_MATCHES = 8.0    # full weight only once the club has played this many
 FORM_MIN_MINUTES = 180.0   # two full games before current production counts
 
+# ── ESPN fallback for the attack axis ────────────────────────────────────────
+# FBref covers the big five; ESPN covers every squad. For a forward or
+# midfielder with 3+ starts and no FBref row, goals + assists per 90 is a
+# weak but real signal (r ≈ 0.44 against the FBref att_z within position).
+# It adjusts the role-offset default rather than replacing it, and the weight
+# is set by a credibility formula: starts * ESPN_CRED_FACTOR gives an
+# effective n90 that enters the standard AXIS_CRED_90S shrinkage, so 7 starts
+# contribute ~17% weight.
+ESPN_ATT_MIN_STARTS = 3
+ESPN_ATT_CRED_FACTOR = 0.35
+ESPN_ATT_POSITIONS = {"Forward", "Midfielder"}
 
 AXES_LEVEL_WEIGHT = 0.55
 # ...and the split follows how much EVIDENCE each side has, not a fixed number.
@@ -1216,7 +1275,8 @@ def axes_for_card(fits: dict, pos: str, role: str, card_ovr: float,
                   fbref_def: tuple | None = None,
                   fbref_att: tuple | None = None,
                   fbref_crea: tuple | None = None,
-                  fbref_build: tuple | None = None) -> dict[str, float]:
+                  fbref_build: tuple | None = None,
+                  espn_att: tuple | None = None) -> dict[str, float]:
     """The four numbers printed on a card face.
 
     `n_att` / `n_def` are the sample sizes behind the attacking and the
@@ -1257,6 +1317,15 @@ def axes_for_card(fits: dict, pos: str, role: str, card_ovr: float,
             z = (float(val) - (a + b * own_ovr)) / max(sd, 1e-6)
             cred = n / (n + AXIS_SHRINK_MATCHES)
             base += AXIS_SPREAD * cred * float(np.clip(z, -AXIS_Z_CAP, AXIS_Z_CAP))
+        elif ax == "attack" and espn_att is not None and str(pos) in ESPN_ATT_POSITIONS:
+            espn_pct, espn_starts = espn_att
+            scale = AXIS_SCALE.get(str(pos), AXIS_SCALE["Midfielder"])["attack"]
+            lo, mid, hi = scale
+            target = float(np.interp(espn_pct, [0.05, 0.50, 0.99, 1.0],
+                                     [lo, mid, hi, hi + (hi - mid) * 0.15]))
+            eff_n90 = espn_starts * ESPN_ATT_CRED_FACTOR
+            ecred = eff_n90 / (eff_n90 + AXIS_CRED_90S)
+            base = (1.0 - ecred) * base + ecred * target
         out[ax] = float(np.clip(soft_ceiling(base), 25.0, 99.0))
     out["defense"] = cap_defense(pos, out["defense"])
     if pos == "Goalkeeper":
@@ -1609,9 +1678,14 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
           for who in squads["player"]]
     fbu = [fb_axis(fb_build.lookup(who, birth=bz(who))) if fb_build is not None else None
            for who in squads["player"]]
-    axes = [axes_for_card(fits, str(pos), rl, float(o), p, n[0], n[1], f, a, cc, bu)
-            for p, pos, rl, o, n, f, a, cc, bu in zip(prof_hit, out["position"], out["role"],
-                                                      out["overall"], ns, fb, fa, fc, fbu)]
+    espn_fb = espn_attack_fallback(squads, fb_att, bz)
+    ea = [espn_fb.get(who) for who in squads["player"]]
+    n_espn = sum(1 for x in ea if x is not None)
+    if n_espn:
+        print(f"  ESPN attack fallback: {n_espn} FW/MF sin FBref (mediana {ESPN_ATT_MIN_STARTS}+ titularidades)")
+    axes = [axes_for_card(fits, str(pos), rl, float(o), p, n[0], n[1], f, a, cc, bu, e)
+            for p, pos, rl, o, n, f, a, cc, bu, e in zip(prof_hit, out["position"], out["role"],
+                                                         out["overall"], ns, fb, fa, fc, fbu, ea)]
     # ── the overall, rebuilt from the clean level signals (2026-09-07) ─────────
     # Every earlier layer (career+axes blend, spread-restore, percentile over a
     # pool padded with backups) inflated and re-ordered the top — Wissa 98.3
@@ -1744,11 +1818,12 @@ def build_current(src: dict, fits: dict, samples: dict, fb_def=None,
     print(f"  escala honesta: mediana {np.median(out['overall']):.0f}, "
           f"90+ = {int((np.array(out['overall']) >= 90).sum()):,} cartas "
           f"({np.mean(np.array(out['overall']) >= 90) * 100:.1f}%)")
-    axes = [axes_for_card(fits, str(pos), rl, float(o), p, n[0], n[1], f, a, cc, bu)
-            for p, pos, rl, o, n, f, a, cc, bu in zip(prof_hit, out["position"], out["role"],
-                                                      out["overall"], ns, fb, fa, fc, fbu)]
+    axes = [axes_for_card(fits, str(pos), rl, float(o), p, n[0], n[1], f, a, cc, bu, e)
+            for p, pos, rl, o, n, f, a, cc, bu, e in zip(prof_hit, out["position"], out["role"],
+                                                         out["overall"], ns, fb, fa, fc, fbu, ea)]
     out["def_source"] = ["fbref" if f is not None else "rol" for f in fb]
-    out["att_source"] = ["fbref" if a is not None else "rol" for a in fa]
+    out["att_source"] = ["fbref" if a is not None else ("espn" if e is not None else "rol")
+                         for a, e in zip(fa, ea)]
     out["crea_source"] = ["fbref" if x is not None else "rol" for x in fc]
     for k in ("attack", "defense", "creation", "gk"):
         out[k] = [round(float(a[k]), 1) for a in axes]
