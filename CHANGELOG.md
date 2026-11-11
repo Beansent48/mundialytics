@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.66.4 — Two silent defects out of the Docker PR, with a test (2026-11-11)
+
+Both were found by the A2 session building its containers (PR #35) and fixed
+there. They are product defects, not packaging ones, and #35 had been stuck for
+a week conflicting on every merge into master, so they are extracted here on
+their own. The rest of A2's findings stay in #35.
+
+### Fixed
+- **The market-level memo cached its own failure.** `_market_levels` keys its
+  cache on a stamp of the football-data files. When those cannot be read the
+  stamp is the hash of nothing, `market_level_detail` returns `{}` — and that
+  empty answer was written *under the key that describes the files being
+  missing*, so every later start with the same problem **hit** it and served
+  every match with no market shift, in under a second, with no exception. The
+  market level has been part of the published model since 2026-10-17, so this
+  is a silent divergence from the deployed baseline. Measured by A2 on
+  2026-11-03: a bind mount that could not expose `data/raw/football_data`
+  produced `market_level_..._e3b0c442.json` (`e3b0c442` is the hash of the
+  empty string) and three later containers read it back.
+
+  The guard returns without writing when the result is empty: one recomputation
+  on the next start, and no way to cache a wrong answer.
+
+- **A nullable field typed as non-nullable.** `_benchmark()` in `api/main.py`
+  is deliberately fail-soft and returns `None`, but `web/lib/api.ts` typed it
+  `Benchmark`, so `tsc` was satisfied and nothing guarded it. It had never been
+  null in development, where the file is always there. In the container it was,
+  and the failure was not a blank panel: `/en/results` threw while `next build`
+  prerendered it, so the web image could not be built. Both sides fixed — the
+  type tells the truth, which makes the compiler demand the guard.
+
+### Added
+- `tests/test_market_level_cache.py`, which **fails with the guard removed**
+  and writes a file ending in `e3b0c442` when it does: the same signature the
+  containers produced, so it reproduces the defect rather than an approximation
+  of it. A third case recomputes an empty cache entry left by the defect, so a
+  machine that already caught this heals on its next start instead of needing
+  the file deleted by hand. The memo exists purely as a cold-start
+  optimisation, which makes it exactly the kind of code someone tightens later
+  without knowing what the early return is for.
+- `docs/tfg/registro/2026-11-11-memo-que-cachea-su-fallo.md`, and the two rows
+  in the defect catalogue of `docs/tfg/00-punto-de-partida.md`.
+
 ## v0.66.3 — Every prediction whose result we hold now gets checked (2026-11-03)
 
 Scoring the season's live track record for the first time found 220 of 412

@@ -198,6 +198,8 @@ con su medición:
 | Ningún partido europeo podía liquidar primera parte | 172 de 519 sin marcador al descanso | el mercado seguía puntuando, con menos partidos |
 | Siete clubes europeos inencontrables por nombre | `københavn` se escribía `k benhavn` | `ä` sí se transliteraba, así que parecía arbitrario |
 | 25 partidos europeos registrados dos veces | `porto vs man city` y `fc porto vs manchester city` | un control de duplicados por texto no ve ninguno |
+| El memo del nivel de mercado cacheaba su propio fallo | tres arranques sirvieron sin nivel de mercado, en menos de un segundo | la clave incluye la huella de las entradas: si no se pueden leer, el vacío se guarda bajo la clave del vacío y la siguiente ejecución **acierta** |
+| Un campo anulable tipado como no nulo | `/en/results` reventaba al prerrenderizar y la imagen de web no se podía construir | `tsc` daba el visto bueno, así que nadie ponía la guarda; en desarrollo el fichero siempre está |
 
 Esta tabla es solo de defectos **corregidos**. Hay además **siete hallazgos
 anotados y vivos**, con mecanismo y escenario de fallo, en
