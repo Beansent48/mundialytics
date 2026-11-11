@@ -118,6 +118,148 @@ comes up healthy, and that the site works end to end through the proxy with
 accounts. Each is a command in
 [`docs/DEPLOYMENT_PLAN.md`](docs/DEPLOYMENT_PLAN.md) §6; none is a design
 question.
+## v0.66.3 — Every prediction whose result we hold now gets checked (2026-11-03)
+
+Scoring the season's live track record for the first time found 220 of 412
+logged 1X2 predictions unsettled. Three bugs, none of which raised anything: the
+record kept publishing a number over fewer matches than it claimed.
+
+### Fixed
+- **Every European prediction was unsettled.** The UEFA results carry ClubElo
+  names ("Bayern", "Man United") and the log carries foundation names ("bayern
+  munich", "manchester united"), so the join matched 0 of 162 rows. The log side
+  is now resolved into Elo space first, which settles all 108 that have a
+  result. Canonicalising instead only lowercases, and reaches 15.
+- **Fixtures that moved were dropped.** Settlement demanded an exact date, and
+  four matches were played a day off the date the calendar promised when the
+  prediction was logged: toulouse-troyes, paris sg-lyon, nice-rennes and
+  lyon-angers. A two-day window settles them, and only when the pairing is
+  unambiguous — a window that tight cannot reach the reverse fixture or another
+  season's meeting.
+- **The newest round could never settle.** Settlement only read the foundation,
+  which trails by a round or two, so the freshest results sat on disk unused:
+  lorient vs brest was played 0-2 on 2026-11-02 and settled nowhere. For a live
+  record that is a systematic bias, not a delay. The season fixture calendars
+  are now a fallback for what the foundation has not ingested — foundation
+  first, always, and only goal-outcome markets can settle from there, since the
+  calendars carry no shots, cards or half-time goals.
+- **A moved fixture settled its 1X2 and nothing else.** The two-day window
+  copied only the goals, so a fixture played a day off its logged date had its
+  half-time and event markets left unscoreable even though the foundation held
+  them in full, one day over. That read as missing coverage rather than as a
+  join that stopped early. The window now carries every column the source has,
+  which checks **644 more predictions**: corners 3608 → 3762, shots 3280 →
+  3420, yellows 2952 → 3078, half-time 1665 → 1735, booking points 984 → 1026.
+- **No European tie could settle a half-time market.** The UEFA result files
+  carry only the final score, so 172 of 519 settled fixtures had no half-time at
+  all. ESPN's key events carry a period per goal, and counting the first-period
+  ones reproduces football-data's half-time score on **447 of 447** domestic
+  matches of this season — exactly, both sides, with the first-half 1X2 and
+  total too. Applied to the European files it checks **760 more predictions**:
+  half-time 1735 → 2495, and fixtures with no half-time drop from 172 to 20. The
+  UEFA fetch was already step 7d2 of `update_season.py`, so this stays fresh
+  without new plumbing; it had simply never been run in this checkout.
+
+- **Seven European clubs were unmatchable by name, so their ties could not
+  settle.** ESPN's canonical pass strips accents with NFKD and then turns
+  anything still non-ASCII into a space — but NFKD does not decompose `ø` or
+  `æ`, so `f.c. københavn` was written to disk as `f c k benhavn` and
+  `fc nordsjælland` as `fc nordsj lland`. `ä` came through as a plain `a`,
+  because that one *does* decompose, which is what made the failure look
+  arbitrary. A new `transliterate()` spells out only the letters NFKD cannot
+  handle, applied in the ESPN connector before canonicalisation; `ä`, `ö` and
+  `ü` are deliberately left out, since mapping them would rewrite names that
+  already resolve. Six aliases cover the clubs whose ClubElo spelling differs
+  anyway (`FC Kobenhavn` with a plain `o`, `Mjaellby`, `St Truiden`,
+  `St Gillis`, `Beer-Sheva`, `Escaldes`) — the existing entries for those clubs
+  were keyed on the spellings that still carry their diacritics, which is what
+  the prediction log holds, not what ESPN writes. All 108 European names now
+  resolve, and fixtures with no half-time fall from 172 to **5 of 519**.
+- **The shared normaliser is still wrong, and on purpose.** The root cause is
+  that `normalize_club` carries a transliteration table and `normalize_text`
+  does not. Adding one to `normalize_text` is a two-line change and was not
+  made: that function also backs `canonical_player_name`, so it would rewrite
+  the identity key of every player with one of those letters — Ødegaard,
+  Højlund, Sørloth — across files already written. That is a migration, not a
+  fix, and it deserves its own change.
+
+### Found along the way
+- **Every European fixture of mid-September is in the log twice.** Not two
+  fixtures: **25**, each logged once under broadcast short names and once under
+  full ones — `fc porto vs manchester city` and `porto vs man city`,
+  `real madrid vs inter` and `real madrid vs internazionale`, `liverpool vs
+  atleti` and `liverpool vs atlético madrid`. Grouping by the fixture text
+  cannot see any of them. The audit now groups by the names resolved into
+  ClubElo space, which collapses the spellings onto one club. All 25 predate
+  provenance, so no published figure is contaminated and the audit warns
+  instead of failing; it fails only on a duplicate from the current logging
+  path, because an audit that stays red over unfixable history is noise.
+- **ESPN files an own goal under the side it counts for.** Flipping it — the
+  obvious reading of the `own_goal` column — moved one goal to the wrong side in
+  18 of 447 matches while the first-half *total* stayed correct. A total that
+  reconciles while the sides do not is the signature of a misattribution, not of
+  missing data. Nothing else in the project reads that column.
+Settled 1X2 rows went 192 → 300 → 304 → 309 of 412 across the three fixes. Of
+the 103 that remain, 102 are unplayed and one is vallecano vs ath bilbao, logged
+for 2026-10-10 and moved by the calendar to 2026-12-09.
+
+### Changed
+- "Is there a result for this fixture?" was answered in three places — the
+  serving path, the audit and the analysis script — and the audit disagreed with
+  the settlement it was auditing, reporting the four moved fixtures as holes.
+  One function, `attach_results`, now answers it for all three.
+
+### Added
+- `scripts/audit_settlement.py` exits non-zero on any played match whose
+  prediction is not checked, which is the opposite question to
+  `audit_prediction_coverage.py`. It also reports per-market scoring rates and
+  fails outright on a market that scores nothing — the symptom that would have
+  caught the European hole on day one. Accepted holes go in
+  `data/curated/settlement_known_gaps.csv` with a cause.
+- `scripts/tfg/score_live_track_record.py` aggregates the live log by model
+  fingerprint: RPS, log loss, bootstrap intervals, per-outcome bias and
+  calibration.
+- `docs/tfg/` records the starting point of the degree project built on this
+  repository (the baseline commit is tagged `tfg-baseline`), the plan of the
+  report's sections, and a work log with one entry per piece of work.
+
+### Measured
+Live 1X2, 2026/27, over 309 settled predictions logged before kick-off: RPS
+0.1990, 95% bootstrap [0.1836, 0.2149], against 0.1998 for the published
+backtest and 0.2326 for this sample's own base rates. Domestic 0.2017 on 201,
+Europe 0.1939 on 108. Per-outcome bias is inside the noise (draw z = −1.03), so
+v0.63.0's draw fix holds up live. ECE 0.0264.
+
+With 309 matches the RPS interval is ±0.016 while the differences between model
+eras are around 0.001. The live record cannot discriminate between eras, and
+should not be asked to.
+
+### Enforced, not just plausible
+The audit works at two levels, because the fixture level on its own is what let
+the European hole run for weeks. Level one asks whether a result exists that
+settlement failed to use. Level two requires every row that *has* a result and
+was still not scored to name the column it is missing, and fails on any row that
+cannot. Every market reconciles exactly — scored equals scoreable, shortfall
+zero:
+
+| Market | logged | scoreable | scored | unscoreable because |
+|---|---|---|---|---|
+| 1X2, Goles | 622 | 519 | 519 | — |
+| ht_1x2, ht_ft | 622 | 514 | 514 | no half-time goals (5) |
+| ht_goles | 1866 | 1542 | 1542 | no half-time goals (15) |
+| corners | 5019 | 3762 | 3762 | no `home_corners` (556) |
+| shots | 4402 | 3420 | 3420 | no `home_shots` (384) |
+| yellows | 4227 | 3078 | 3078 | no `home_yellow_cards` (546) |
+| booking_pts | 1188 | 1026 | 1026 | no cards (15) |
+| jug_tiros | 18866 | 10361 | 10361 | no player rows (6235) |
+
+A plausible rate is no longer enough, because "explainable" is exactly what the
+European rows looked like. The classifier mirrors `evaluate_log`'s own branches,
+so whatever makes it skip a row has to name itself here.
+
+### Tests
+705 pass, 6 skip.
+
 ## v0.66.2 — The card catalogue is reproducible (2026-11-02)
 
 ### Fixed

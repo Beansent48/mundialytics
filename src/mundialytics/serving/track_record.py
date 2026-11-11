@@ -21,13 +21,25 @@ ROOT = Path(__file__).resolve().parents[3]
 PRED_LOG = ROOT / "data/processed/logs/predictions_log.csv"
 
 
-def _european_results() -> pd.DataFrame:
-    """Real European results from the cached season CSVs, ClubElo names."""
+def _elo_resolver():
+    """Map a team name in any of the project's spellings to its ClubElo name.
+
+    Returns None when the Elo table cannot be read. European rows then cannot be
+    settled at all, which is a reporting hole and not something to raise inside
+    an HTTP request: `scripts/audit_settlement.py` is what notices it.
+    """
     try:
         from mundialytics.statistical_core.competition.european import (
             fetch_current_elo, make_resolver)
-        resolver = make_resolver(list(fetch_current_elo(ROOT)))
+        return make_resolver(list(fetch_current_elo(ROOT)))
     except Exception:
+        return None
+
+
+def _european_results() -> pd.DataFrame:
+    """Real European results from the cached season CSVs, ClubElo names."""
+    resolver = _elo_resolver()
+    if resolver is None:
         return pd.DataFrame()
     rows = []
     for p in (ROOT / "data/external/uefa").glob("raw_*.csv"):
@@ -49,6 +61,98 @@ def _european_results() -> pd.DataFrame:
     return (pd.concat(rows, ignore_index=True)
             .drop_duplicates(subset=["fecha", "home", "away"])
             .rename(columns={"hg": "home_goals", "ag": "away_goals"}))
+
+
+CALENDAR_DIR = ROOT / "data/processed/fixture_calendars"
+ESPN_DIR = ROOT / "data/external/advanced/espn"
+
+
+def _espn_half_time() -> pd.DataFrame:
+    """Half-time scores rebuilt from ESPN's first-period goals.
+
+    The UEFA result files carry only the final score, so every European
+    prediction on a half-time market was unscoreable — 172 of 519 settled
+    fixtures of 2026/27 had no half-time at all. ESPN's key events carry a
+    period per goal, and counting the first-period ones reproduced
+    football-data's half-time score on **447 of 447** domestic matches of this
+    season: exact, both sides, and the first-half 1X2 and total with it.
+
+    The one trap: **own goals are left alone.** ESPN already files an own goal
+    under the side it counts for, so flipping it — the obvious reading of the
+    `own_goal` column — moved one goal to the wrong side in 18 of those 447,
+    while the first-half total stayed right. A total that reconciles while the
+    sides do not is the signature of a misattribution, not of missing data.
+
+    Both files per suffix are needed: the match list is what supplies the 0-0
+    half-times, which generate no events at all.
+    """
+    frames = []
+    for suffix in ("current", "uefa"):
+        mt_f = ESPN_DIR / f"espn_matches_{suffix}.csv"
+        ev_f = ESPN_DIR / f"espn_player_events_{suffix}.csv"
+        if not (mt_f.exists() and ev_f.exists()):
+            continue
+        try:
+            mt = pd.read_csv(mt_f, low_memory=False)
+            ev = pd.read_csv(ev_f, low_memory=False)
+        except Exception:
+            continue
+        played = mt[mt["home_goals"].notna()]
+        if not len(played) or "period" not in ev.columns:
+            continue
+        scoring = ev["scoring"].fillna(False).astype(bool)
+        shoot = (ev["shootout"].fillna(False).astype(bool)
+                 if "shootout" in ev.columns
+                 else pd.Series(False, index=ev.index))
+        goals = ev[scoring & ~shoot & (ev["period"] == 1)]
+        by_event: dict = {}
+        for e in goals.itertuples(index=False):
+            by_event.setdefault(e.event_id, []).append(str(e.team))
+        rows = []
+        for r in played.itertuples(index=False):
+            teams = by_event.get(r.event_id, [])
+            hh = sum(1 for t in teams if t == str(r.home_team))
+            rows.append({"fecha": str(r.date)[:10], "home": r.home_team,
+                         "away": r.away_team, "home_goals_ht": float(hh),
+                         "away_goals_ht": float(len(teams) - hh)})
+        frames.append(pd.DataFrame(rows))
+    if not frames:
+        return pd.DataFrame()
+    return (pd.concat(frames, ignore_index=True)
+            .drop_duplicates(subset=["fecha", "home", "away"]))
+
+
+def _calendar_results() -> pd.DataFrame:
+    """Completed results from the season fixture calendars, foundation names.
+
+    The foundation trails the calendars by a round or two, so the freshest
+    results sit on disk before they reach it — lorient vs brest was played 0-2
+    on 2026-11-02 and settled nowhere, because settlement only ever read the
+    foundation. That made the live record systematically exclude the newest
+    round. Used strictly to fill what the foundation does not have: the
+    foundation stays authoritative, and only goal-outcome markets can settle
+    from here, since the calendars carry no shots or cards.
+    """
+    if not CALENDAR_DIR.exists():
+        return pd.DataFrame()
+    rows = []
+    need = {"date", "home_team", "away_team", "completed", "home_goals", "away_goals"}
+    for p in CALENDAR_DIR.glob("*.csv"):
+        try:
+            df = pd.read_csv(p)
+        except Exception:
+            continue
+        if not need <= set(df.columns):
+            continue
+        d = df[df["completed"].astype(str).str.lower() == "true"].copy()
+        d["fecha"] = d["date"].astype(str).str[:10]
+        d = d.rename(columns={"home_team": "home", "away_team": "away"})
+        rows.append(d.dropna(subset=["home_goals", "away_goals"])[
+            ["fecha", "home", "away", "home_goals", "away_goals"]])
+    if not rows:
+        return pd.DataFrame()
+    return (pd.concat(rows, ignore_index=True)
+            .drop_duplicates(subset=["fecha", "home", "away"]))
 
 
 EVENT_COLS = {"corners": ("home_corners", "away_corners"),
@@ -212,6 +316,133 @@ def _player_finder(plk: dict):
     return find
 
 
+def _fill_near_date(m: pd.DataFrame, res: pd.DataFrame,
+                    home_col: str = "home", away_col: str = "away",
+                    tol_days: int = 2) -> pd.DataFrame:
+    """Settle rows whose fixture moved after the prediction was logged.
+
+    Kick-offs get rescheduled for television, so the date stored with the
+    prediction is the date the calendar promised, not always the date the match
+    was played: four of 2026/27's logged rows were off by exactly one day
+    (toulouse-troyes, paris sg-lyon, nice-rennes, lyon-angers). An exact-date
+    join drops those, which reads as "never predicted" instead of "moved".
+
+    Only an unambiguous match counts: one result for that pair inside the
+    window, or the row is left unsettled. A tolerance of a couple of days cannot
+    reach the reverse fixture or another season's meeting.
+    """
+    if not len(res) or not m["home_goals"].isna().any():
+        return m
+    # Carry every column the source has, not just the goals. Filling goals
+    # alone settled the 1X2 of a moved fixture and left its half-time and event
+    # markets unscoreable even though the foundation held them one day over —
+    # 14 of 2026/27's fixtures, which read as missing coverage rather than as a
+    # join that stopped early. `date` stays out: the row keeps the date it was
+    # predicted for.
+    cols = [c for c in res.columns
+            if c not in ("home", "away", "fecha", "date") and c in m.columns]
+    idx: dict[tuple, list] = {}
+    for r in res.itertuples(index=False):
+        idx.setdefault((r.home, r.away), []).append(r)
+    tol = pd.Timedelta(days=tol_days)
+    for i in m.index[m["home_goals"].isna()]:
+        cands = idx.get((m.at[i, home_col], m.at[i, away_col]))
+        if not cands:
+            continue
+        want = pd.Timestamp(m.at[i, "fecha"])
+        near = [c for c in cands if abs(pd.Timestamp(c.fecha) - want) <= tol]
+        if len(near) == 1:
+            for c in cols:
+                m.at[i, c] = getattr(near[0], c)
+    return m
+
+
+def attach_results(log: pd.DataFrame, df_clubs: pd.DataFrame) -> pd.DataFrame:
+    """The prediction log with real goals attached, from every source we hold.
+
+    One place decides what counts as "there is a result for this fixture": the
+    foundation first, then the UEFA results for European ties, then the fixture
+    calendars for rounds the foundation has not ingested, and last a two-day
+    window for fixtures that moved. `evaluate_log` grades from this and
+    `scripts/audit_settlement.py` audits it, so the audit cannot disagree with
+    the settlement it audits — which it did while each kept its own copy of the
+    join, reporting as holes four fixtures that settle perfectly well.
+
+    Rows keep their NaN goals when nothing has a result: the caller decides
+    whether that is "not played yet" or a hole.
+    """
+    extra = [c for c in ("home_red_cards", "away_red_cards",
+                         "home_goals_ht", "away_goals_ht") if c in df_clubs.columns]
+    res = df_clubs[["home_team", "away_team", "date", "home_goals", "away_goals"]
+                   + [c for cc in EVENT_COLS.values() for c in cc] + extra].copy()
+    res["fecha"] = res["date"].astype(str).str[:10]
+    res_log = res.rename(columns={"home_team": "home", "away_team": "away"})
+    m = log.merge(res_log, on=["home", "away", "fecha"], how="left")
+    # European rows won't match the domestic foundation — fill from the UEFA
+    # results. Those carry ClubElo names ("Bayern", "Man United") while the log
+    # carries foundation names ("bayern munich", "manchester united"), so the log
+    # side has to be resolved into Elo space first. Merging the two spellings
+    # directly matched zero rows of 162, which left every European prediction
+    # silently unsettled; resolving first settles all 108 that have a result.
+    eu_res = _european_results()
+    resolve = _elo_resolver()
+    if len(eu_res) and resolve is not None:
+        miss = m["home_goals"].isna()
+        side = m.loc[miss, ["home", "away", "fecha"]].copy()
+        side["home"] = side["home"].astype(str).map(resolve)
+        side["away"] = side["away"].astype(str).map(resolve)
+        fill = side.merge(eu_res, on=["home", "away", "fecha"], how="left")
+        m.loc[miss, "home_goals"] = fill["home_goals"].to_numpy()
+        m.loc[miss, "away_goals"] = fill["away_goals"].to_numpy()
+        # keep the Elo spelling so the moved-fixture pass can use it too
+        m["_elo_home"] = m["home"].astype(str).map(resolve)
+        m["_elo_away"] = m["away"].astype(str).map(resolve)
+
+    # The foundation trails the calendars, so fill from them what it has not
+    # ingested yet. Foundation first, always: this only sees untouched rows.
+    cal = _calendar_results()
+    if len(cal):
+        miss = m["home_goals"].isna()
+        fill = (m.loc[miss, ["home", "away", "fecha"]]
+                .merge(cal, on=["home", "away", "fecha"], how="left"))
+        m.loc[miss, "home_goals"] = fill["home_goals"].to_numpy()
+        m.loc[miss, "away_goals"] = fill["away_goals"].to_numpy()
+
+    # Anything still open may simply have been played on another day.
+    m = _fill_near_date(m, res_log)
+    m = _fill_near_date(m, cal)
+    if "_elo_home" in m.columns and len(eu_res):
+        m = _fill_near_date(m, eu_res, "_elo_home", "_elo_away")
+        m = m.drop(columns=["_elo_home", "_elo_away"])
+
+    # Half-time for fixtures whose result source carries only the final score,
+    # which is every European tie: the UEFA files have no half-time at all.
+    ht = _espn_half_time()
+    if len(ht) and "home_goals_ht" in m.columns:
+        def _fill_ht(frame: pd.DataFrame, keys: pd.DataFrame) -> None:
+            fill = keys.merge(frame, on=["home", "away", "fecha"], how="left")
+            m.loc[keys.index, "home_goals_ht"] = fill["home_goals_ht"].to_numpy()
+            m.loc[keys.index, "away_goals_ht"] = fill["away_goals_ht"].to_numpy()
+
+        need = m["home_goals_ht"].isna() & m["home_goals"].notna()
+        if need.any():
+            _fill_ht(ht, m.loc[need, ["home", "away", "fecha"]].copy())
+        # ESPN spells European sides the way ClubElo does ("dortmund",
+        # "man city", "ath madrid") while the log uses foundation names
+        # ("borussia dortmund", "manchester city", "atletico madrid"), so the
+        # second pass bridges both sides through the Elo resolver.
+        need = m["home_goals_ht"].isna() & m["home_goals"].notna()
+        if need.any() and resolve is not None:
+            hte = ht.assign(home=ht["home"].astype(str).map(resolve),
+                            away=ht["away"].astype(str).map(resolve)
+                            ).dropna(subset=["home", "away"])
+            keys = m.loc[need, ["home", "away", "fecha"]].copy()
+            keys["home"] = keys["home"].astype(str).map(resolve)
+            keys["away"] = keys["away"].astype(str).map(resolve)
+            _fill_ht(hte, keys)
+    return m
+
+
 def evaluate_log(df_clubs: pd.DataFrame,
                  labels: dict[str, str] | None = None) -> pd.DataFrame:
     """Join the served-predictions log with real results -> hit per prediction.
@@ -223,21 +454,7 @@ def evaluate_log(df_clubs: pd.DataFrame,
     if not PRED_LOG.exists():
         return pd.DataFrame()
     log = pd.read_csv(PRED_LOG)
-    extra = [c for c in ("home_red_cards", "away_red_cards",
-                         "home_goals_ht", "away_goals_ht") if c in df_clubs.columns]
-    res = df_clubs[["home_team", "away_team", "date", "home_goals", "away_goals"]
-                   + [c for cc in EVENT_COLS.values() for c in cc] + extra].copy()
-    res["fecha"] = res["date"].astype(str).str[:10]
-    m = log.merge(res.rename(columns={"home_team": "home", "away_team": "away"}),
-                  on=["home", "away", "fecha"], how="left")
-    # European rows won't match the domestic foundation — fill from the UEFA results
-    eu_res = _european_results()
-    if len(eu_res):
-        miss = m["home_goals"].isna()
-        fill = (m.loc[miss, ["home", "away", "fecha"]]
-                .merge(eu_res, on=["home", "away", "fecha"], how="left"))
-        m.loc[miss, "home_goals"] = fill["home_goals"].to_numpy()
-        m.loc[miss, "away_goals"] = fill["away_goals"].to_numpy()
+    m = attach_results(log, df_clubs)
     # player markets settle from a different source (Understat player-match),
     # so they are joined separately rather than through the team-level frame
     pl = _player_match_actuals()

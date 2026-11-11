@@ -115,8 +115,33 @@ Any on-disk memo hides its own inputs this way. So the measurement script now
 records directory listings as well as opens and prints them separately —
 "listed (not every file opened)", `walked` in the manifest — which is where the
 next gap of this shape will show up before a container finds it. And
-`build_serving_bundle.py` has an explicit `ALWAYS_INCLUDE` for
-`data/raw/football_data` with the reason written next to it.
+`build_serving_bundle.py` has an explicit `ALWAYS_INCLUDE`, with the reason
+written next to each entry.
+
+### Measure it cold, or you publish an incomplete volume
+
+The same trap one layer along, and the reason `--cold` exists. A fit loaded from
+`data/processed/cache` never opens the files that **built** it, so a warm
+measurement misses them entirely — `understat_shots.csv`, 121 MB, among them.
+`PlayerPropsModel.fit` takes that file as
+
+    if shots is None and shots_path is not None and Path(shots_path).exists()
+
+so a bundle without it still yields a working `PlayerPropsModel`: every price
+plausible, and the penalty information it carries simply not in the model.
+Verified in a container on 2026-11-03.
+
+`--cold` points `api.engine.CACHE_DIR` at a temporary directory — the real cache
+is never touched — so the fits run for real. Ten minutes against one, and it is
+the only measurement a server's empty volume corresponds to. **The mechanism is
+a parallel session's**, from branch `claude/settlement-audit`, which measured the
+bundle this way as 439 files / 356 MB; the two committed records of that run are
+`docs/serving_bundle.json` and `docs/serving_bundle_cold.json`.
+
+Measured here with both fixes in, by the full seventeen-route crawl: **584
+files, 350.6 MB** — within 6 MB of that independent cold figure, by a different
+route. Two methods, the same number, which is the closest thing to a check this
+measurement can have.
 
 **The bundle is therefore 583 files, 234.7 MB** — 201 football-data CSVs and
 41 MB more than measured, and still **0.9% of the 26.5 GB tree.**

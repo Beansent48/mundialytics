@@ -141,6 +141,35 @@ TEAM_ALIASES = {
 }
 
 
+# Letters that NFKD does NOT decompose into ASCII plus a combining mark, so
+# stripping accents leaves them intact and the [^a-z0-9] pass below turns each
+# into a space: "københavn" became "k benhavn" and stopped matching anything.
+# "ä" and "ö" are absent on purpose — those DO decompose, and mapping them here
+# would turn "münchen" into "muenchen" and change names that already resolve.
+TRANSLIT = {"æ": "ae", "ø": "oe", "å": "aa", "ß": "ss", "ð": "d", "þ": "th",
+            "ł": "l", "đ": "d", "ı": "i", "œ": "oe",
+            "Æ": "ae", "Ø": "oe", "Å": "aa", "Ð": "d", "Þ": "th",
+            "Ł": "l", "Đ": "d", "Œ": "oe"}
+
+
+def transliterate(value: object) -> str:
+    """Spell out the letters NFKD cannot decompose, before any accent stripping.
+
+    Call this on a raw provider name when its canonical form has to survive
+    Nordic and Central-European spellings. It is deliberately NOT wired into
+    `normalize_text`: that function also backs `canonical_player_name`, so
+    changing it would rewrite the identity key of every player with one of
+    these letters — Ødegaard, Højlund, Sørloth — across files already written.
+    That is a migration, not a fix.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    text = str(value)
+    for k, v in TRANSLIT.items():
+        text = text.replace(k, v)
+    return text
+
+
 def strip_accents(value: object) -> str:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
