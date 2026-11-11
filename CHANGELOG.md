@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.67.1 — Seven cold-start findings fixed (2026-11-11)
+
+The cold-start review (v0.64.0, PR #29) found eleven issues; four were fixed in
+that PR and seven were catalogued without a fix. All seven are fixed here:
+five silent defects and two performance wastes.
+
+### Fixed
+- **A 503 "warming up" was cached as an ISR page for the whole revalidate
+  window.** `request()` in `web/lib/api.ts` now retries up to three times on
+  503, honouring the `Retry-After` header, so a page that regenerates while
+  the engine is reloading waits for it instead of caching the error.
+- **The market-level memo deleted other checkouts' disk caches.** The glob
+  `market_level_*.json` hit files from any worktree sharing
+  `data/processed/cache`. Scoped to the code fingerprint prefix so each
+  checkout manages only its own file.
+- **The calendar temp file had a fixed name, so two processes writing the
+  same league could interleave.** `refresh_calendar` now writes to a PID-
+  and-timestamp-unique `.tmp`, then atomically replaces the snapshot.
+- **`_models()` read `data_version()` twice.** A refresh landing between the
+  two stat calls made `_ready()` see the old mtime and `club_engine()` the
+  new one, causing a full in-line refit. Now reads it once and forwards the
+  snapshot.
+- **The cached calendar DataFrame was shared without copying.** Any caller
+  that mutated it would poison every subsequent read until the mtime changed.
+  `season_calendar` now returns `.copy()`.
+- **A stale calendar spawned one refresh thread per concurrent request.**
+  `_LAST_TRY` is now written before the thread launches, so concurrent
+  callers see the refresh in flight.
+- **`_CACHE_LOCKS` grew without bound.** Stale lock entries are pruned when
+  the dict exceeds 128 keys.
+
+### Tests
+- 6 new tests pinning the seven fixes (652 total, 0 failures).
+
 ## v0.67.0 — The whole site as one compose stack (2026-11-03)
 
 Task **A2** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md), the last

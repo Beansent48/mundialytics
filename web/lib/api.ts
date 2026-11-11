@@ -548,25 +548,34 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, revalidate = 300): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
-  try {
-    const res = await fetch(`${apiBase()}${path}`, {
-      signal: controller.signal,
-      // One shared tag on every cached response so the daily data refresh can
-      // invalidate them all at once (see app/api/revalidate). The per-call
-      // `revalidate` still bounds staleness on its own; the tag is what lets an
-      // out-of-band refresh push fresh fixtures, timelines and standings the
-      // moment they land instead of waiting for the window to lapse.
-      next: { revalidate, tags: ["data"] },
-    });
-    if (!res.ok) {
-      throw new ApiError(`${path} returned ${res.status}`, res.status);
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const res = await fetch(`${apiBase()}${path}`, {
+        signal: controller.signal,
+        // One shared tag on every cached response so the daily data refresh can
+        // invalidate them all at once (see app/api/revalidate). The per-call
+        // `revalidate` still bounds staleness on its own; the tag is what lets an
+        // out-of-band refresh push fresh fixtures, timelines and standings the
+        // moment they land instead of waiting for the window to lapse.
+        next: { revalidate, tags: ["data"] },
+      });
+      if (res.status === 503 && attempt < maxAttempts) {
+        const delay = parseInt(res.headers.get("Retry-After") ?? "5", 10);
+        await new Promise((r) => setTimeout(r, delay * 1000));
+        continue;
+      }
+      if (!res.ok) {
+        throw new ApiError(`${path} returned ${res.status}`, res.status);
+      }
+      return (await res.json()) as T;
+    } finally {
+      clearTimeout(timeout);
     }
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new ApiError(`${path} returned 503 after ${maxAttempts} attempts`, 503);
 }
 
 export const api = {

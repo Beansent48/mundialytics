@@ -132,7 +132,7 @@ def refresh_calendar(comp_id: str, season: str, block: bool = True,
         if cal.empty:
             return False
         CALENDAR_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".csv.tmp")
+        tmp = path.with_suffix(f".{os.getpid()}.{time.monotonic_ns()}.tmp")
         cal.to_csv(tmp, index=False, encoding="utf-8")
         os.replace(tmp, path)           # a reader never sees half a file
         return True
@@ -188,15 +188,14 @@ def season_calendar(comp_id: str, season: str) -> pd.DataFrame:
     """
     path = _snapshot_path(comp_id, season)
     age = _age(path)
-    # At most one provider attempt per league-season per window, whether it
-    # succeeds or not: a dead provider must not cost a timeout per request.
-    may_try = time.time() - _LAST_TRY.get((comp_id, season), 0.0) > CALENDAR_TTL_SECONDS
+    key = (comp_id, season)
+    now = time.time()
+    may_try = now - _LAST_TRY.get(key, 0.0) > CALENDAR_TTL_SECONDS
     if age == float("inf"):
-        # nothing on disk at all: the very first run has to wait for the fetch
         if may_try:
             refresh_calendar(comp_id, season, block=True)
     elif age > CALENDAR_TTL_SECONDS and may_try:
-        # stale: serve what we have and refresh behind the visitor's back
+        _LAST_TRY[key] = now
         threading.Thread(target=refresh_calendar, args=(comp_id, season, False),
                          daemon=True, name=f"calendar-{slugify(comp_id)}").start()
     stamp = 0
@@ -204,7 +203,7 @@ def season_calendar(comp_id: str, season: str) -> pd.DataFrame:
         stamp = int(path.stat().st_mtime)
     except OSError:
         pass
-    return _read_snapshot(comp_id, season, stamp)
+    return _read_snapshot(comp_id, season, stamp).copy()
 
 
 def serving_season(today: date | None = None) -> str:

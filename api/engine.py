@@ -165,7 +165,7 @@ def _market_levels(df: pd.DataFrame, k: float) -> dict[str, tuple[int, float]]:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_f.write_text(json.dumps({c: [n, m] for c, (n, m) in detail.items()}),
                            encoding="utf-8")
-        for old in CACHE_DIR.glob("market_level_*.json"):
+        for old in CACHE_DIR.glob(f"market_level_{LEVEL_FP}_*.json"):
             if old != cache_f:
                 old.unlink(missing_ok=True)
     except OSError:
