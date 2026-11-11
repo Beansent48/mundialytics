@@ -7,6 +7,9 @@ __pycache__/
 .venv/
 .env
 .env.*
+# ...but the templates are the documentation for them, and are committed.
+# (web/.env.example predates this line and was force-added.)
+!.env.example
 .ipynb_checkpoints/
 *.pkl
 *.zip

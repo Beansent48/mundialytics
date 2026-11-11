@@ -1,0 +1,13 @@
+# Git for Windows has core.autocrlf=true system-wide on the machine this
+# project is developed on, so a checkout here rewrites text files to CRLF. For
+# most of the repo that is harmless. For the files Linux tooling reads it is
+# not: a shell script whose shebang line ends in CR fails with "bad
+# interpreter", and a Dockerfile's line continuations are fragile the same way.
+#
+# These therefore keep LF in every checkout, on every platform.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+docker/Caddyfile text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore text eol=lf

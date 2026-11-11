@@ -1,0 +1,49 @@
+# The only service with a public port. Everything behind it talks over the
+# compose network.
+#
+# One origin for the whole site, which is the decision that makes CORS stop
+# mattering: the browser calls `/engine/...` on the same host it loaded the page
+# from, and Caddy hands those to the API. The API therefore needs no public
+# hostname, no CORS allow-list in production, and no published port (it binds
+# 127.0.0.1 only, for the web build and for a human with an SSH tunnel).
+#
+# docs/DEPLOYMENT_PLAN.md weighed the alternative -- proxying the API through a
+# Next route handler -- and this is the same same-origin result with one less
+# hop and no application code.
+
+{
+	# Automatic TLS. Unused while SITE_ADDRESS is `:80` or `localhost`; required
+	# by Let's Encrypt once it is a real hostname.
+	email {$ACME_EMAIL:nobody@example.invalid}
+}
+
+# `:80` locally (plain HTTP, no certificate to trust); the public hostname in
+# production, where Caddy then gets and renews the certificate by itself.
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# The model API, on the site's own origin. handle_path strips the prefix, so
+	# the API sees the paths it actually declares (/health, /fixtures/day, ...).
+	handle_path /engine/* {
+		reverse_proxy api:8000 {
+			# A cold process can be a couple of minutes inside its own lifespan
+			# and the heaviest endpoint (POST /squadlab/season) is seconds, not
+			# milliseconds. Long enough not to cut those off, short enough that a
+			# wedged upstream does not pile up connections.
+			transport http {
+				response_header_timeout 180s
+			}
+		}
+	}
+
+	# Everything else is the Next.js app, its own /api/* route handlers (auth,
+	# revalidate, user data) included.
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

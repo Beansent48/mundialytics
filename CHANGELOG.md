@@ -1,5 +1,123 @@
 # Changelog
 
+## v0.67.0 — The whole site as one compose stack (2026-11-03)
+
+Task **A2** of [`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md), the last
+of the four, on top of v0.66.1. Caddy in front, Next.js, the API, the accounts
+Postgres, the Drizzle migrations as a one-shot and the daily refresh as a
+service of its own.
+
+Nothing is published: no VPS was rented, no domain bought, nothing deployed.
+**No served probability moves** — `src/` is untouched, and the two files under
+`api/` that changed are a CORS allow-list and an import.
+
+### Added
+- **The serving bundle, measured rather than guessed.**
+  `scripts/measure_serving_bundle.py` installs an audit hook on `open` *before*
+  the app is imported — pandas, joblib and numpy all open through CPython's
+  `open`, so one hook catches everything, module-level reads included — then
+  drives a real uvicorn and calls all **17** routes: every competition's
+  league, awards and fixture list, the three UEFA ones, three played and three
+  upcoming match pages, and the whole of SquadLab including a full Champions
+  season. Result: **373 files, 224.5 MB**, of which
+  `scripts/build_serving_bundle.py` writes the **277 files and 194.5 MB** a
+  deployment mounts. That is **0.7% of a 26.5 GB tree**, and the bundle can be
+  mounted on its own (`DATA_DIR=outputs/bundle_data`), which is the test that
+  the list is complete.
+
+- **Two images.** `api` on `python:3.14-slim` — the interpreter
+  `requirements-lock.txt` is the known-good set for — carrying code and
+  dependencies and **no data at all**, with a `refresh` stage on top that adds
+  soccerdata. `web` multi-stage on `node:22-alpine`, shipping
+  `.next/standalone` only (37 MB against ~500 MB of `node_modules`), built with
+  `next build` and never `next dev`.
+
+- **A healthcheck with a 420-second `start_period`**, which is the one number
+  in this release that cannot be tuned away. uvicorn runs its lifespan — where
+  the models load — *before* it binds the socket, so a probe during a cold fit
+  gets a refused connection: not a 503, nothing to answer with. Without the
+  grace period the container is marked unhealthy, restarted, and the restart
+  begins the same two-minute fit again. It never comes up. 420 s is the 119 s
+  measured here, ×3 for two slow vCPUs, plus the payload warm-up — and the
+  probe checks `ready`, not just a 200, because a process that answers while
+  still loading serves the "model is warming up" box.
+
+- **The daily refresh inside the stack**, which is the user's choice of
+  2026-11-02 over the plan's own recommendation.
+  `scripts/refresh_loop.py` is `run_update.ps1`'s contract as a process that
+  sleeps until `REFRESH_AT`: the light/heavy split, stdout teed and stderr
+  filed (a `--full` run emits hundreds of thousands of warning lines),
+  `last_run.json` in the same shape, the cache invalidation, the lineup
+  watcher, 30 runs of logs. A malformed `REFRESH_AT` falls back instead of
+  crash-looping under `restart: unless-stopped`, and it wakes every minute
+  rather than sleeping the gap so a suspended host cannot sleep through its
+  slot.
+
+- **A nightly `pg_dump`** (`docker/backup-postgres.sh`, one crontab line at
+  04:30, 14 days kept, written to a `.part` and renamed). Postgres is the only
+  thing here that needs a backup: `data/` is reproducible from the refresh,
+  `outputs/` is not served, the images rebuild from the repository — the
+  accounts are the only bytes that exist nowhere else.
+
+- **CI builds the images**, and says in the workflow what it cannot build: the
+  web image's final stage needs a ready API, which needs ~195 MB of data git
+  does not carry. So the API image whole, the web image to `source`, and a
+  `docker compose config` check.
+
+- **`robots.txt` and `noindex`** (`web/app/robots.ts` plus the locale layout):
+  public but not findable, the user's other decision of 2026-11-02.
+  `SITE_INDEXABLE=1` flips both.
+
+- **Nine tests**: the refresh schedule arithmetic and the `last_run.json`
+  contract (`tests/test_refresh_loop.py`), and the three CORS cases
+  (`tests/test_cors_origins.py`).
+
+### Changed
+- **The browser stops calling the API cross-origin.** Five client components
+  did — the matchday screen, the competition browser, the awards browser, the
+  historic tournament and the POST that plays a Champions season — so the
+  deployment plan's open question was a real fork. Taken: one origin,
+  terminated at Caddy, which hands `/engine/*` to the API. New
+  `web/lib/api-base.ts` answers "where is the API" twice, because the same
+  module runs server-side (`API_INTERNAL_URL`, one hop on the container
+  network) and in the browser (`NEXT_PUBLIC_API_URL`, a *path* in a
+  deployment); with neither set both answer `http://localhost:8000` and
+  development is untouched.
+
+- **`MUNDIALYTICS_CORS_ORIGINS`.** The development default — any `localhost:*`
+  port — must not ship, and this settles it: unset means development, **set
+  and empty** means no cross-origin caller at all (what the container sets), a
+  list means exactly those. Empty is not unset, which is what the test pins
+  down.
+
+- **`docker-compose.yml`** grew from one service to six, and its project name
+  is now pinned to `mundialytics`: A1 found B1's Postgres invisible to
+  `docker compose` from the main checkout because it had been started from a
+  worktree and the name came from the directory.
+
+- **`.gitattributes`** pins LF for the Dockerfiles, the Caddyfile, the compose
+  file and `*.sh`. This machine has `core.autocrlf=true` system-wide and a
+  shell script whose shebang ends in CR fails on a server with "bad
+  interpreter".
+
+### Fixed
+- Two things the deployment plan had wrong, both found by measuring:
+  **`data/` is 26.5 GB, not 2.7 GB** (it had omitted `data/raw`, 23.9 GB in
+  17,256 files), and **the data mount cannot be read-only** — merely serving a
+  page rewrites the UEFA fixture CSVs, the per-league forecast and scorer
+  caches, the fixture-calendar snapshots and, on a cold boot, the 28 MB fit.
+
+### Not verified yet
+A Claude session cannot start Docker on this machine (`com.docker.service` is
+on manual start and `OpenService` is denied without elevation), and it was not
+running while this was built. Measured, parsed and tested: the serving bundle
+and the write set against the real app, `docker compose config` over the whole
+stack, the suite, `npm run lint` and `npx tsc --noEmit`. Still needing one
+`docker compose up`: that the images build and how big they are, that the stack
+comes up healthy, and that the site works end to end through the proxy with
+accounts. Each is a command in
+[`docs/DEPLOYMENT_PLAN.md`](docs/DEPLOYMENT_PLAN.md) §6; none is a design
+question.
 ## v0.66.3 — Every prediction whose result we hold now gets checked (2026-11-03)
 
 Scoring the season's live track record for the first time found 220 of 412

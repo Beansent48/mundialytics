@@ -414,6 +414,8 @@ the SquadLab calibration reported under In progress.
 | Odds layer | odds contract and readiness checks, de-vigging, value, pick policy |
 | Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
 | Live logging | every prediction written pre-kickoff with its provenance, settled afterwards; coverage checked forward and back every day |
+| Accounts | optional sign-in (Google or email) over our own Postgres; favourites, settings and SquadLab runs follow the user across devices |
+| Deployment | one compose stack — proxy, web, API, database, migrations, daily refresh — with the serving bundle measured at 194.5 MB of a 26.5 GB tree |
 
 The odds layer is dormant by choice: built while the betting question was still
 open, kept because the benchmark above depends on it.
@@ -560,6 +562,65 @@ failures into `last_run.json` and shows a Windows notification. Data files are
 written to a temporary file and swapped in, and the API reloads its models when
 the foundation changes, so a refresh reaches the site without a restart.
 
+## All of it in containers
+
+The two processes above are how this is developed. For a server — or to run the
+whole site locally without a venv and a node install — there is a compose stack:
+Caddy in front, Next.js, the API, the accounts Postgres, the Drizzle migrations
+as a one-shot, and the daily refresh as a service of its own.
+
+```bash
+cp .env.example .env                        # fill BETTER_AUTH_SECRET and REVALIDATE_SECRET
+docker compose up -d --wait postgres api    # the API is "healthy" once its models are in
+docker buildx bake -f docker-compose.yml web --allow=network.host --load
+docker compose up -d                        # http://localhost
+```
+
+**Why the build is a separate move, and why that third line is not
+`docker compose build web`.** Every data page is prerendered, so `next build`
+renders each one against whatever the API answers *at build time* — and the
+builder has no route to the compose network, so it borrows the host's and talks
+to the port the API publishes on loopback. The API therefore has to be up and
+ready *before* the web image is built, and it refuses to build otherwise rather
+than baking the "model is warming up" box into static HTML. Host networking in
+a build is a BuildKit *entitlement* and compose has no flag to grant one, so
+that step goes through `buildx bake`, which does. After the first time,
+`docker compose up -d` is the whole command.
+
+**The first start is slow, once.** On a freshly seeded data directory there are
+no caches, so the API fits the engine, recomputes the market level and refits
+the prop models before it binds its port: **394.7 s measured** in the container.
+That is what the healthcheck's `start_period` covers. With
+`data/processed/cache` warm the same start is seconds.
+
+**The data is a mount, never a layer** (`DATA_DIR`, `./data` by default): the
+refresh rewrites it daily, so an image with a CSV inside would have to be
+rebuilt once a day. And it does not need all of it —
+`scripts/measure_serving_bundle.py` records every file the API opens while all
+17 routes are called, which is **277 files and 194.5 MB of a 26.5 GB tree**:
+
+```bash
+python scripts/measure_serving_bundle.py --out outputs/serving_bundle
+python scripts/build_serving_bundle.py --to outputs/bundle_data --clean
+DATA_DIR=outputs/bundle_data docker compose up -d --wait api    # serves from the bundle alone
+```
+
+The healthcheck on the API carries a **420-second `start_period`**, and that is
+not padding: uvicorn runs its lifespan — where the models load — before it binds
+the socket, so a probe during a cold fit gets a refused connection. Without the
+grace period the container is marked unhealthy, restarted, and the restart
+begins the same two-minute fit again.
+
+Caddy serves everything on one origin: `/engine/*` goes to the API, everything
+else to Next. So the browser never calls the API cross-origin, the API publishes
+nothing to the world, and TLS is automatic the moment `SITE_ADDRESS` is a real
+hostname instead of `:80`.
+
+[`docs/DEPLOYMENT_PLAN.md`](docs/DEPLOYMENT_PLAN.md) has the rest: what the
+measurement found, why the data mount cannot be read-only, where the daily
+refresh runs and what that choice costs, the nightly `pg_dump`, and the
+step-by-step for putting it on a VPS.
+
 ## Layout
 
 ```
@@ -580,8 +641,9 @@ src/mundialytics/
 ├── providers/          ESPN fixtures, external API configuration
 └── matchday/, reports/ earlier matchday builder and paper-ledger reports
 
-api/                    FastAPI service the web app reads from
+api/                    FastAPI service the web app reads from, and its Dockerfile
 web/                    Next.js front end — see web/README.md
+docker/                 Caddyfile (the reverse proxy) and the nightly pg_dump
 scripts/                ~200 CLI entry points — see scripts/README.md
 tests/                  637 tests green on a clean checkout; 112 more
                         skip unless the local dataset is built

@@ -13,7 +13,11 @@
  * the API up, and `next start` served the notice to every visitor. A build that
  * silently ships the error page is worse than one that refuses to run.
  */
-const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// API_INTERNAL_URL first: in a container build NEXT_PUBLIC_API_URL is a path
+// (`/engine`, served on the site's own origin by Caddy) and only the build's own
+// route to the API is a URL this can fetch. See web/lib/api-base.ts.
+const base =
+  process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const url = `${base.replace(/\/$/, "")}/health`;
 
 try {
