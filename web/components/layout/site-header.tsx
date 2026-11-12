@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AccountMenu } from "@/components/ui/account-menu";
 import { buttonStyles } from "@/components/ui/button";
 import { Wordmark } from "@/components/ui/logo";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,7 @@ export function SiteHeader() {
           >
             {t("openApp")}
           </Link>
+          <ThemeToggle />
           <AccountMenu />
           <button
             type="button"
