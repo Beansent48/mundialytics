@@ -111,9 +111,9 @@ export function AccountMenu() {
                 </Link>
               </DropdownMenu.Item>
               <DropdownMenu.Item className={itemClass} asChild>
-                <Link href="/account">
-                  <UserRound className="size-4" />
-                  {tAuth("accountTitle")}
+                <Link href="/settings">
+                  <Settings className="size-4" />
+                  {t("settings")}
                 </Link>
               </DropdownMenu.Item>
               <DropdownMenu.Item
@@ -151,10 +151,6 @@ export function AccountMenu() {
             <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-dim">
               {t("soon")}
             </span>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item className={itemClass} disabled>
-            <Settings className="size-4" />
-            {t("settings")}
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator className="my-1.5 h-px bg-border" />
