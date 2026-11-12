@@ -25,7 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Link } from "@/i18n/navigation";
 import { useSession } from "@/lib/auth-client";
@@ -105,19 +105,18 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"achievements" | "album">("achievements");
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/user/profile", { cache: "no-store" });
-      if (res.ok) setData(await res.json());
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (session) load();
-    else setLoading(false);
-  }, [session, load]);
+    if (!session) {
+      Promise.resolve().then(() => setLoading(false));
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/user/profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => { if (!cancelled && json) setData(json); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [session]);
 
   if (!session) {
     return (
@@ -159,9 +158,6 @@ export default function ProfilePage() {
 
   const { progress, achievements, stats, album } = data;
   const pct = progress.xpNeeded > 0 ? (progress.xpInLevel / progress.xpNeeded) * 100 : 100;
-  const unlocked = achievements.filter((a) => a.awardedAt);
-  const locked = achievements.filter((a) => !a.awardedAt);
-
   const categories = ["tournament", "match", "squad", "collection"] as const;
 
   return (

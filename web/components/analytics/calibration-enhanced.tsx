@@ -35,7 +35,7 @@ export function CalibrationEnhanced({
   const diagonal = [
     { x: 0, y: 0 },
     { x: 1, y: 1 },
-  ];
+  ] as const;
 
   return (
     <div className="mt-6 space-y-8">
@@ -93,10 +93,10 @@ export function CalibrationEnhanced({
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              formatter={(value: number, name: string) => [
+              formatter={((value: number, name: string) => [
                 `${(value * 100).toFixed(1)}%`,
                 name === "observed" ? t("observed") : t("announced"),
-              ]}
+              ]) as never}
               labelFormatter={() => ""}
             />
             <Scatter
@@ -143,7 +143,7 @@ export function CalibrationEnhanced({
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              formatter={(value: number, name: string) => [
+              formatter={((value: number, name: string) => [
                 `${(value * 100).toFixed(1)}%`,
                 name === "observed"
                   ? t("observed")
@@ -152,7 +152,7 @@ export function CalibrationEnhanced({
                     : name === "ci_hi"
                       ? t("ciHi")
                       : t("announced"),
-              ]}
+              ]) as never}
             />
             <Line
               type="monotone"

@@ -415,6 +415,7 @@ the SquadLab calibration reported under In progress.
 | Evaluation | RPS, Brier, log loss, walk-forward backtesting, calibration search |
 | Live logging | every prediction written pre-kickoff with its provenance, settled afterwards; coverage checked forward and back every day |
 | Accounts | optional sign-in (Google or email) over our own Postgres; favourites, settings and SquadLab runs follow the user across devices |
+| Analytics | per-team lambda decomposition (4 sub-models), prediction-error breakdown, enhanced calibration with Brier decomposition, Elo trajectory and attack/defence radar |
 | Deployment | one compose stack — proxy, web, API, database, migrations, daily refresh — with the serving bundle measured at 194.5 MB of a 26.5 GB tree |
 
 The odds layer is dormant by choice: built while the betting question was still
@@ -545,7 +546,8 @@ stateless and anonymous, and the account layer lives entirely in Next.js.
 The web app has pages for matchday (the five leagues and the three UEFA
 competitions, each priced by its own model), single-competition simulation, league
 forecasting from the current table, player and team props, European
-competitions, results and track record, individual awards, and SquadLab —
+competitions, results and track record, model analytics (lambda decomposition,
+error analysis, calibration and team profiles), individual awards, and SquadLab —
 where you draft an eleven and play the real Champions League.
 
 Keeping it fresh is one command — `python scripts/update_season.py` downloads new
@@ -645,7 +647,7 @@ api/                    FastAPI service the web app reads from, and its Dockerfi
 web/                    Next.js front end — see web/README.md
 docker/                 Caddyfile (the reverse proxy) and the nightly pg_dump
 scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  637 tests green on a clean checkout; 112 more
+tests/                  668 tests green on a clean checkout; 127 more
                         skip unless the local dataset is built
 docs/                   README figures, one current note, archived history
 ```

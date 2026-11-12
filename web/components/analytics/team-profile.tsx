@@ -19,6 +19,10 @@ import {
 
 import type { TeamProfileResponse } from "@/lib/api";
 
+function titleCase(s: string) {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function TeamProfile({ data }: { data: TeamProfileResponse }) {
   const t = useTranslations("analytics.profile");
 
@@ -96,10 +100,10 @@ export function TeamProfile({ data }: { data: TeamProfileResponse }) {
                 fontSize: 12,
               }}
               labelStyle={{ color: "var(--text)", fontWeight: 600 }}
-              formatter={(value: number) => [value.toFixed(1), "Elo"]}
+              formatter={((value: number) => [value.toFixed(1), "Elo"]) as never}
               labelFormatter={(_, payload) => {
                 const p = payload?.[0]?.payload;
-                return p ? `${p.date} vs ${p.opponent} (${p.venue})` : "";
+                return p ? `${p.date} vs ${titleCase(p.opponent)} (${p.venue})` : "";
               }}
             />
             <Line
@@ -147,9 +151,9 @@ export function TeamProfile({ data }: { data: TeamProfileResponse }) {
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                  formatter={(_: number, __: string, entry: { payload?: { raw?: number } }) =>
+                  formatter={((_: number, __: string, entry: { payload?: { raw?: number } }) =>
                     [entry.payload?.raw?.toFixed(4) ?? "–", ""]
-                  }
+                  ) as never}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -172,7 +176,7 @@ export function TeamProfile({ data }: { data: TeamProfileResponse }) {
                   className="rounded-[var(--radius-card)] border border-border bg-surface p-4"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold capitalize">{rival.rival}</span>
+                    <span className="font-semibold">{titleCase(rival.rival)}</span>
                     <span className="text-[0.78rem] text-muted">
                       {rival.total} {t("totalMatches")}
                     </span>

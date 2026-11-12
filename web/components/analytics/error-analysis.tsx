@@ -59,10 +59,10 @@ export function ErrorAnalysis({ data }: { data: ErrorAnalysisResponse }) {
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              formatter={(value: number, _name: string) => [
+              formatter={((value: number) => [
                 value.toFixed(6),
                 "RPS",
-              ]}
+              ]) as never}
               labelStyle={{ color: "var(--text)", fontWeight: 600 }}
             />
             <Bar dataKey="rps" radius={[4, 4, 0, 0]} maxBarSize={40}>
@@ -111,7 +111,7 @@ export function ErrorAnalysis({ data }: { data: ErrorAnalysisResponse }) {
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              formatter={(value: number) => [value.toFixed(6), "RPS"]}
+              formatter={((value: number) => [value.toFixed(6), "RPS"]) as never}
               labelStyle={{ color: "var(--text)", fontWeight: 600 }}
             />
             <Bar dataKey="rps" radius={[0, 4, 4, 0]} maxBarSize={28}>
@@ -158,7 +158,7 @@ export function ErrorAnalysis({ data }: { data: ErrorAnalysisResponse }) {
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              formatter={(value: number) => [value.toFixed(6), "RPS"]}
+              formatter={((value: number) => [value.toFixed(6), "RPS"]) as never}
               labelStyle={{ color: "var(--text)", fontWeight: 600 }}
             />
             <Bar dataKey="rps" radius={[4, 4, 0, 0]} maxBarSize={48}>

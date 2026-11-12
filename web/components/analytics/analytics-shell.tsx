@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
 import { CalibrationEnhanced } from "@/components/analytics/calibration-enhanced";
@@ -15,6 +15,10 @@ import type {
   ErrorAnalysisResponse,
   TeamProfileResponse,
 } from "@/lib/api";
+
+function titleCase(s: string) {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`/engine${path}`);
@@ -40,30 +44,30 @@ export function AnalyticsShell({
   const [team, setTeam] = useState(defaultTeam);
   const [decomposition, setDecomposition] = useState<DecompositionResponse | null>(null);
   const [profile, setProfile] = useState<TeamProfileResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const loadTeam = useCallback(async (t: string) => {
-    setLoading(true);
-    try {
-      const [dec, prof] = await Promise.all([
-        fetchJson<DecompositionResponse>(`/analytics/decomposition?team=${encodeURIComponent(t)}`),
-        fetchJson<TeamProfileResponse>(`/analytics/team-profile?team=${encodeURIComponent(t)}`),
-      ]);
-      setDecomposition(dec);
-      setProfile(prof);
-    } catch {
-      setDecomposition(null);
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [loading, setLoading] = useState(!!defaultTeam);
 
   useEffect(() => {
-    if (team) loadTeam(team);
-  }, [team, loadTeam]);
+    if (!team) return;
+    let cancelled = false;
+    Promise.all([
+      fetchJson<DecompositionResponse>(`/analytics/decomposition?team=${encodeURIComponent(team)}`),
+      fetchJson<TeamProfileResponse>(`/analytics/team-profile?team=${encodeURIComponent(team)}`),
+    ]).then(([dec, prof]) => {
+      if (cancelled) return;
+      setDecomposition(dec);
+      setProfile(prof);
+    }).catch(() => {
+      if (cancelled) return;
+      setDecomposition(null);
+      setProfile(null);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [team]);
 
   const onTeamChange = (newTeam: string) => {
+    setLoading(true);
     setTeam(newTeam);
     const params = new URLSearchParams(searchParams.toString());
     params.set("team", newTeam);
@@ -82,16 +86,16 @@ export function AnalyticsShell({
             id="team-select"
             value={team}
             onChange={(e) => onTeamChange(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[0.85rem] capitalize text-text focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand-ring"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[0.85rem] text-text focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand-ring"
           >
-            {teams.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            {teams.map((name) => (
+              <option key={name} value={name}>
+                {titleCase(name)}
               </option>
             ))}
           </select>
           {loading && (
-            <span className="text-[0.75rem] text-dim">{t("loading")}</span>
+            <div className="size-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           )}
         </div>
       </div>
@@ -104,7 +108,11 @@ export function AnalyticsShell({
         <p className="mt-3 max-w-2xl text-[0.92rem] leading-relaxed text-muted">
           {t("decomposition.lead")}
         </p>
-        {decomposition && <DecompositionChart matches={decomposition.matches} />}
+        {decomposition ? (
+          <DecompositionChart matches={decomposition.matches} />
+        ) : loading ? (
+          <div className="mt-6 h-[360px] animate-pulse rounded-xl bg-surface" />
+        ) : null}
       </Reveal>
 
       {/* 2. Prediction errors */}
@@ -142,17 +150,22 @@ export function AnalyticsShell({
       )}
 
       {/* 4. Team strength profile */}
-      {profile && (
-        <Reveal as="section">
-          <h2 className="font-display text-[1.6rem] leading-tight sm:text-[2rem]">
-            {t("profile.title")}
-          </h2>
-          <p className="mt-3 max-w-2xl text-[0.92rem] leading-relaxed text-muted">
-            {t("profile.lead")}
-          </p>
+      <Reveal as="section">
+        <h2 className="font-display text-[1.6rem] leading-tight sm:text-[2rem]">
+          {t("profile.title")}
+        </h2>
+        <p className="mt-3 max-w-2xl text-[0.92rem] leading-relaxed text-muted">
+          {t("profile.lead")}
+        </p>
+        {profile ? (
           <TeamProfile data={profile} />
-        </Reveal>
-      )}
+        ) : loading ? (
+          <div className="mt-6 space-y-6">
+            <div className="h-[320px] animate-pulse rounded-xl bg-surface" />
+            <div className="mx-auto h-[300px] max-w-[380px] animate-pulse rounded-xl bg-surface" />
+          </div>
+        ) : null}
+      </Reveal>
     </div>
   );
 }

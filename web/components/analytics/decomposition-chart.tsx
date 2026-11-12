@@ -15,6 +15,10 @@ import {
 
 import type { DecompositionMatch } from "@/lib/api";
 
+function titleCase(s: string) {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const SERIES = [
   { key: "gl", color: "var(--chart-1)" },
   { key: "ad", color: "var(--chart-2)" },
@@ -33,7 +37,7 @@ export function DecompositionChart({
     () =>
       matches.map((m) => ({
         date: m.date,
-        label: `${m.date} vs ${m.opponent}`,
+        label: `${m.date} vs ${titleCase(m.opponent)}`,
         gl: m.gl,
         ad: m.ad,
         adx: m.adx,
