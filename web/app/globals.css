@@ -68,6 +68,11 @@
 
   --grid-line: rgba(12, 14, 20, 0.06);
 
+  --chart-1: #6d3fff;
+  --chart-2: #e86826;
+  --chart-3: #0ea5a5;
+  --chart-4: #d946a8;
+
   color-scheme: light;
 }
 
@@ -104,6 +109,11 @@
   --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.6);
 
   --grid-line: rgba(255, 255, 255, 0.06);
+
+  --chart-1: #8b5cff;
+  --chart-2: #f59e3c;
+  --chart-3: #2dd4bf;
+  --chart-4: #f472b6;
 
   color-scheme: dark;
 }

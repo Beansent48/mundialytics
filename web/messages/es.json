@@ -10,6 +10,7 @@
     "results": "Track record",
     "awards": "Premios",
     "lab": "SquadLab",
+    "analytics": "Análisis",
     "openApp": "Entrar en la app",
     "menu": "Menú",
     "close": "Cerrar"
@@ -629,6 +630,80 @@
       "veteran": "Veterano",
       "legend": "Leyenda",
       "master": "Maestro"
+    }
+  },
+  "analytics": {
+    "eyebrow": "Ciencia de datos",
+    "title": "Análisis del modelo",
+    "lead": "Radiografía del motor de predicción: cómo se construye cada lambda, dónde acierta y dónde falla, y qué aspecto tiene cada equipo bajo su lente.",
+    "selectTeam": "Equipo",
+    "loading": "Cargando…",
+    "offlineTitle": "Motor no disponible",
+    "offlineBody": "El servidor de predicción no responde. Inténtalo de nuevo más tarde.",
+    "decomposition": {
+      "title": "Descomposición del modelo",
+      "lead": "Cómo contribuye cada sub-modelo a la lambda (goles esperados) de este equipo partido a partido. Las cuatro fuentes se apilan: su suma es la lambda servida.",
+      "empty": "No hay datos de descomposición para este equipo.",
+      "series": {
+        "gl": "GoalLambda",
+        "ad": "Ataque-Defensa",
+        "adx": "AD-xG",
+        "xr": "xG-rate"
+      }
+    },
+    "errors": {
+      "title": "Análisis de errores",
+      "lead": "Ranked Probability Score (RPS) del modelo en predicciones walk-forward genuinas: cada pronóstico se emitió antes del pitido inicial, sin ver el resultado.",
+      "bySeason": "RPS por temporada",
+      "byLeague": "RPS por liga",
+      "byTier": "RPS por nivel de fuerza",
+      "tier": {
+        "low": "Débiles",
+        "mid": "Medios",
+        "high": "Fuertes"
+      },
+      "gofTitle": "Bondad de ajuste de Poisson",
+      "score": "Marcador",
+      "observed": "Observado",
+      "expected": "Esperado",
+      "diff": "Diferencia"
+    },
+    "calibration": {
+      "title": "Calibración detallada",
+      "lead": "Probabilidad anunciada contra frecuencia observada en 20 tramos, con intervalos de confianza de Wilson y descomposición de Brier.",
+      "announced": "Anunciada",
+      "observed": "Observada",
+      "ciTitle": "Intervalos de confianza",
+      "ciLead": "Las bandas de Wilson al 95% muestran la incertidumbre en la frecuencia observada.",
+      "ciLo": "IC inferior",
+      "ciHi": "IC superior",
+      "brierTitle": "Descomposición de Brier",
+      "brierLead": "Brier Score = Fiabilidad − Resolución + Incertidumbre. Fiabilidad baja = bien calibrado; resolución alta = distingue bien los eventos.",
+      "brier": {
+        "brier": "Brier",
+        "reliability": "Fiabilidad",
+        "resolution": "Resolución",
+        "uncertainty": "Incertidumbre"
+      }
+    },
+    "profile": {
+      "title": "Perfil de fuerza",
+      "lead": "Trayectoria Elo, perfil ataque/defensa y los rivales más frecuentes del equipo seleccionado.",
+      "eloTitle": "Trayectoria Elo",
+      "current": "Actual",
+      "peak": "Máximo",
+      "matches": "Partidos",
+      "radarTitle": "Perfil ataque / defensa",
+      "radarLead": "Parámetros del modelo MLE normalizado contra la liga. Ataque y defensa son parámetros log-escala; un valor alto en ambos indica calidad total.",
+      "attack": "Ataque",
+      "defense": "Defensa",
+      "strength": "Fuerza",
+      "balance": "Balance",
+      "h2hTitle": "Cara a cara",
+      "totalMatches": "partidos en total",
+      "wins": "V",
+      "draws": "E",
+      "losses": "D"
     }
   }
 }

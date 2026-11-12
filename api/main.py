@@ -1058,6 +1058,11 @@ def _calibration() -> list[dict] | None:
     return bins or None
 
 
+def _enhanced_cal() -> dict | None:
+    from api.analytics import enhanced_calibration
+    return enhanced_calibration()
+
+
 @app.get("/track-record")
 def track_record() -> dict:
     """Benchmark, calibration and the settled live log."""
@@ -1101,9 +1106,50 @@ def track_record() -> dict:
             "calibration": _calibration(),
             "live": live,
             "dataThrough": str(df["date"].max())[:10],
+            "calibrationDetail": _enhanced_cal(),
         }
 
     return _cached(key, build)
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+@app.get("/analytics/decomposition")
+def analytics_decomposition(team: str = Query(...)) -> dict:
+    from api.analytics import decomposition
+    _, _, df = _models()
+    return decomposition(team, df)
+
+
+@app.get("/analytics/errors")
+def analytics_errors() -> dict:
+    from api.analytics import prediction_errors
+    _, _, df = _models()
+    return prediction_errors(df)
+
+
+@app.get("/analytics/team-profile")
+def analytics_team_profile(team: str = Query(...)) -> dict:
+    from api.analytics import team_profile
+    engine, _, df = _models()
+    return team_profile(team, engine, df, data_version())
+
+
+@app.get("/analytics/calibration")
+def analytics_calibration() -> dict:
+    from api.analytics import enhanced_calibration
+    result = enhanced_calibration()
+    if result is None:
+        raise HTTPException(404, "Walk-forward predictions not available")
+    return result
+
+
+@app.get("/analytics/teams")
+def analytics_teams() -> list[str]:
+    """All team names the engine knows, for the team selector."""
+    _, teams, _ = _models()
+    return teams
+
 
 # ── League forecast ────────────────────────────────────────────────────────────
 def _league_cache_path(comp_id: str, season: str) -> Path:

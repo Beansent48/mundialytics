@@ -660,4 +660,100 @@ export const api = {
       `/competition/${slug}${matchday != null ? `?matchday=${matchday}` : ""}`,
       600,
     ),
+
+  // ── Analytics ───────────────────────────────────────────────────────────
+  analyticsTeams: () => request<string[]>("/analytics/teams", 3600),
+  analyticsDecomposition: (team: string) =>
+    request<DecompositionResponse>(`/analytics/decomposition?team=${encodeURIComponent(team)}`, 600),
+  analyticsErrors: () => request<ErrorAnalysisResponse>("/analytics/errors", 600),
+  analyticsTeamProfile: (team: string) =>
+    request<TeamProfileResponse>(`/analytics/team-profile?team=${encodeURIComponent(team)}`, 600),
+  analyticsCalibration: () =>
+    request<EnhancedCalibrationResponse>("/analytics/calibration", 600),
+};
+
+// ── Analytics types ──────────────────────────────────────────────────────────
+
+export type DecompositionMatch = {
+  date: string;
+  opponent: string;
+  venue: "home" | "away";
+  goals: number;
+  conceded: number;
+  gl: number;
+  ad: number;
+  adx: number;
+  xr: number;
+};
+
+export type DecompositionResponse = {
+  team: string;
+  matches: DecompositionMatch[];
+};
+
+export type ErrorAnalysisResponse = {
+  total_rps: number | null;
+  n: number;
+  by_season: { season: string; rps: number; n: number }[];
+  by_league: { league: string; rps: number; n: number }[];
+  by_tier: { tier: string; rps: number; n: number }[];
+  scoreline_gof: {
+    chi2: number;
+    p: number;
+    df: number;
+    bins: { score: string; observed: number; expected: number }[];
+  } | null;
+};
+
+export type TeamProfileResponse = {
+  team: string;
+  elo: {
+    current: number | null;
+    peak: number | null;
+    trajectory: {
+      date: string;
+      elo: number;
+      opponent: string;
+      venue: "home" | "away";
+      goals: number;
+      conceded: number;
+    }[];
+  };
+  profile: {
+    attack: number;
+    defense: number;
+    strength: number;
+    attack_balance: number;
+    league_avg_attack: number;
+    league_avg_defense: number;
+    league_max_strength: number;
+    league_min_strength: number;
+  } | null;
+  h2h: {
+    rival: string;
+    total: number;
+    matches: {
+      date: string;
+      venue: "home" | "away";
+      goals: number;
+      conceded: number;
+    }[];
+  }[];
+};
+
+export type EnhancedCalibrationBin = {
+  announced: number;
+  observed: number;
+  n: number;
+  ci_lo: number;
+  ci_hi: number;
+};
+
+export type EnhancedCalibrationResponse = {
+  bins: EnhancedCalibrationBin[];
+  brier: number;
+  reliability: number;
+  resolution: number;
+  uncertainty: number;
+  n: number;
 };

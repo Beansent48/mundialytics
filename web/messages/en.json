@@ -10,6 +10,7 @@
     "results": "Track record",
     "awards": "Awards",
     "lab": "SquadLab",
+    "analytics": "Analytics",
     "openApp": "Open the app",
     "menu": "Menu",
     "close": "Close"
@@ -629,6 +630,80 @@
       "veteran": "Veteran",
       "legend": "Legend",
       "master": "Master"
+    }
+  },
+  "analytics": {
+    "eyebrow": "Data science",
+    "title": "Model analysis",
+    "lead": "A deep look inside the prediction engine: how each lambda is built, where the model succeeds and fails, and what every team looks like through its lens.",
+    "selectTeam": "Team",
+    "loading": "Loading…",
+    "offlineTitle": "Engine unavailable",
+    "offlineBody": "The prediction server is not responding. Try again later.",
+    "decomposition": {
+      "title": "Model decomposition",
+      "lead": "How each sub-model contributes to this team's lambda (expected goals) match by match. The four sources stack: their sum is the served lambda.",
+      "empty": "No decomposition data available for this team.",
+      "series": {
+        "gl": "GoalLambda",
+        "ad": "Attack-Defense",
+        "adx": "AD-xG",
+        "xr": "xG-rate"
+      }
+    },
+    "errors": {
+      "title": "Error analysis",
+      "lead": "Ranked Probability Score (RPS) from genuine walk-forward predictions: every forecast was issued before kick-off, without seeing the result.",
+      "bySeason": "RPS by season",
+      "byLeague": "RPS by league",
+      "byTier": "RPS by strength tier",
+      "tier": {
+        "low": "Weak",
+        "mid": "Mid",
+        "high": "Strong"
+      },
+      "gofTitle": "Poisson goodness of fit",
+      "score": "Scoreline",
+      "observed": "Observed",
+      "expected": "Expected",
+      "diff": "Difference"
+    },
+    "calibration": {
+      "title": "Detailed calibration",
+      "lead": "Announced probability vs observed frequency across 20 bins, with Wilson confidence intervals and Brier score decomposition.",
+      "announced": "Announced",
+      "observed": "Observed",
+      "ciTitle": "Confidence intervals",
+      "ciLead": "95% Wilson bands show the uncertainty in observed frequency.",
+      "ciLo": "CI lower",
+      "ciHi": "CI upper",
+      "brierTitle": "Brier decomposition",
+      "brierLead": "Brier Score = Reliability − Resolution + Uncertainty. Low reliability = well calibrated; high resolution = good discrimination between events.",
+      "brier": {
+        "brier": "Brier",
+        "reliability": "Reliability",
+        "resolution": "Resolution",
+        "uncertainty": "Uncertainty"
+      }
+    },
+    "profile": {
+      "title": "Strength profile",
+      "lead": "Elo trajectory, attack/defense profile and the most frequent rivals of the selected team.",
+      "eloTitle": "Elo trajectory",
+      "current": "Current",
+      "peak": "Peak",
+      "matches": "Matches",
+      "radarTitle": "Attack / defense profile",
+      "radarLead": "MLE model parameters normalised against the league. Attack and defense are log-scale; high on both signals overall quality.",
+      "attack": "Attack",
+      "defense": "Defense",
+      "strength": "Strength",
+      "balance": "Balance",
+      "h2hTitle": "Head to head",
+      "totalMatches": "total matches",
+      "wins": "W",
+      "draws": "D",
+      "losses": "L"
     }
   }
 }
