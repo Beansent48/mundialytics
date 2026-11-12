@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   // off .next, and every route measured the same — and about ten seconds of
   // build (25 s to 35 s) for the file tracing, paid once per change.
   output: "standalone",
+  async rewrites() {
+    const apiDest = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
+    return [
+      { source: "/engine/:path*", destination: `${apiDest}/:path*` },
+    ];
+  },
 };
 
 const withNextIntl = createNextIntlPlugin();

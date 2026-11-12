@@ -82,8 +82,8 @@ export const POST = withUser(async (userId, request) => {
         result as Parameters<typeof processFinishedRun>[1],
         record(payload, "squad") as Parameters<typeof processFinishedRun>[2],
       );
-    } catch {
-      // Gamification is best-effort: a failure here must not break saving.
+    } catch (err) {
+      console.error("[gamification]", err);
     }
   }
 

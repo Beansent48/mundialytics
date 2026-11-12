@@ -23,6 +23,7 @@ export default function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/_vercel") ||
     pathname.startsWith("/api") ||
+    pathname.startsWith("/engine") ||
     // anything with an extension is a file: favicon.ico, robots.txt, og images
     pathname.includes(".")
   ) {

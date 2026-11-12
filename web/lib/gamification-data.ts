@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   achievement,
@@ -127,7 +127,7 @@ async function awardAchievements(
     .where(
       and(
         eq(userAchievement.userId, userId),
-        sql`${userAchievement.code} = any(${codes})`,
+        inArray(userAchievement.code, codes),
       ),
     );
 
