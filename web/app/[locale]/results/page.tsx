@@ -124,8 +124,8 @@ export default async function ResultsPage({
                 <h3 className="mt-12 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">
                   {t("byMarket")}
                 </h3>
-                <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border border-border">
-                  <table className="w-full text-[0.86rem]">
+                <div className="mt-4 overflow-x-auto rounded-[var(--radius-card)] border border-border">
+                  <table className="w-full min-w-[420px] text-[0.86rem]">
                     <thead>
                       <tr className="border-b border-border bg-surface-2 text-left text-[0.66rem] uppercase tracking-[0.09em] text-dim">
                         <th className="px-4 py-2.5 font-semibold">{t("market")}</th>
