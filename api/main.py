@@ -1495,6 +1495,7 @@ class DealRequest(BaseModel):
     reroll: int = Field(default=0, ge=0)
     # card ids already drafted; a man is removed with ALL of his cards
     taken: list[str] = Field(default_factory=list, max_length=18)
+    competition: str | None = None
 
 
 class SeasonRequest(BaseModel):
@@ -1508,14 +1509,34 @@ class SeasonRequest(BaseModel):
     seed: int | None = None
 
 
-@app.get("/squadlab/pool")
-def squadlab_pool() -> dict:
-    """Every player available to draft, from any league, by position, best first.
+class LeagueRequest(BaseModel):
+    squad: list[str] = Field(min_length=11, max_length=11)
+    bench: list[str] = Field(default_factory=list, max_length=7)
+    competition: str
+    replaced: str | None = None
+    mode: str = "draft"
+    seed: int | None = None
 
-    The squad always plays the Champions, whose field is pan-European, so the
-    pool is no longer scoped to a single competition.
-    """
+
+@app.get("/squadlab/pool")
+def squadlab_pool(competition: str | None = None) -> dict:
+    """Player pool for drafting. No competition or 'champions' → pan-European.
+    A domestic slug (laliga, premier-league, ...) → that league's players."""
     from api import squadlab as sl
+
+    if competition and competition != "champions":
+        comp_name = sl.LEAGUE_COMP_SLUG.get(competition)
+        if comp_name is None:
+            raise HTTPException(400, f"Unknown competition: {competition}")
+        comp_id = next(
+            (k for k, v in sl.PLAYER_COMP.items() if v == comp_name), competition)
+        data = sl.pool(comp_id)
+        if not any(data["players"].values()):
+            raise HTTPException(503, "No player profiles available")
+        return {"competition": competition, "competitionName": comp_name,
+                "maxRerolls": sl.MAX_REROLLS, **data,
+                "benchSlots": sl.BENCH_SLOTS, "formations": sl.FORMATIONS,
+                "roleWeights": sl.ROLE_WEIGHTS, "substatLabels": sl.SUBSTAT_LABELS}
 
     data = sl.champions_pool()
     if not any(data["players"].values()):
@@ -1539,7 +1560,8 @@ def squadlab_deal(req: DealRequest) -> dict:
     if req.reroll > sl.MAX_REROLLS:
         raise HTTPException(400, f"At most {sl.MAX_REROLLS} rerolls per slot")
 
-    data = sl.deal_slot(req.seed, req.position, req.index, req.reroll, req.taken)
+    data = sl.deal_slot(req.seed, req.position, req.index, req.reroll, req.taken,
+                        competition=req.competition)
     if not data["candidates"]:
         raise HTTPException(503, "No cards available to deal")
     return data
@@ -1574,6 +1596,40 @@ def squadlab_season(req: SeasonRequest) -> dict:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(503, f"Could not play the Champions: {str(exc)[:180]}") from exc
+
+
+@app.get("/squadlab/league/teams")
+def squadlab_league_teams(competition: str = Query(...)) -> dict:
+    """The teams in a domestic league with their AD-model strength ranking."""
+    from api import squadlab as sl
+
+    try:
+        teams = sl.league_teams(competition)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not teams:
+        raise HTTPException(404, f"No teams found for {competition}")
+    return {"competition": competition, "teams": teams}
+
+
+@app.post("/squadlab/league")
+def squadlab_league(req: LeagueRequest) -> dict:
+    """Play a full domestic season with the chosen eleven replacing a real club."""
+    from api import squadlab as sl
+
+    try:
+        return sl.play_league(
+            req.squad,
+            req.competition,
+            replaced=req.replaced,
+            seed=req.seed,
+            bench_names=req.bench,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, f"Could not play the league: {str(exc)[:180]}") from exc
+
 
 @app.get("/fixtures/day")
 def fixtures_day(day: str | None = None) -> dict:

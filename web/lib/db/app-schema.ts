@@ -120,6 +120,8 @@ export const squadlabRun = pgTable(
     status: text("status").notNull(),
     /** The `SquadSeason` as played; null while the run is still in progress. */
     result: jsonb("result"),
+    /** The competition slug for league-mode runs (e.g. "laliga"); null for Champions. */
+    competition: text("competition"),
     /** What the engine looked like when it was played; see lib/engine-fingerprint.ts. */
     engineFingerprint: text("engine_fingerprint"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -137,7 +139,7 @@ export const squadlabRun = pgTable(
     // the code would have rejected every sandbox run at the database.
     check(
       "squadlab_run_mode",
-      sql`${table.mode} in ('draft', 'sandbox', 'historic')`,
+      sql`${table.mode} in ('draft', 'sandbox', 'historic', 'league')`,
     ),
     check(
       "squadlab_run_status",

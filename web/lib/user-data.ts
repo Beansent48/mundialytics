@@ -42,6 +42,7 @@ export type RunSummary = {
   stage: string | null;
   teamName: string | null;
   players: number;
+  competition: string | null;
   engineFingerprint: string | null;
   createdAt: string;
   updatedAt: string;
@@ -162,6 +163,7 @@ function summarise(row: {
   status: string;
   squad: unknown;
   result: unknown;
+  competition: string | null;
   engineFingerprint: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -175,6 +177,7 @@ function summarise(row: {
     stage: result?.stage ?? null,
     teamName: result?.teamName ?? null,
     players: Object.keys((row.squad as Record<string, unknown>) ?? {}).length,
+    competition: row.competition,
     engineFingerprint: row.engineFingerprint,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -206,6 +209,7 @@ export async function listRuns(
         'stage', ${squadlabRun.result} -> 'stage',
         'teamName', ${squadlabRun.result} -> 'teamName'
       )`,
+      competition: squadlabRun.competition,
       engineFingerprint: squadlabRun.engineFingerprint,
       createdAt: squadlabRun.createdAt,
       updatedAt: squadlabRun.updatedAt,
@@ -237,6 +241,7 @@ export type RunInput = {
   rerolls: Record<string, number>;
   status: RunStatus;
   result: unknown | null;
+  competition: string | null;
   engineFingerprint: string | null;
 };
 
@@ -262,6 +267,7 @@ export async function saveRun(userId: string, input: RunInput) {
     rerolls: input.rerolls,
     status: input.status,
     result: input.result,
+    competition: input.competition,
     engineFingerprint: input.engineFingerprint,
   };
   await getDb()
@@ -274,6 +280,7 @@ export async function saveRun(userId: string, input: RunInput) {
         rerolls: values.rerolls,
         status: values.status,
         result: values.result,
+        competition: values.competition,
         engineFingerprint: values.engineFingerprint,
       },
       // Belt and braces next to the ownership check above: a conflict on a

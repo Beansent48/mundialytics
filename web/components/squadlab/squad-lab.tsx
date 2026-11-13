@@ -16,6 +16,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { HistoricChampionsView } from "@/components/squadlab/historic-champions";
+import { LeagueSeasonView } from "@/components/squadlab/league-season-view";
 import { LiveMatch } from "@/components/squadlab/live-match";
 import { EmptyCard, PlayerCard } from "@/components/squadlab/player-card";
 import { SavedRuns } from "@/components/squadlab/saved-runs";
@@ -32,14 +33,24 @@ import {
 import {
   api,
   type BracketTie,
+  type LeagueSeason,
+  type LeagueTeam,
   type SquadPlayer,
   type SquadPool,
   type SquadSeason,
 } from "@/lib/api";
 import { cn, ordinal } from "@/lib/utils";
 
-type Mode = "draft" | "sandbox" | "historic";
-type Phase = "setup" | "building" | "lineup" | "season" | "historic";
+type Mode = "draft" | "sandbox" | "league" | "historic";
+type Phase = "setup" | "competition" | "building" | "lineup" | "replace" | "season" | "historic";
+
+const COMPETITIONS = [
+  { slug: "laliga", name: "La Liga", country: "España" },
+  { slug: "premier-league", name: "Premier League", country: "England" },
+  { slug: "serie-a", name: "Serie A", country: "Italia" },
+  { slug: "bundesliga", name: "Bundesliga", country: "Deutschland" },
+  { slug: "ligue-1", name: "Ligue 1", country: "France" },
+] as const;
 /** `bench` slots are the seven reserves; `dealIndex` seeds the server's deal
  *  (0-10 the eleven, 11-17 the bench) so no two slots are dealt alike. */
 type Slot = { position: string; index: number; key: string; bench: boolean; dealIndex: number };
@@ -127,6 +138,10 @@ export function SquadLab() {
 
   const [lineup, setLineup] = useState<Lineup | null>(null);
   const [season, setSeason] = useState<SquadSeason | null>(null);
+  const [leagueSeason, setLeagueSeason] = useState<LeagueSeason | null>(null);
+  const [competition, setCompetition] = useState<string | null>(null);
+  const [leagueTeams, setLeagueTeams] = useState<LeagueTeam[]>([]);
+  const [replaced, setReplaced] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
@@ -175,6 +190,7 @@ export function SquadLab() {
         rerolls,
         status: "in_progress",
         result: null,
+        competition: competition ?? null,
       });
     }, 1200);
     return () => clearTimeout(timer);
@@ -185,6 +201,14 @@ export function SquadLab() {
       setPhase("historic");
       return;
     }
+    if (mode === "league") {
+      setPhase("competition");
+      setCompetition(null);
+      setLeagueTeams([]);
+      setReplaced(null);
+      setLeagueSeason(null);
+      return;
+    }
     setPhase("building");
     setPool(null);
     setPoolError(false);
@@ -193,14 +217,92 @@ export function SquadLab() {
     setDealt({});
     setSeed(mintSeed());
     setSeason(null);
+    setLeagueSeason(null);
     setRunId(signedIn ? mintRunId() : null);
     setGamification(null);
     try {
       setPool(await api.squadPool());
-      // the first slot opens itself: an empty pitch with no prompt is a puzzle
       setOpenSlot("Forward_0");
     } catch {
       setPoolError(true);
+    }
+  }
+
+  async function pickCompetition(slug: string) {
+    setCompetition(slug);
+    setPhase("building");
+    setPool(null);
+    setPoolError(false);
+    setPicks({});
+    setRerolls({});
+    setDealt({});
+    setSeed(mintSeed());
+    setSeason(null);
+    setLeagueSeason(null);
+    setRunId(signedIn ? mintRunId() : null);
+    setGamification(null);
+    try {
+      setPool(await api.squadPool(slug));
+      setOpenSlot("Forward_0");
+    } catch {
+      setPoolError(true);
+    }
+  }
+
+  async function toReplace() {
+    if (!complete || !competition) return;
+    setLineup({
+      xi: slots.filter((s) => !s.bench).map((s) => picks[s.key]),
+      bench: slots.filter((s) => s.bench).map((s) => picks[s.key]),
+    });
+    try {
+      const res = await api.leagueTeams(competition);
+      const teams = res.teams;
+      const bottom = teams.slice(Math.floor(teams.length / 2));
+      setLeagueTeams(bottom);
+      setReplaced(bottom[bottom.length - 1]?.teamId ?? null);
+      setPhase("replace");
+    } catch {
+      setSeasonError(t("seasonFailed"));
+    }
+  }
+
+  async function playLeague() {
+    if (!lineup || !competition) return;
+    setPlaying(true);
+    setSeasonError(null);
+    try {
+      const result = await api.playLeague(
+        lineup.xi.map((p) => p.player),
+        competition,
+        mode === "league" ? "draft" : mode,
+        lineup.bench.map((p) => p.player),
+        replaced ?? undefined,
+      );
+      setLeagueSeason(result);
+      setRevealed(0);
+      setPhase("season");
+      if (signedIn && runId) {
+        saveRunToServer({
+          id: runId,
+          mode: "league",
+          seed,
+          squad: picks,
+          rerolls,
+          status: "finished",
+          result,
+          competition: competition ?? null,
+        }).then((res) => {
+          if (res.gamification) {
+            setGamification(res.gamification);
+            if (res.gamification.newLevel > userLevel) setUserLevel(res.gamification.newLevel);
+          }
+        });
+      }
+    } catch {
+      setSeasonError(t("seasonFailed"));
+    } finally {
+      setPlaying(false);
     }
   }
 
@@ -245,7 +347,7 @@ export function SquadLab() {
   // slot+reroll, so it is fetched once and survives every re-render after.
   const dealKey = openSlot ? `${openSlot}|${rerolls[openSlot] ?? 0}` : null;
   useEffect(() => {
-    if (mode !== "draft" || !pool || !openSlot || !dealKey || !seed) return;
+    if ((mode !== "draft" && mode !== "league") || !pool || !openSlot || !dealKey || !seed) return;
     if (dealt[dealKey]) return;
     const slot = slots.find((x) => x.key === openSlot);
     if (!slot) return;
@@ -253,7 +355,8 @@ export function SquadLab() {
     let cancelled = false;
     api
       .dealSlot(seed, slot.position, slot.dealIndex, rerolls[openSlot] ?? 0,
-                Object.values(picks).map((p) => p.player))
+                Object.values(picks).map((p) => p.player),
+                competition ?? undefined)
       .then((d) => {
         if (!cancelled) setDealt((prev) => ({ ...prev, [dealKey]: d.candidates }));
       })
@@ -268,7 +371,7 @@ export function SquadLab() {
     // `picks` is read, not watched: a hand already dealt must not be re-dealt
     // under the reader because another slot was filled.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, pool, openSlot, dealKey, seed, slots, dealt]);
+  }, [mode, pool, openSlot, dealKey, seed, slots, dealt, competition]);
 
   function pick(slotKey: string, player: SquadPlayer) {
     setPicks((prev) => ({ ...prev, [slotKey]: player }));
@@ -314,6 +417,7 @@ export function SquadLab() {
           rerolls,
           status: "finished",
           result,
+          competition: null,
         }).then((res) => {
           if (res.gamification) {
             setGamification(res.gamification);
@@ -356,7 +460,7 @@ export function SquadLab() {
     setPicks(saved.squad);
     setRerolls(saved.rerolls);
     try {
-      setPool(await api.squadPool());
+      setPool(await api.squadPool(saved.mode === "league" ? (saved as any).competition : undefined));
     } catch {
       setPoolError(true);
     }
@@ -367,6 +471,10 @@ export function SquadLab() {
     setPicks({});
     setLineup(null);
     setSeason(null);
+    setLeagueSeason(null);
+    setCompetition(null);
+    setLeagueTeams([]);
+    setReplaced(null);
     setRerolls({});
     setDealt({});
     setOpenSlot(null);
@@ -375,6 +483,108 @@ export function SquadLab() {
 
   if (phase === "historic") {
     return <HistoricChampionsView onReset={reset} />;
+  }
+
+  if (phase === "competition") {
+    return (
+      <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-border px-3.5 text-[0.83rem] text-muted transition-colors hover:border-border-strong hover:text-text"
+          >
+            <ChevronLeft className="size-3.5" />
+            {t("changeSetup")}
+          </button>
+        </div>
+        <div className="mt-6 max-w-xl">
+          <p className="font-display text-[1.5rem] leading-tight">{t("pickCompetition")}</p>
+          <p className="mt-1.5 text-[0.85rem] leading-relaxed text-muted">
+            {t("pickCompetitionLead")}
+          </p>
+        </div>
+        <div className="mt-5 grid max-w-xl gap-2">
+          {COMPETITIONS.map((c) => (
+            <button
+              key={c.slug}
+              type="button"
+              onClick={() => pickCompetition(c.slug)}
+              className="rounded-[13px] border border-border bg-surface px-5 py-4 text-left transition-colors duration-200 hover:border-brand hover:bg-brand-ghost"
+            >
+              <span className="text-[0.98rem] font-semibold">{c.name}</span>
+              <span className="mt-0.5 block text-[0.8rem] text-muted">{c.country}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "replace" && leagueTeams.length > 0) {
+    return (
+      <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPhase("building")}
+            className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-border px-3.5 text-[0.83rem] text-muted transition-colors hover:border-border-strong hover:text-text"
+          >
+            <ChevronLeft className="size-3.5" />
+            {t("backToDraft")}
+          </button>
+        </div>
+        <div className="mt-6 max-w-xl">
+          <p className="font-display text-[1.5rem] leading-tight">{t("pickTeam")}</p>
+          <p className="mt-1.5 text-[0.85rem] leading-relaxed text-muted">
+            {t("pickTeamLead")}
+          </p>
+        </div>
+        <div className="mt-5 grid max-w-xl gap-1.5">
+          {leagueTeams.map((team) => (
+            <button
+              key={team.teamId}
+              type="button"
+              onClick={() => setReplaced(team.teamId)}
+              className={cn(
+                "rounded-[11px] border px-4 py-3 text-left transition-colors duration-200",
+                replaced === team.teamId
+                  ? "border-brand bg-brand-ghost"
+                  : "border-border bg-surface hover:border-border-strong",
+              )}
+            >
+              <span className="text-[0.92rem] font-medium">{team.team}</span>
+              <span className="ml-3 text-[0.78rem] tabular-nums text-muted">
+                #{team.rank}
+              </span>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={playLeague}
+          disabled={!replaced}
+          className="mt-8 inline-flex h-12 items-center gap-2 rounded-[10px] bg-brand px-6 text-[0.95rem] font-medium text-brand-contrast transition-all duration-200 hover:bg-brand-hover disabled:opacity-40"
+        >
+          {t("playLeague")}
+          <ChevronRight className="size-4" />
+        </button>
+        {seasonError ? <p className="mt-4 text-[0.85rem] text-negative">{seasonError}</p> : null}
+      </div>
+    );
+  }
+
+  if (phase === "season" && leagueSeason) {
+    return (
+      <LeagueSeasonView
+        season={leagueSeason}
+        squad={lineup?.xi ?? []}
+        revealed={revealed}
+        setRevealed={setRevealed}
+        onReset={reset}
+        gamification={gamification}
+      />
+    );
   }
 
   if (phase === "season" && season) {
@@ -398,7 +608,7 @@ export function SquadLab() {
             {t("stepMode")}
           </p>
           <div className="mt-3 flex flex-col gap-2">
-            {(["draft", "sandbox", "historic"] as const).map((m) => (
+            {(["draft", "sandbox", "league", "historic"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -420,7 +630,7 @@ export function SquadLab() {
 
           <p className="mt-6 flex items-start gap-2 rounded-[12px] border border-border bg-surface px-4 py-3 text-[0.83rem] leading-relaxed text-muted">
             <Trophy className="mt-0.5 size-4 shrink-0 text-warning" />
-            {t("championsNote")}
+            {mode === "league" ? t("leagueNote") : t("championsNote")}
           </p>
         </div>
 
@@ -459,7 +669,7 @@ export function SquadLab() {
         roleWeights={pool.roleWeights}
         substatLabels={pool.substatLabels}
         onBack={() => setPhase("building")}
-        onPlay={playChampions}
+        onPlay={mode === "league" ? () => toReplace() : playChampions}
         error={seasonError}
       />
     );

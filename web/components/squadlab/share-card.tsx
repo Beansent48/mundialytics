@@ -80,7 +80,7 @@ export function ShareCard({
   onClose,
 }: {
   squad: SquadPlayer[];
-  season: SquadSeason;
+  season: SquadSeason & { competitionName?: string };
   squadLabel: string;
   onClose: () => void;
 }) {
@@ -97,7 +97,7 @@ export function ShareCard({
     () => false,
   );
 
-  const competitionName = "Champions League";
+  const competitionName = season.competitionName ?? "Champions League";
   const championLabel =
     season.champion === season.teamName ? squadLabel : season.champion;
   const outfield = squad.filter((p) => p.position !== "Goalkeeper");

@@ -23,6 +23,7 @@ export type RunSummary = {
   stage: string | null;
   teamName: string | null;
   players: number;
+  competition: string | null;
   engineFingerprint: string | null;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +55,7 @@ export type RunInput = {
   rerolls: Record<string, number>;
   status: "in_progress" | "finished";
   result: unknown | null;
+  competition: string | null;
 };
 
 const ENDPOINT = "/api/user/squadlab/runs";

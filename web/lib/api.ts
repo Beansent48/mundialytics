@@ -505,6 +505,64 @@ export type SquadSeason = {
   }[];
 };
 
+/** One row of a domestic league table. */
+export type LeagueStandingsRow = {
+  rank: number;
+  team: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDiff: number;
+  points: number;
+  isSquad: boolean;
+};
+
+/** A matchday result (all 10 fixtures). */
+export type LeagueMatchdayResult = {
+  matchday: number;
+  home: string;
+  away: string;
+  homeGoals: number;
+  awayGoals: number;
+};
+
+/** The result of one domestic league run. */
+export type LeagueSeason = {
+  mode: "league";
+  teamName: string;
+  replaced: string;
+  competition: string;
+  competitionName: string;
+  seed: number;
+  champion: string;
+  stage: string;
+  finalPosition: number;
+  standings: LeagueStandingsRow[];
+  matches: SquadFixture[];
+  allResults: LeagueMatchdayResult[];
+  scorers: {
+    player: string;
+    team: string;
+    goals: number;
+    assists: number;
+    isSquad: boolean;
+  }[];
+  squadTotals?: SquadSeason["squadTotals"];
+};
+
+/** A team available for replacement in a domestic league. */
+export type LeagueTeam = {
+  team: string;
+  teamId: string;
+  attack: number;
+  defense: number;
+  strength: number;
+  rank: number;
+};
+
 /** A Champions League of sides from any era, rated by their real ClubElo. */
 export type HistoricChampions = {
   /** "campeones" | "variado" | "cualquiera" */
@@ -612,9 +670,16 @@ export const api = {
   league: (slug: string) => request<LeagueForecast>(`/league/${slug}`, 600),
   uefa: () => request<UefaCard[]>("/competitions", 600),
   awards: (slug: string) => request<ScorerRace>(`/awards/${slug}`, 1800),
-  // The squad always plays the Champions, so the pool is pan-European — no
-  // competition to scope it to.
-  squadPool: () => request<SquadPool>(`/squadlab/pool`, 3600),
+  squadPool: (competition?: string) =>
+    request<SquadPool>(
+      competition ? `/squadlab/pool?competition=${competition}` : `/squadlab/pool`,
+      3600,
+    ),
+  leagueTeams: (competition: string) =>
+    request<{ competition: string; teams: LeagueTeam[] }>(
+      `/squadlab/league/teams?competition=${competition}`,
+      3600,
+    ),
   // A POST because the body carries the draft's own seed and everything taken
   // so far. Uncached on purpose: the answer is already reproducible from the
   // body, so a cache would only add a way for it to go stale.
@@ -624,11 +689,12 @@ export const api = {
     index: number,
     reroll: number,
     taken: string[],
+    competition?: string,
   ) => {
     const res = await fetch(`${apiBase()}/squadlab/deal`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ seed, position, index, reroll, taken }),
+      body: JSON.stringify({ seed, position, index, reroll, taken, competition: competition ?? null }),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -651,6 +717,25 @@ export const api = {
       throw new ApiError(`season returned ${res.status}`, res.status);
     }
     return (await res.json()) as SquadSeason;
+  },
+  playLeague: async (
+    squad: string[],
+    competition: string,
+    mode: string,
+    bench: string[] = [],
+    replaced?: string,
+    seed?: number,
+  ) => {
+    const res = await fetch(`${apiBase()}/squadlab/league`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ squad, bench, competition, replaced, mode, seed }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new ApiError(`league returned ${res.status}`, res.status);
+    }
+    return (await res.json()) as LeagueSeason;
   },
   // Deterministic in (pool, seed), so it can be cached like any other page.
   historicChampions: (pool: string, seed: number) =>

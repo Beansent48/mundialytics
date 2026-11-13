@@ -349,7 +349,8 @@ def _deal_rng(seed: int, position: str, index: int, reroll: int):
 
 
 def deal_slot(seed: int, position: str, index: int = 0, reroll: int = 0,
-              taken: list[str] | None = None) -> dict:
+              taken: list[str] | None = None,
+              competition: str | None = None) -> dict:
     """The candidates for one slot, rolled kind-then-tier by DraftPool.
 
     This used to be two layers of determinism stacked on each other: the pool
@@ -368,6 +369,10 @@ def deal_slot(seed: int, position: str, index: int = 0, reroll: int = 0,
     df = load_cards()
     if df.empty:
         return {"candidates": []}
+
+    if competition:
+        comp = PLAYER_COMP.get(competition, competition)
+        df = df[(df["kind"] != "actual") | (df["league"].isin({comp, competition}))]
 
     pool = DraftPool(df, _deal_rng(seed, position, index, reroll))
     names = card_player_names()
@@ -750,6 +755,209 @@ def _champ_bracket(rounds: dict) -> dict:
             for t in rounds.get(key, [])
         ]
     return out
+
+
+# ── liga doméstica ────────────────────────────────────────────────────────────
+
+LEAGUE_COMP_SLUG = {
+    "laliga": "La Liga",
+    "premier-league": "Premier League",
+    "serie-a": "Serie A",
+    "bundesliga": "Bundesliga",
+    "ligue-1": "Ligue 1",
+}
+
+LEAGUE_COMP_NAME = {
+    "La Liga": "La Liga",
+    "Premier League": "Premier League",
+    "Serie A": "Serie A",
+    "Bundesliga": "Bundesliga",
+    "Ligue 1": "Ligue 1",
+}
+
+
+def league_teams(competition_slug: str) -> list[dict]:
+    """The 20 teams in a domestic league with their AD-model strength ranking."""
+    from api.engine import club_engine
+
+    comp = LEAGUE_COMP_SLUG.get(competition_slug)
+    if comp is None:
+        raise ValueError(f"Unknown competition: {competition_slug}")
+
+    engine, _, _ = club_engine()
+    ad = engine.ad_model_
+
+    league_teams_list = []
+    for team in ad.teams_:
+        comp_for = ad.team_competition_.get(team)
+        if comp_for != comp:
+            continue
+        idx = ad.team_index_[team]
+        att = float(ad.attack_[idx])
+        defe = float(ad.defense_[idx])
+        league_teams_list.append({
+            "team": _label(team),
+            "teamId": team,
+            "attack": round(att, 3),
+            "defense": round(defe, 3),
+            "strength": round(att - defe, 3),
+        })
+
+    league_teams_list.sort(key=lambda x: x["strength"], reverse=True)
+    for i, t in enumerate(league_teams_list, 1):
+        t["rank"] = i
+    return league_teams_list
+
+
+def play_league(
+    squad_names: list[str],
+    competition_slug: str,
+    replaced: str | None = None,
+    seed: int | None = None,
+    bench_names: list[str] | None = None,
+) -> dict:
+    """Play a full domestic season with the chosen eleven replacing a real club."""
+    import numpy as np
+
+    from mundialytics.statistical_core.squadlab.cards import load_cards
+    from mundialytics.statistical_core.squadlab.lambda_source import (
+        RealTeamLambdaSource,
+        SeasonLambdaSource,
+    )
+    from mundialytics.statistical_core.squadlab.squad_lambda_model import (
+        SquadLambdaModel,
+    )
+
+    from api.engine import club_engine
+
+    comp = LEAGUE_COMP_SLUG.get(competition_slug)
+    if comp is None:
+        raise ValueError(f"Unknown competition: {competition_slug}")
+
+    engine, _, _ = club_engine()
+    ad = engine.ad_model_
+
+    teams = [t for t in ad.teams_ if ad.team_competition_.get(t) == comp]
+    if len(teams) < 18:
+        raise ValueError(f"Not enough teams for {comp}: only {len(teams)}")
+
+    if replaced is None:
+        def _team_strength(t):
+            idx = ad.team_index_[t]
+            return float(ad.attack_[idx]) - float(ad.defense_[idx])
+        replaced = min(teams, key=_team_strength)
+
+    if replaced not in teams:
+        raise ValueError(f"{replaced} not found in {comp}")
+
+    xi = resolve_cards(squad_names)
+    if len(xi) < 11:
+        raise ValueError("The squad needs eleven players the model knows")
+    if sum(c.position == "Goalkeeper" for c in xi) != 1:
+        raise ValueError("The eleven needs exactly one goalkeeper")
+    bench = [c for c in resolve_cards(bench_names or [])
+             if c.card_id not in {x.card_id for x in xi}]
+
+    squad_profiles = resolve_squad(strength_model().profiles_, squad_names)
+
+    real_source = RealTeamLambdaSource(engine)
+    squad_bridge = SquadLambdaModel(strength_model())
+    lambda_source = SeasonLambdaSource(
+        squad_team_name=SQUAD_TEAM_NAME,
+        squad=squad_profiles,
+        squad_bridge=squad_bridge,
+        real_source=real_source,
+        ad_model=ad,
+    )
+
+    cards_df = load_cards()
+    if seed is None:
+        seed = random.randrange(2**32)
+    rng = np.random.default_rng(int(seed))
+
+    from mundialytics.statistical_core.squadlab.league import LeagueRun
+
+    run = LeagueRun(
+        squad_name=SQUAD_TEAM_NAME,
+        squad=xi,
+        bench=bench,
+        competition=comp,
+        teams=teams,
+        replaced=replaced,
+        lambda_source=lambda_source,
+        cards_df=cards_df if not cards_df.empty else None,
+        rng=rng,
+    )
+    res = run.play()
+    return _shape_league(res, int(seed))
+
+
+def _shape_league(res, seed: int) -> dict:
+    """The league run in the shape the client reveals matchday by matchday."""
+    from mundialytics.statistical_core.schemas import canonical_name
+
+    squad_canon = canonical_name(SQUAD_TEAM_NAME)
+
+    standings = []
+    for r in res.table.to_dict("records"):
+        standings.append({
+            "rank": int(r["rank"]),
+            "team": _label(str(r["team"])),
+            "played": int(r["played"]),
+            "won": int(r["won"]),
+            "drawn": int(r["drawn"]),
+            "lost": int(r["lost"]),
+            "goalsFor": int(r["goals_for"]),
+            "goalsAgainst": int(r["goals_against"]),
+            "goalDiff": int(r["goal_diff"]),
+            "points": int(r["points"]),
+            "isSquad": str(r["team"]) == squad_canon,
+        })
+
+    matches = [_champ_fixture(m) for m in res.matches]
+
+    all_results = [
+        {
+            "matchday": int(r["matchday"]),
+            "home": _label(str(r["home"])),
+            "away": _label(str(r["away"])),
+            "homeGoals": int(r["home_goals"]),
+            "awayGoals": int(r["away_goals"]),
+        }
+        for r in res.all_results
+    ]
+
+    scorers = []
+    if res.scorers is not None and len(res.scorers):
+        for r in res.scorers.head(20).itertuples():
+            team = str(getattr(r, "equipo", "") or "")
+            scorers.append({
+                "player": _display(str(r.jugador)),
+                "team": _label(team),
+                "goals": int(r.goles),
+                "assists": int(r.asistencias),
+                "isSquad": team == SQUAD_TEAM_NAME,
+            })
+
+    champion_row = res.table[res.table["rank"] == 1]
+    champion = str(champion_row["team"].iloc[0]) if len(champion_row) else ""
+
+    return {
+        "mode": "league",
+        "teamName": SQUAD_TEAM_NAME,
+        "replaced": _label(res.replaced),
+        "competition": res.competition,
+        "competitionName": res.competition_name,
+        "seed": seed,
+        "champion": _label(champion),
+        "stage": res.stage,
+        "finalPosition": res.squad_position,
+        "standings": standings,
+        "matches": matches,
+        "allResults": all_results,
+        "scorers": scorers,
+        "squadTotals": _squad_totals(res.squad_totals),
+    }
 
 
 # ── la Champions histórica ─────────────────────────────────────────────────────

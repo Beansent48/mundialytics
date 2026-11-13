@@ -8,9 +8,10 @@ import {
   userProgress,
 } from "@/lib/db/app-schema";
 import { getDb } from "@/lib/db/client";
-import type { SquadSeason } from "@/lib/api";
+import type { LeagueSeason, SquadSeason } from "@/lib/api";
 import {
   detectAchievements,
+  detectLeagueAchievements,
   levelFromXp,
   rewardsForLevel,
   xpForRun,
@@ -335,10 +336,11 @@ export type PostRunResult = {
  */
 export async function processFinishedRun(
   userId: string,
-  result: SquadSeason,
+  result: SquadSeason | LeagueSeason,
   squad: Record<string, { player: string; kind: string; display: string; position: string; overall: number; league?: string }>,
 ): Promise<PostRunResult> {
   const oldProgress = await readProgress(userId);
+  const isLeague = (result as LeagueSeason).mode === "league";
 
   // 1. Collect cards into the album
   await collectCards(userId, squad);
@@ -356,12 +358,14 @@ export async function processFinishedRun(
       squad: r.squad as Record<string, { player: string; kind: string; overall: number; league?: string }>,
     }));
 
-  // 3. Detect achievements
-  const detected = detectAchievements(result, squad, allRuns);
+  // 3. Detect achievements — route by mode
+  const detected = isLeague
+    ? detectLeagueAchievements(result as LeagueSeason, squad, allRuns)
+    : detectAchievements(result as SquadSeason, squad, allRuns);
   const { newCodes, xpEarned: achievementXp } = await awardAchievements(userId, detected);
 
   // 4. Award XP (run + achievements)
-  const runXp = xpForRun(result.stage);
+  const runXp = xpForRun(result.stage, isLeague ? "league" : undefined);
   const totalXp = runXp + achievementXp;
   const { level: newLevel } = await addXp(userId, totalXp);
 

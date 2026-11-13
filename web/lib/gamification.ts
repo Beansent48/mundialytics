@@ -1,4 +1,4 @@
-import type { SquadSeason } from "@/lib/api";
+import type { LeagueSeason, SquadSeason } from "@/lib/api";
 
 // ── Levels ──────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,17 @@ const STAGE_XP: Record<string, number> = {
   "Champion": 350,
 };
 
-export function xpForRun(stage: string): number {
+const LEAGUE_POSITION_XP: Record<string, number> = {
+  "Campeón": 350, "Champion": 350,
+  "Top 4": 200,
+  "Europa": 150,
+  "Mitad de tabla": 100, "Mid-table": 100,
+  "Salvación": 75, "Survived": 75,
+  "Descenso": 50, "Relegated": 50,
+};
+
+export function xpForRun(stage: string, mode?: string): number {
+  if (mode === "league") return LEAGUE_POSITION_XP[stage] ?? 50;
   return STAGE_XP[stage] ?? 50;
 }
 
@@ -253,6 +263,124 @@ export function detectAchievements(
   return [...new Set(codes)];
 }
 
+export function detectLeagueAchievements(
+  result: LeagueSeason,
+  squad: Squad,
+  allRuns?: { result: SquadSeason | LeagueSeason; squad: Squad }[],
+): AchievementCode[] {
+  const codes: AchievementCode[] = [];
+  const matches = result.matches ?? [];
+  const teamName = result.teamName;
+  const isChampion = result.champion === teamName;
+
+  if (isChampion) codes.push("league_champion");
+  if (result.finalPosition <= 4) codes.push("league_top4");
+  if (result.finalPosition <= 6) codes.push("league_europa");
+
+  const squadRow = result.standings?.find((r) => r.isSquad);
+  if (squadRow && squadRow.points >= 100) codes.push("league_100pts");
+
+  const lost = matches.some((m) => {
+    const home = m.home === teamName;
+    const us = home ? m.homeGoals : m.awayGoals;
+    const them = home ? m.awayGoals : m.homeGoals;
+    return us < them;
+  });
+  if (isChampion && !lost) codes.push("league_unbeaten");
+
+  // Golden boot: squad player is top scorer
+  if (result.scorers.length > 0) {
+    const topGoals = result.scorers[0].goals;
+    const topSquad = result.scorers.find(
+      (s) => s.isSquad && s.goals === topGoals,
+    );
+    if (topSquad) codes.push("league_golden_boot");
+  }
+
+  // 5 consecutive clean sheets
+  let cleanStreak = 0;
+  for (const m of matches) {
+    const home = m.home === teamName;
+    const them = home ? m.awayGoals : m.homeGoals;
+    if (them === 0) {
+      cleanStreak++;
+      if (cleanStreak >= 5) { codes.push("league_clean_run"); break; }
+    } else {
+      cleanStreak = 0;
+    }
+  }
+
+  // Survived: was in relegation zone at matchday 30 but finished above 17
+  if (result.finalPosition <= 17 && result.allResults.length > 0) {
+    const md30Results = result.allResults.filter((r) => r.matchday <= 30);
+    if (md30Results.length > 0) {
+      const map = new Map<string, number>();
+      for (const row of result.standings) map.set(row.team, 0);
+      for (const r of md30Results) {
+        for (const [team, gf, ga] of [
+          [r.home, r.homeGoals, r.awayGoals],
+          [r.away, r.awayGoals, r.homeGoals],
+        ] as [string, number, number][]) {
+          const cur = map.get(team) ?? 0;
+          map.set(team, cur + (gf > ga ? 3 : gf === ga ? 1 : 0));
+        }
+      }
+      const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+      const pos30 = sorted.findIndex(([t]) => t === teamName) + 1;
+      if (pos30 >= 18) codes.push("league_survived");
+    }
+  }
+
+  // Five leagues achievement
+  if (allRuns) {
+    const leagueComps = new Set<string>();
+    for (const r of allRuns) {
+      const res = r.result as any;
+      if (res?.mode === "league" && res?.competition) {
+        leagueComps.add(res.competition);
+      }
+    }
+    if (result.competition) leagueComps.add(result.competition);
+    if (leagueComps.size >= 5) codes.push("five_leagues");
+  }
+
+  // Match-level achievements (shared with Champions)
+  for (const m of matches) {
+    const home = m.home === teamName;
+    const us = home ? m.homeGoals : m.awayGoals;
+    const them = home ? m.awayGoals : m.homeGoals;
+    if (us >= 5) codes.push("five_goals");
+    if (us - them >= 4) codes.push("win_by_four");
+  }
+
+  // Squad achievements (shared)
+  const cards = Object.values(squad);
+  const icons = cards.filter((c) => c.kind === "icono");
+  if (icons.length >= 1) codes.push("draft_icon");
+  if (icons.length >= 2) codes.push("draft_two_icons");
+  const avgOverall = cards.reduce((a, c) => a + c.overall, 0) / Math.max(cards.length, 1);
+  if (avgOverall >= 85) codes.push("squad_85");
+  if (isChampion && avgOverall < 75) codes.push("giant_killer");
+
+  // Collection achievements (shared)
+  if (allRuns) {
+    const allSquads = [...allRuns.map((r) => r.squad), squad];
+    const totalRuns = allSquads.length;
+    if (totalRuns >= 10) codes.push("runs_10");
+    if (totalRuns >= 50) codes.push("runs_50");
+    if (totalRuns >= 100) codes.push("runs_100");
+    const uniqueIcons = new Set<string>();
+    for (const s of allSquads) {
+      for (const c of Object.values(s)) {
+        if (c.kind === "icono") uniqueIcons.add(c.player);
+      }
+    }
+    if (uniqueIcons.size >= 10) codes.push("icons_10");
+  }
+
+  return [...new Set(codes)];
+}
+
 function formationFromXi(
   xi: { position?: string }[],
 ): string | null {
@@ -307,4 +435,15 @@ export const ACHIEVEMENT_CATALOGUE: AchievementDef[] = [
   { code: "icons_10", nameEs: "Coleccionista", nameEn: "Collector", descEs: "Draftea 10 íconos distintos entre todas tus partidas", descEn: "Draft 10 different icons across all your runs", points: 200, category: "collection", icon: "library", hidden: 0 },
   { code: "formations_5", nameEs: "Camaleón", nameEn: "Chameleon", descEs: "Gana la Champions con 5 formaciones distintas", descEn: "Win the Champions League with 5 different formations", points: 300, category: "collection", icon: "layout-grid", hidden: 0 },
   { code: "leagues_10", nameEs: "Cosmopolita", nameEn: "Cosmopolitan", descEs: "Draftea jugadores de 10 ligas distintas", descEn: "Draft players from 10 different leagues", points: 150, category: "collection", icon: "globe", hidden: 0 },
+
+  // ── League mode ──
+  { code: "league_champion", nameEs: "Campeón de liga", nameEn: "League Champion", descEs: "Gana una liga doméstica", descEn: "Win a domestic league", points: 300, category: "tournament", icon: "trophy", hidden: 0 },
+  { code: "league_top4", nameEs: "Top 4", nameEn: "Top 4", descEs: "Termina en los 4 primeros de una liga", descEn: "Finish in the top 4 of a league", points: 100, category: "tournament", icon: "medal", hidden: 0 },
+  { code: "league_europa", nameEs: "Puerta europea", nameEn: "European Place", descEs: "Clasifícate para competición europea", descEn: "Qualify for European competition", points: 75, category: "tournament", icon: "target", hidden: 0 },
+  { code: "league_survived", nameEs: "Superviviente", nameEn: "Survivor", descEs: "Estando en descenso en la J30, te salvas", descEn: "Be in the relegation zone at MD30 and survive", points: 200, category: "tournament", icon: "heart-pulse", hidden: 1 },
+  { code: "league_unbeaten", nameEs: "Invencible", nameEn: "Invincible", descEs: "Gana la liga sin perder un solo partido", descEn: "Win the league without losing a single match", points: 500, category: "tournament", icon: "shield-check", hidden: 0 },
+  { code: "league_100pts", nameEs: "Centenario", nameEn: "The Centurion", descEs: "Consigue 100 o más puntos en una liga", descEn: "Reach 100 or more points in a league", points: 400, category: "tournament", icon: "star", hidden: 0 },
+  { code: "league_golden_boot", nameEs: "Pichichi", nameEn: "Golden Boot", descEs: "Tu jugador es el máximo goleador de la liga", descEn: "Your player is the league's top scorer", points: 200, category: "tournament", icon: "award", hidden: 0 },
+  { code: "league_clean_run", nameEs: "Muralla", nameEn: "Fortress", descEs: "Encadena 5 porterías a cero seguidas", descEn: "Keep 5 consecutive clean sheets", points: 150, category: "match", icon: "shield", hidden: 0 },
+  { code: "five_leagues", nameEs: "Trotamundos", nameEn: "Globe-Trotter", descEs: "Juega las 5 grandes ligas", descEn: "Play all 5 major leagues", points: 200, category: "collection", icon: "map", hidden: 0 },
 ];

@@ -16,7 +16,7 @@ import { BadRequest, readJson, withUser } from "@/lib/user-route";
  */
 export const dynamic = "force-dynamic";
 
-const MODES = ["draft", "sandbox", "historic"];
+const MODES = ["draft", "sandbox", "historic", "league"];
 const STATUSES = ["in_progress", "finished"];
 
 function text(payload: Record<string, unknown>, field: string, allowed?: string[]) {
@@ -59,6 +59,8 @@ export const POST = withUser(async (userId, request) => {
     throw new BadRequest("a finished run must carry its result");
   }
 
+  const competition = typeof payload.competition === "string" ? payload.competition : null;
+
   const run = await saveRun(userId, {
     id: text(payload, "id"),
     mode: text(payload, "mode", MODES),
@@ -67,9 +69,7 @@ export const POST = withUser(async (userId, request) => {
     rerolls: record(payload, "rerolls") as Record<string, number>,
     status,
     result,
-    // Stamped here rather than sent by the browser: the browser may have no
-    // route to the API at all once this is deployed, and a fingerprint the
-    // client could choose would be worth nothing anyway.
+    competition,
     engineFingerprint: await engineFingerprint(),
   });
 
