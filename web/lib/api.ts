@@ -553,6 +553,62 @@ export type LeagueSeason = {
   squadTotals?: SquadSeason["squadTotals"];
 };
 
+// ── Monte Carlo ────────────────────────────────────────────────────────────
+
+export type StageProb = {
+  stage: string;
+  count: number;
+  probability: number;
+};
+
+export type RoundProb = {
+  round: string;
+  probability: number;
+};
+
+export type PositionProb = {
+  position: number;
+  count: number;
+  probability: number;
+};
+
+export type TeamProb = {
+  team: string;
+  count: number;
+  probability: number;
+  isSquad: boolean;
+};
+
+export type MonteCarloChampions = {
+  n: number;
+  squadElo: number;
+  narrativeSeed: number;
+  narrative: SquadSeason;
+  stages: StageProb[];
+  reachProbabilities: RoundProb[];
+  leaguePhasePositions: PositionProb[];
+  averagePoints: number;
+  averageGoalsFor: number;
+  averageGoalsAgainst: number;
+  topChampions: TeamProb[];
+};
+
+export type MonteCarloLeague = {
+  mode: "league";
+  n: number;
+  competition: string;
+  narrativeSeed: number;
+  narrative: LeagueSeason;
+  positions: PositionProb[];
+  averagePoints: number;
+  pChampion: number;
+  pTop4: number;
+  pRelegation: number;
+  topChampions: TeamProb[];
+};
+
+export type MonteCarloResult = MonteCarloChampions | MonteCarloLeague;
+
 /** A team available for replacement in a domestic league. */
 export type LeagueTeam = {
   team: string;
@@ -736,6 +792,26 @@ export const api = {
       throw new ApiError(`league returned ${res.status}`, res.status);
     }
     return (await res.json()) as LeagueSeason;
+  },
+  monteCarlo: async (
+    squad: string[],
+    mode: string,
+    bench: string[] = [],
+    n: number = 200,
+    seed?: number,
+    competition?: string,
+    replaced?: string,
+  ) => {
+    const res = await fetch(`${apiBase()}/squadlab/montecarlo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ squad, bench, mode, seed, n, competition, replaced }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new ApiError(`montecarlo returned ${res.status}`, res.status);
+    }
+    return (await res.json()) as MonteCarloResult;
   },
   // Deterministic in (pool, seed), so it can be cached like any other page.
   historicChampions: (pool: string, seed: number) =>

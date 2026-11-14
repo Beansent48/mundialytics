@@ -609,7 +609,23 @@
     "colLost": "PP",
     "competitionTeams": "{n} equipos · 38 jornadas",
     "achievementUnlocked": "Nuevo logro desbloqueado",
-    "achievementsUnlocked": "{n} logros desbloqueados"
+    "achievementsUnlocked": "{n} logros desbloqueados",
+    "mc": {
+      "title": "Monte Carlo",
+      "nSimulations": "{n} simulaciones",
+      "runMC": "Simular {n} veces",
+      "running": "Simulando…",
+      "backToRun": "Ver partida",
+      "pChampion": "P(campeón)",
+      "pTop4": "P(top 4)",
+      "avgPoints": "Puntos med.",
+      "avgGF": "GF med.",
+      "stageDistribution": "Dónde caes",
+      "reachProbability": "P(alcanzar ronda)",
+      "positionDistribution": "Distribución de posición",
+      "topChampions": "Campeones más frecuentes",
+      "relegationRisk": "Riesgo de descenso: {pct}%"
+    }
   },
   "profile": {
     "signedOutTitle": "Perfil",

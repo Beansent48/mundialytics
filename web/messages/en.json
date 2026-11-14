@@ -609,7 +609,23 @@
     "colLost": "L",
     "competitionTeams": "{n} teams · 38 matchdays",
     "achievementUnlocked": "New achievement unlocked",
-    "achievementsUnlocked": "{n} achievements unlocked"
+    "achievementsUnlocked": "{n} achievements unlocked",
+    "mc": {
+      "title": "Monte Carlo",
+      "nSimulations": "{n} simulations",
+      "runMC": "Simulate {n} times",
+      "running": "Simulating…",
+      "backToRun": "Back to run",
+      "pChampion": "P(champion)",
+      "pTop4": "P(top 4)",
+      "avgPoints": "Avg points",
+      "avgGF": "Avg GF",
+      "stageDistribution": "Where you go out",
+      "reachProbability": "P(reach round)",
+      "positionDistribution": "Position distribution",
+      "topChampions": "Most frequent champions",
+      "relegationRisk": "Relegation risk: {pct}%"
+    }
   },
   "profile": {
     "signedOutTitle": "Profile",

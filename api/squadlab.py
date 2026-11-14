@@ -510,6 +510,257 @@ def play_champions(squad_names: list[str], seed: int | None = None,
     return _shape_champions(res, run.replaced, int(seed))
 
 
+# ── Monte Carlo ──────────────────────────────────────────────────────────────
+
+STAGE_ORDER = [
+    "Eliminado en la fase liga",
+    "Eliminado",
+    "Eliminado en playoff",
+    "Eliminado en octavos",
+    "Eliminado en cuartos",
+    "Eliminado en semifinales",
+    "Finalista",
+    "Campeón",
+]
+
+_REACHED = {
+    "Campeón": {"Campeón"},
+    "Final": {"Campeón", "Finalista"},
+    "Semifinales": {"Campeón", "Finalista", "Eliminado en semifinales"},
+    "Cuartos": {"Campeón", "Finalista", "Eliminado en semifinales", "Eliminado en cuartos"},
+    "Octavos": {"Campeón", "Finalista", "Eliminado en semifinales", "Eliminado en cuartos",
+                "Eliminado en octavos"},
+    "Playoff": {"Campeón", "Finalista", "Eliminado en semifinales", "Eliminado en cuartos",
+                "Eliminado en octavos", "Eliminado en playoff", "Eliminado"},
+}
+
+
+def monte_carlo_champions(
+    squad_names: list[str],
+    bench_names: list[str] | None = None,
+    n: int = 200,
+    narrative_seed: int | None = None,
+) -> dict:
+    """Run the Champions League N times and return aggregate probabilities
+    plus one full narrative run (the one with `narrative_seed`).
+    """
+    import numpy as np
+    from collections import Counter
+
+    from mundialytics.statistical_core.squadlab.champions import ChampionsRun
+
+    field, scale, shape, cards = _champions_resources()
+    xi = resolve_cards(squad_names)
+    if len(xi) < 11:
+        raise ValueError("The squad needs eleven players the model knows")
+    if sum(c.position == "Goalkeeper" for c in xi) != 1:
+        raise ValueError("The eleven needs exactly one goalkeeper")
+    bench = [c for c in resolve_cards(bench_names or [])
+             if c.card_id not in {x.card_id for x in xi}]
+    squad_elo = scale.elo_for([c.overall for c in xi])
+
+    if narrative_seed is None:
+        narrative_seed = random.randrange(2 ** 32)
+
+    stage_counts: Counter[str] = Counter()
+    position_counts: Counter[int] = Counter()
+    points_total = 0
+    goals_for_total = 0
+    goals_against_total = 0
+    champion_counts: Counter[str] = Counter()
+    narrative_result = None
+
+    for i in range(n):
+        seed_i = narrative_seed if i == 0 else random.randrange(2 ** 32)
+        rng = np.random.default_rng(int(seed_i))
+        run = ChampionsRun(SQUAD_TEAM_NAME, xi, squad_elo, field, rng=rng,
+                           bench=bench, scale=scale, shape=shape, cards_df=cards)
+        res = run.play()
+
+        stage_counts[res.squad_stage] += 1
+        position_counts[res.squad_position] += 1
+        champion_counts[res.champion] += 1
+
+        squad_row = res.table[res.table["team"] == SQUAD_TEAM_NAME]
+        if len(squad_row):
+            points_total += int(squad_row["pts"].iloc[0])
+            goals_for_total += int(squad_row["gf"].iloc[0])
+            goals_against_total += int(squad_row["ga"].iloc[0])
+
+        if i == 0:
+            narrative_result = _shape_champions(res, run.replaced, int(narrative_seed))
+
+    # Build probability distributions.
+    stage_dist = []
+    for stage in STAGE_ORDER:
+        count = stage_counts.get(stage, 0)
+        stage_dist.append({"stage": stage, "count": count, "probability": round(count / n, 4)})
+
+    reach_dist = []
+    for label, stages in _REACHED.items():
+        count = sum(stage_counts.get(s, 0) for s in stages)
+        reach_dist.append({"round": label, "probability": round(count / n, 4)})
+
+    position_dist = []
+    for pos in range(1, 37):
+        count = position_counts.get(pos, 0)
+        position_dist.append({"position": pos, "count": count, "probability": round(count / n, 4)})
+
+    top_champions = champion_counts.most_common(10)
+
+    return {
+        "n": n,
+        "squadElo": round(float(squad_elo), 0),
+        "narrativeSeed": int(narrative_seed),
+        "narrative": narrative_result,
+        "stages": stage_dist,
+        "reachProbabilities": reach_dist,
+        "leaguePhasePositions": position_dist,
+        "averagePoints": round(points_total / n, 1),
+        "averageGoalsFor": round(goals_for_total / n, 1),
+        "averageGoalsAgainst": round(goals_against_total / n, 1),
+        "topChampions": [
+            {"team": _label(team), "count": count, "probability": round(count / n, 4),
+             "isSquad": team == SQUAD_TEAM_NAME}
+            for team, count in top_champions
+        ],
+    }
+
+
+def monte_carlo_league(
+    squad_names: list[str],
+    competition_slug: str,
+    bench_names: list[str] | None = None,
+    replaced: str | None = None,
+    n: int = 200,
+    narrative_seed: int | None = None,
+) -> dict:
+    """Run a domestic league N times and return aggregate probabilities."""
+    import numpy as np
+    from collections import Counter
+
+    from mundialytics.statistical_core.squadlab.cards import load_cards
+    from mundialytics.statistical_core.squadlab.lambda_source import (
+        RealTeamLambdaSource, SeasonLambdaSource,
+    )
+    from mundialytics.statistical_core.squadlab.squad_lambda_model import SquadLambdaModel
+
+    from api.engine import club_engine
+
+    comp = LEAGUE_COMP_SLUG.get(competition_slug)
+    if comp is None:
+        raise ValueError(f"Unknown competition: {competition_slug}")
+
+    engine, _, _ = club_engine()
+    ad = engine.ad_model_
+
+    teams = [t for t in ad.teams_ if ad.team_competition_.get(t) == comp]
+    if len(teams) < 18:
+        raise ValueError(f"Not enough teams for {comp}: only {len(teams)}")
+
+    if replaced is None:
+        def _team_strength(t):
+            idx = ad.team_index_[t]
+            return float(ad.attack_[idx]) - float(ad.defense_[idx])
+        replaced = min(teams, key=_team_strength)
+
+    if replaced not in teams:
+        raise ValueError(f"{replaced} not found in {comp}")
+
+    xi = resolve_cards(squad_names)
+    if len(xi) < 11:
+        raise ValueError("The squad needs eleven players the model knows")
+    if sum(c.position == "Goalkeeper" for c in xi) != 1:
+        raise ValueError("The eleven needs exactly one goalkeeper")
+    bench_cards = [c for c in resolve_cards(bench_names or [])
+                   if c.card_id not in {x.card_id for x in xi}]
+
+    squad_profiles = resolve_squad(strength_model().profiles_, squad_names)
+    real_source = RealTeamLambdaSource(engine)
+    squad_bridge = SquadLambdaModel(strength_model())
+
+    cards_df = load_cards()
+    if narrative_seed is None:
+        narrative_seed = random.randrange(2 ** 32)
+
+    position_counts: Counter[int] = Counter()
+    points_total = 0
+    champion_count = 0
+    top4_count = 0
+    relegation_count = 0
+    champion_names: Counter[str] = Counter()
+    narrative_result = None
+
+    from mundialytics.statistical_core.squadlab.league import LeagueRun
+    from mundialytics.statistical_core.schemas import canonical_name
+
+    squad_canon = canonical_name(SQUAD_TEAM_NAME)
+
+    for i in range(n):
+        seed_i = narrative_seed if i == 0 else random.randrange(2 ** 32)
+        rng = np.random.default_rng(int(seed_i))
+
+        lambda_source = SeasonLambdaSource(
+            squad_team_name=SQUAD_TEAM_NAME,
+            squad=squad_profiles,
+            squad_bridge=squad_bridge,
+            real_source=real_source,
+            ad_model=ad,
+        )
+        run = LeagueRun(
+            squad_name=SQUAD_TEAM_NAME, squad=xi, bench=bench_cards,
+            competition=comp, teams=teams, replaced=replaced,
+            lambda_source=lambda_source,
+            cards_df=cards_df if not cards_df.empty else None, rng=rng,
+        )
+        res = run.play()
+
+        position_counts[res.squad_position] += 1
+        champion_row = res.table[res.table["rank"] == 1]
+        champ_name = str(champion_row["team"].iloc[0]) if len(champion_row) else ""
+        champion_names[champ_name] += 1
+
+        squad_row = res.table[res.table["team"] == squad_canon]
+        if len(squad_row):
+            points_total += int(squad_row["points"].iloc[0])
+
+        if res.squad_position == 1:
+            champion_count += 1
+        if res.squad_position <= 4:
+            top4_count += 1
+        if res.squad_position >= 18:
+            relegation_count += 1
+
+        if i == 0:
+            narrative_result = _shape_league(res, int(narrative_seed))
+
+    n_teams = len(teams)
+    position_dist = []
+    for pos in range(1, n_teams + 1):
+        count = position_counts.get(pos, 0)
+        position_dist.append({"position": pos, "count": count, "probability": round(count / n, 4)})
+
+    top_champions = champion_names.most_common(10)
+
+    return {
+        "mode": "league",
+        "n": n,
+        "competition": comp,
+        "narrativeSeed": int(narrative_seed),
+        "narrative": narrative_result,
+        "positions": position_dist,
+        "averagePoints": round(points_total / n, 1),
+        "pChampion": round(champion_count / n, 4),
+        "pTop4": round(top4_count / n, 4),
+        "pRelegation": round(relegation_count / n, 4),
+        "topChampions": [
+            {"team": _label(team), "count": count, "probability": round(count / n, 4),
+             "isSquad": team == SQUAD_TEAM_NAME or canonical_name(team) == squad_canon}
+            for team, count in top_champions
+        ],
+    }
+
+
 def resolve_cards(names: list[str]):
     """Card ids -> Card objects, in the order given (unknown ids dropped)."""
     from mundialytics.statistical_core.squadlab.cards import cards_from_frame, load_cards

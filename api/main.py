@@ -1631,6 +1631,47 @@ def squadlab_league(req: LeagueRequest) -> dict:
         raise HTTPException(503, f"Could not play the league: {str(exc)[:180]}") from exc
 
 
+class MonteCarloRequest(BaseModel):
+    squad: list[str] = Field(min_length=11, max_length=11)
+    bench: list[str] = Field(default_factory=list, max_length=7)
+    mode: str = "draft"
+    seed: int | None = None
+    n: int = Field(default=200, ge=10, le=500)
+    competition: str | None = None
+    replaced: str | None = None
+
+
+@app.post("/squadlab/montecarlo")
+def squadlab_montecarlo(req: MonteCarloRequest) -> dict:
+    """Run N simulations and return probability distributions.
+
+    Without `competition` it runs the Champions League; with one it runs a
+    domestic league season.
+    """
+    from api import squadlab as sl
+
+    try:
+        if req.competition:
+            return sl.monte_carlo_league(
+                req.squad,
+                req.competition,
+                bench_names=req.bench,
+                replaced=req.replaced,
+                n=req.n,
+                narrative_seed=req.seed,
+            )
+        return sl.monte_carlo_champions(
+            req.squad,
+            bench_names=req.bench,
+            n=req.n,
+            narrative_seed=req.seed,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, f"Monte Carlo failed: {str(exc)[:180]}") from exc
+
+
 @app.get("/fixtures/day")
 def fixtures_day(day: str | None = None) -> dict:
     """One calendar day, grouped by competition.

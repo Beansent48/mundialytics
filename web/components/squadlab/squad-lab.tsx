@@ -2,6 +2,7 @@
 
 import {
   ArrowLeftRight,
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   Dices,
@@ -17,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { HistoricChampionsView } from "@/components/squadlab/historic-champions";
 import { LeagueSeasonView } from "@/components/squadlab/league-season-view";
+import { MonteCarloView } from "@/components/squadlab/monte-carlo-view";
 import { LiveMatch } from "@/components/squadlab/live-match";
 import { EmptyCard, PlayerCard } from "@/components/squadlab/player-card";
 import { SavedRuns } from "@/components/squadlab/saved-runs";
@@ -35,6 +37,7 @@ import {
   type BracketTie,
   type LeagueSeason,
   type LeagueTeam,
+  type MonteCarloResult,
   type SquadPlayer,
   type SquadPool,
   type SquadSeason,
@@ -145,6 +148,8 @@ export function SquadLab() {
   const [playing, setPlaying] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
+  const [mcResult, setMcResult] = useState<MonteCarloResult | null>(null);
+  const [mcRunning, setMcRunning] = useState(false);
 
   // The row this draft is being saved into, for somebody signed in. Minted
   // when a draft starts so that the draft and the tournament it becomes are
@@ -432,6 +437,27 @@ export function SquadLab() {
     }
   }
 
+  async function runMonteCarlo() {
+    if (!lineup) return;
+    setMcRunning(true);
+    try {
+      const result = await api.monteCarlo(
+        lineup.xi.map((p) => p.player),
+        mode,
+        lineup.bench.map((p) => p.player),
+        200,
+        undefined,
+        competition ?? undefined,
+        replaced ?? undefined,
+      );
+      setMcResult(result);
+    } catch {
+      setSeasonError(t("seasonFailed"));
+    } finally {
+      setMcRunning(false);
+    }
+  }
+
   /** Pick up a saved draft where it was left. */
   async function resume(id: string) {
     const saved = await loadRun(id);
@@ -472,6 +498,7 @@ export function SquadLab() {
     setLineup(null);
     setSeason(null);
     setLeagueSeason(null);
+    setMcResult(null);
     setCompetition(null);
     setLeagueTeams([]);
     setReplaced(null);
@@ -574,6 +601,16 @@ export function SquadLab() {
     );
   }
 
+  if (phase === "season" && mcResult) {
+    return (
+      <MonteCarloView
+        result={mcResult}
+        onBack={() => setMcResult(null)}
+        onReset={reset}
+      />
+    );
+  }
+
   if (phase === "season" && leagueSeason) {
     return (
       <LeagueSeasonView
@@ -595,6 +632,8 @@ export function SquadLab() {
         revealed={revealed}
         setRevealed={setRevealed}
         onReset={reset}
+        onMonteCarlo={runMonteCarlo}
+        mcRunning={mcRunning}
         gamification={gamification}
       />
     );
@@ -1064,6 +1103,8 @@ function SeasonView({
   revealed,
   setRevealed,
   onReset,
+  onMonteCarlo,
+  mcRunning,
   gamification,
 }: {
   season: SquadSeason;
@@ -1071,6 +1112,8 @@ function SeasonView({
   revealed: number;
   setRevealed: (n: number) => void;
   onReset: () => void;
+  onMonteCarlo: () => void;
+  mcRunning: boolean;
   gamification: GamificationResult;
 }) {
   const t = useTranslations("squadlab");
@@ -1173,6 +1216,15 @@ function SeasonView({
             >
               <Share2 className="size-4" />
               {t("shareSeason")}
+            </button>
+            <button
+              type="button"
+              onClick={onMonteCarlo}
+              disabled={mcRunning}
+              className="relative mt-3 inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-5 text-[0.88rem] font-medium text-muted transition-colors hover:border-border-strong hover:text-text disabled:opacity-50"
+            >
+              <BarChart3 className="size-4" />
+              {mcRunning ? t("mc.running") : t("mc.runMC", { n: 200 })}
             </button>
           </div>
         </div>
