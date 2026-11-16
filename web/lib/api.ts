@@ -341,6 +341,18 @@ export type SquadPlayer = {
   highlight: { stat: string; note: string } | null;
   /** The league the card belongs to (e.g. "LaLiga", "Premier League"). */
   league: string | null;
+  /** Full name when different from display (e.g. "Lionel Andrés Messi Cuccittini"). */
+  fullName: string | null;
+  /** Physical/biographical data from ESPN + Transfermarkt. */
+  enrichment: {
+    espnId?: number;
+    heightCm?: number;
+    age?: number;
+    ageAtSeason?: number;
+    dob?: string;
+    nationality?: string;
+    foot?: string;
+  } | null;
 };
 
 export type SquadPool = {

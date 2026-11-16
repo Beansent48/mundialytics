@@ -42,6 +42,7 @@ FORMATIONS = ["4-3-3", "4-4-2", "3-4-3", "3-5-2", "5-3-2", "5-2-3", "4-5-1"]
 
 MICRO_STATS = ROOT / "data/processed/player_micro_stats.csv"
 CARD_HIGHLIGHTS = ROOT / "data/curated/card_highlights.csv"
+CARD_ENRICHMENT = ROOT / "data/processed/squadlab_card_enrichment.csv"
 
 # The measured sub-stats, per player, that feed the role rating — the depth
 # behind a card. Outfield first, keeper last; a card only carries the set for
@@ -201,6 +202,52 @@ def _highlight_for(c) -> dict | None:
     return idx.get(("icono", who))
 
 
+@lru_cache(maxsize=1)
+def _enrichment_index() -> dict:
+    if not CARD_ENRICHMENT.exists():
+        return {}
+    df = pd.read_csv(CARD_ENRICHMENT)
+    out: dict = {}
+    for r in df.itertuples(index=False):
+        cid = str(r.card_id)
+        d: dict = {}
+        eid = getattr(r, "espn_athlete_id", None)
+        if pd.notna(eid):
+            d["espnId"] = int(eid)
+        h = getattr(r, "height_cm", None)
+        if pd.notna(h):
+            d["heightCm"] = int(h)
+        dob = getattr(r, "dob", None)
+        if pd.notna(dob):
+            d["dob"] = str(dob)
+        nat = getattr(r, "nationality", None)
+        if pd.notna(nat):
+            d["nationality"] = str(nat)
+        foot = getattr(r, "foot", None)
+        if pd.notna(foot):
+            d["foot"] = str(foot)
+        if d:
+            out[cid] = d
+    return out
+
+
+def _enrich_for(c) -> dict:
+    idx = _enrichment_index()
+    d = idx.get(str(c.card_id), {}).copy()
+    dob = d.pop("dob", None)
+    if dob:
+        from datetime import date
+        born = date.fromisoformat(dob)
+        today = date.today()
+        age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+        d["age"] = age
+        d["dob"] = dob
+        if c.kind == "prime" and c.season_label:
+            start_year = int("20" + c.season_label.split("/")[0])
+            d["ageAtSeason"] = start_year - born.year
+    return d
+
+
 def _card_entry(c) -> dict:
     """One card in the shape the client draws.
 
@@ -233,6 +280,8 @@ def _card_entry(c) -> dict:
         # Curated "why this card" line for prime/icono; None for actual cards.
         "highlight": _highlight_for(c),
         "league": getattr(c, "league", None),
+        "fullName": c.player if c.player != c.display else None,
+        "enrichment": _enrich_for(c) or None,
     }
 
 

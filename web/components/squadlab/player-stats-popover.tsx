@@ -7,14 +7,17 @@ import { createPortal } from "react-dom";
 import type { SquadPlayer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/**
- * The depth behind a card: the measured sub-stats the role rating is built
- * from, and the role's own weight formula. Percentiles are 0-100 within the
- * player's (season, position), so 88 means "better than 88% of his position".
- *
- * Rendered in a portal with fixed positioning so it never clips inside the
- * pitch or the candidate grid, both of which can hide overflow.
- */
+function espnPhotoUrl(espnId: number): string {
+  return `https://a.espncdn.com/combiner/i?img=/i/headshots/soccer/players/full/${espnId}.png&w=130&h=95`;
+}
+
+const POSITION_LABEL: Record<string, string> = {
+  Goalkeeper: "GK",
+  Defender: "DEF",
+  Midfielder: "MID",
+  Forward: "FWD",
+};
+
 export function PlayerStatsPanel({
   player,
   roleWeights,
@@ -29,13 +32,14 @@ export function PlayerStatsPanel({
   const t = useTranslations("squadlab");
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [imgError, setImgError] = useState(false);
 
-  // Prime/icono cards celebrate a past season or a career, not this season's
-  // form, so they show a curated highlight instead of the current formula.
   const isPrime = player.kind === "prime";
-  const isSpecial = isPrime || player.kind === "icono";
+  const isIcono = player.kind === "icono";
+  const isSpecial = isPrime || isIcono;
+  const enrichment = player.enrichment;
+  const hasPhoto = !!enrichment?.espnId && !imgError;
 
-  // Place below the card, flip above when there is no room, clamp to viewport.
   useLayoutEffect(() => {
     const el = panelRef.current;
     if (!el) return;
@@ -55,13 +59,9 @@ export function PlayerStatsPanel({
   }, [anchor]);
 
   const weights = roleWeights ?? {};
-  // The role's own stats first, heaviest first — that is the formula. Then any
-  // other measured stat, so nothing the engine saw is hidden.
   const weighted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
   const weightedCodes = new Set(weighted.map(([c]) => c));
   const subs = player.substats ?? {};
-  // Keeper stats are noise on an outfielder's card and vice versa — the profile
-  // file scores every code for everyone, so filter to the player's own kind.
   const GK_CODES = new Set(["SHOTSTOP", "AERIAL_GK", "SWEEP", "DISTRIB"]);
   const isGk = player.position === "Goalkeeper";
   const extra = Object.keys(subs)
@@ -75,6 +75,24 @@ export function PlayerStatsPanel({
 
   const hasProfile = player.substats != null;
 
+  const infoChips: string[] = [];
+  if (enrichment?.age != null) {
+    if (isPrime && enrichment.ageAtSeason != null && player.season) {
+      infoChips.push(t("playerAgeAtSeason", { age: enrichment.ageAtSeason, season: player.season }));
+    } else {
+      infoChips.push(t("playerAge", { age: enrichment.age }));
+    }
+  }
+  if (enrichment?.heightCm != null) {
+    infoChips.push(t("playerHeight", { cm: enrichment.heightCm }));
+  }
+  if (enrichment?.foot) {
+    infoChips.push(t("playerFoot", { foot: enrichment.foot }));
+  }
+  if (enrichment?.nationality) {
+    infoChips.push(enrichment.nationality);
+  }
+
   return createPortal(
     <div
       ref={panelRef}
@@ -85,31 +103,107 @@ export function PlayerStatsPanel({
         top: pos?.top ?? -9999,
         visibility: pos ? "visible" : "hidden",
       }}
-      className="z-[60] w-[19rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-[14px] border border-border-strong bg-surface shadow-[0_18px_40px_-12px_rgba(0,0,0,0.6)]"
+      className="z-[60] w-[20rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-[14px] border border-border-strong bg-surface shadow-[0_18px_40px_-12px_rgba(0,0,0,0.6)]"
     >
-      <div className="border-b border-border px-4 py-3">
-        <p className="truncate text-[0.9rem] font-semibold">{player.display}</p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-[0.72rem] text-muted">
-          <span className="truncate">{player.team}</span>
-          {isSpecial ? (
-            <>
-              <span className="text-dim">·</span>
-              <span className="rounded-[5px] bg-black/25 px-1.5 py-0.5 text-[0.66rem] font-semibold">
-                {isPrime ? `PRIME${player.season ? ` ${player.season}` : ""}` : "ICONO"}
-              </span>
-            </>
-          ) : player.role ? (
-            <>
-              <span className="text-dim">·</span>
-              <span className="rounded-[5px] bg-brand-ghost px-1.5 py-0.5 text-[0.66rem] font-semibold text-brand">
-                {player.role}
-              </span>
-            </>
+      {/* ── Header: photo + identity ── */}
+      <div className="flex items-start gap-3 border-b border-border px-4 py-3">
+        {hasPhoto ? (
+          <div className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={espnPhotoUrl(enrichment!.espnId!)}
+              alt={player.display}
+              className="absolute inset-0 size-full object-cover object-top"
+              onError={() => setImgError(true)}
+            />
+          </div>
+        ) : (
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[1.2rem] font-bold text-dim">
+            {player.display.charAt(0)}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[0.92rem] font-semibold leading-tight">
+            {player.display}
+          </p>
+          {player.fullName && player.fullName !== player.display ? (
+            <p className="mt-0.5 truncate text-[0.66rem] text-dim">
+              {player.fullName}
+            </p>
           ) : null}
-        </p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.68rem] text-muted">
+            <span className="truncate">{player.team}</span>
+            <span className="text-dim">·</span>
+            <span>{POSITION_LABEL[player.position] ?? player.position}</span>
+            {isSpecial ? (
+              <>
+                <span className="text-dim">·</span>
+                <span className="rounded-[5px] bg-black/25 px-1.5 py-0.5 text-[0.6rem] font-semibold">
+                  {isPrime ? `PRIME${player.season ? ` ${player.season}` : ""}` : "ICONO"}
+                </span>
+              </>
+            ) : player.role ? (
+              <>
+                <span className="text-dim">·</span>
+                <span className="rounded-[5px] bg-brand-ghost px-1.5 py-0.5 text-[0.6rem] font-semibold text-brand">
+                  {player.role}
+                </span>
+              </>
+            ) : null}
+          </p>
+        </div>
       </div>
 
-      <div className="max-h-[22rem] overflow-y-auto px-4 py-3">
+      {/* ── Info chips: age, height, foot, nationality ── */}
+      {infoChips.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 border-b border-border px-4 py-2.5">
+          {infoChips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded-md bg-surface-2 px-2 py-0.5 text-[0.66rem] font-medium text-muted"
+            >
+              {chip}
+            </span>
+          ))}
+          <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[0.66rem] font-medium text-muted">
+            {t("playerMatches", { n: player.matches })}
+          </span>
+        </div>
+      ) : null}
+
+      {/* ── Rating axes ── */}
+      <div className="border-b border-border px-4 py-2.5">
+        <div className={cn("grid gap-2", isGk ? "grid-cols-1" : "grid-cols-3")}>
+          {isGk ? (
+            <AxisBar
+              label={t("statsGk")}
+              value={player.attack}
+              tier={axisTier(player.attack)}
+            />
+          ) : (
+            <>
+              <AxisBar
+                label={t("statsAttack")}
+                value={player.attack}
+                tier={axisTier(player.attack)}
+              />
+              <AxisBar
+                label={t("statsDefense")}
+                value={player.defense}
+                tier={axisTier(player.defense)}
+              />
+              <AxisBar
+                label={t("statsCreation")}
+                value={player.creation}
+                tier={axisTier(player.creation)}
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Substats / highlight ── */}
+      <div className="max-h-[18rem] overflow-y-auto px-4 py-3">
         {isSpecial ? (
           player.highlight && (player.highlight.stat || player.highlight.note) ? (
             <>
@@ -186,6 +280,47 @@ export function PlayerStatsPanel({
       </div>
     </div>,
     document.body,
+  );
+}
+
+function axisTier(value: number | null): "high" | "mid" | "low" {
+  if (value == null) return "low";
+  if (value >= 80) return "high";
+  if (value >= 65) return "mid";
+  return "low";
+}
+
+function AxisBar({
+  label,
+  value,
+  tier,
+}: {
+  label: string;
+  value: number | null;
+  tier: "high" | "mid" | "low";
+}) {
+  const v = value != null ? Math.round(value) : null;
+  const tone =
+    tier === "high"
+      ? "bg-positive"
+      : tier === "mid"
+        ? "bg-brand"
+        : "bg-negative/70";
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-dim">
+          {label}
+        </span>
+        <span className="text-[0.78rem] font-bold tabular-nums">{v ?? "—"}</span>
+      </div>
+      <span className="h-1 overflow-hidden rounded-full bg-surface-3">
+        <span
+          className={cn("block h-full rounded-full transition-all", tone)}
+          style={{ width: `${v == null ? 0 : Math.max(3, v)}%` }}
+        />
+      </span>
+    </div>
   );
 }
 
