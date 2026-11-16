@@ -535,30 +535,33 @@ _REACHED = {
 }
 
 
-def _analyze_squad(xi_cards, bench_cards, scale) -> dict:
+def _analyze_squad(xi_cards, bench_cards, scale, shape=None) -> dict:
     """Player-level Elo impact and optimal XI from the 18-player pool.
 
-    Uses the raw (uncapped) Elo for comparisons so that differences remain
-    visible even when the squad sits at the 2250 cap.
+    Uses an effective Elo that includes shape multipliers (attack/defense/gk)
+    so that a defender's raw_defense and a forward's raw_attack affect their
+    measured impact, not just their overall.
     """
     import numpy as np
+    from mundialytics.statistical_core.squadlab.cards import FORMATION_SLOTS
 
-    def _raw_elo(cards):
+    ELO_B = 0.7393927801465834
+
+    def _effective_elo(cards):
         ovrs = [float(c.overall) for c in cards]
-        return float(scale.intercept + scale.slope_mean * float(np.mean(ovrs)))
+        base = float(scale.intercept + scale.slope_mean * float(np.mean(ovrs)))
+        if shape is None or len(cards) < 11:
+            return base
+        m_att, m_def = shape.multipliers(cards)
+        shape_bonus = 400.0 / ELO_B * (np.log(m_att) - np.log(m_def))
+        return base + shape_bonus
 
-    current_elo = _raw_elo(xi_cards)
+    current_elo = _effective_elo(xi_cards)
     capped_elo = scale.elo_for([c.overall for c in xi_cards])
     xi_ids = {c.card_id for c in xi_cards}
     all_cards = list(xi_cards) + list(bench_cards)
 
-    gks = [c for c in all_cards if c.position == "Goalkeeper"]
-    outfield = sorted(
-        [c for c in all_cards if c.position != "Goalkeeper"],
-        key=lambda c: -c.overall,
-    )
-
-    # ── Per-player marginal impact ────────────────────────────────────────
+    # ── Per-player marginal impact (shape-aware) ─────────────────────────
     impacts = []
     for i, player in enumerate(xi_cards):
         remaining = [c for j, c in enumerate(xi_cards) if j != i]
@@ -567,7 +570,7 @@ def _analyze_squad(xi_cards, bench_cards, scale) -> dict:
             candidate = remaining + [bp]
             if sum(1 for c in candidate if c.position == "Goalkeeper") != 1:
                 continue
-            elo = _raw_elo(candidate)
+            elo = _effective_elo(candidate)
             if elo > best_elo:
                 best_elo = elo
                 best_repl = bp
@@ -581,10 +584,40 @@ def _analyze_squad(xi_cards, bench_cards, scale) -> dict:
             "replacementOvr": int(best_repl.overall) if best_repl else None,
         })
 
-    # ── Optimal XI: highest-OVR GK + top 10 outfield ─────────────────────
-    best_gk = max(gks, key=lambda c: c.overall) if gks else None
-    optimal_xi = ([best_gk] + outfield[:10]) if best_gk else outfield[:11]
-    optimal_elo = _raw_elo(optimal_xi)
+    # ── Optimal XI: best formation from pool, position-balanced ──────────
+    best_formation_xi = None
+    best_formation_elo = -1e9
+    best_formation_name = None
+    for formation, slots in FORMATION_SLOTS.items():
+        xi_candidate = []
+        used: set[str] = set()
+        for pos, n in slots.items():
+            available = sorted(
+                [c for c in all_cards if c.position == pos and c.card_id not in used],
+                key=lambda c: -c.overall,
+            )[:n]
+            xi_candidate.extend(available)
+            used.update(c.card_id for c in available)
+        if len(xi_candidate) < 11:
+            rest = sorted(
+                [c for c in all_cards if c.card_id not in used and c.position != "Goalkeeper"],
+                key=lambda c: -c.overall,
+            )
+            for c in rest:
+                if len(xi_candidate) >= 11:
+                    break
+                xi_candidate.append(c)
+                used.add(c.card_id)
+        if len(xi_candidate) < 11:
+            continue
+        elo = _effective_elo(xi_candidate)
+        if elo > best_formation_elo:
+            best_formation_elo = elo
+            best_formation_xi = xi_candidate
+            best_formation_name = formation
+
+    optimal_xi = best_formation_xi or list(xi_cards)
+    optimal_elo = best_formation_elo if best_formation_xi else current_elo
     optimal_ids = {c.card_id for c in optimal_xi}
 
     pos_order = {"Goalkeeper": 0, "Defender": 1, "Midfielder": 2, "Forward": 3}
@@ -597,7 +630,7 @@ def _analyze_squad(xi_cards, bench_cards, scale) -> dict:
     swaps = []
     for pin, pout in zip(players_in, players_out):
         swapped = [c for c in xi_cards if c.card_id != pout.card_id] + [pin]
-        swap_elo = _raw_elo(swapped)
+        swap_elo = _effective_elo(swapped)
         swaps.append({
             "playerIn": _display(pin.player), "playerInOvr": int(pin.overall),
             "playerInPos": pin.position,
@@ -611,6 +644,7 @@ def _analyze_squad(xi_cards, bench_cards, scale) -> dict:
         "optimalElo": round(min(optimal_elo, 2250.0), 0),
         "eloDelta": round(optimal_elo - current_elo, 1),
         "isOptimal": len(swaps) == 0,
+        "bestFormation": best_formation_name,
         "playerImpacts": sorted(impacts, key=lambda x: -x["eloImpact"]),
         "optimalXI": [
             {"player": _display(c.player), "overall": int(c.overall),
@@ -730,7 +764,7 @@ def monte_carlo_champions(
         })
     player_perf.sort(key=lambda p: (-p["avgGoals"], -p["avgAssists"]))
 
-    analysis = _analyze_squad(xi, bench, scale)
+    analysis = _analyze_squad(xi, bench, scale, shape)
 
     return {
         "n": n,

@@ -652,6 +652,7 @@ export type SquadAnalysis = {
   optimalElo: number;
   eloDelta: number;
   isOptimal: boolean;
+  bestFormation: string | null;
   playerImpacts: PlayerImpact[];
   optimalXI: OptimalPlayer[];
   recommendedSwaps: RecommendedSwap[];

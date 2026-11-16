@@ -265,6 +265,11 @@ function SquadAnalysisView({
           <div className="mt-4">
             <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-dim">
               {t("mc.optimalXI")}
+              {analysis.bestFormation && (
+                <span className="ml-2 text-[0.62rem] font-medium normal-case tracking-normal text-muted">
+                  ({analysis.bestFormation})
+                </span>
+              )}
             </p>
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {analysis.optimalXI.map((p) => (
