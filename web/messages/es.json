@@ -624,7 +624,21 @@
       "reachProbability": "P(alcanzar ronda)",
       "positionDistribution": "Distribución de posición",
       "topChampions": "Campeones más frecuentes",
-      "relegationRisk": "Riesgo de descenso: {pct}%"
+      "relegationRisk": "Riesgo de descenso: {pct}%",
+      "playerPerformance": "Rendimiento individual",
+      "colPlayer": "Jugador",
+      "colGoals": "Goles",
+      "colAssists": "Asist.",
+      "colApps": "PJ",
+      "colRating": "Nota",
+      "whatIf": "Composición ideal",
+      "alreadyOptimal": "Tu once ya es el mejor posible con esta plantilla",
+      "currentElo": "Elo actual",
+      "optimalElo": "Elo óptimo",
+      "eloDelta": "Ganancia",
+      "recommendedSwaps": "Cambios recomendados",
+      "optimalXI": "Once ideal",
+      "playerImpact": "Impacto por jugador"
     }
   },
   "profile": {

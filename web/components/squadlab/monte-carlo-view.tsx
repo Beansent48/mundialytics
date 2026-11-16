@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, ChevronLeft, RotateCcw, Trophy } from "lucide-react";
+import { ArrowRight, BarChart3, Check, ChevronLeft, RotateCcw, Trophy, Users, Zap } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
 
@@ -8,7 +8,11 @@ import type {
   MonteCarloChampions,
   MonteCarloLeague,
   MonteCarloResult,
+  PlayerImpact,
+  PlayerPerf,
   PositionProb,
+  RecommendedSwap,
+  SquadAnalysis,
   TeamProb,
 } from "@/lib/api";
 import { cn, ordinal } from "@/lib/utils";
@@ -112,6 +116,213 @@ function TopChampionsTable({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function PlayerPerformanceTable({
+  players,
+  t,
+}: {
+  players: PlayerPerf[];
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  if (!players.length) return null;
+  return (
+    <div>
+      <p className="mb-3 text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-dim">
+        {t("mc.playerPerformance")}
+      </p>
+      <div className="overflow-hidden rounded-[10px] border border-border">
+        <table className="w-full text-[0.8rem]">
+          <thead>
+            <tr className="border-b border-border bg-bg-elevated text-[0.68rem] uppercase tracking-[0.08em] text-dim">
+              <th className="px-3 py-2 text-left font-semibold">{t("mc.colPlayer")}</th>
+              <th className="px-2 py-2 text-right font-semibold">{t("mc.colGoals")}</th>
+              <th className="px-2 py-2 text-right font-semibold">{t("mc.colAssists")}</th>
+              <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">{t("mc.colApps")}</th>
+              <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">{t("mc.colRating")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {players.map((p) => (
+              <tr key={p.player} className="border-b border-border last:border-0">
+                <td className="px-3 py-2 font-medium">{p.player}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">
+                  {p.avgGoals.toFixed(1)}
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">
+                  {p.avgAssists.toFixed(1)}
+                </td>
+                <td className="hidden px-2 py-2 text-right tabular-nums text-muted sm:table-cell">
+                  {p.avgApps.toFixed(0)}
+                </td>
+                <td className="hidden px-2 py-2 text-right tabular-nums text-muted sm:table-cell">
+                  {p.avgRating?.toFixed(1) ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SquadAnalysisView({
+  analysis,
+  t,
+}: {
+  analysis: SquadAnalysis;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <Zap className="size-4 text-brand" />
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-dim">
+          {t("mc.whatIf")}
+        </p>
+      </div>
+
+      {analysis.isOptimal ? (
+        <div className="mt-3 flex items-center gap-2 rounded-[10px] border border-positive/30 bg-positive/5 px-4 py-3">
+          <Check className="size-4 text-positive" />
+          <p className="text-[0.82rem] font-medium text-positive">
+            {t("mc.alreadyOptimal")}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Elo comparison */}
+          <div className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-[10px] border border-border bg-border">
+            <div className="bg-bg-elevated px-3 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-dim">
+                {t("mc.currentElo")}
+              </p>
+              <p className="mt-1 text-[1rem] font-semibold tabular-nums">
+                {analysis.currentElo}
+              </p>
+            </div>
+            <div className="bg-bg-elevated px-3 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-dim">
+                {t("mc.optimalElo")}
+              </p>
+              <p className="mt-1 text-[1rem] font-semibold tabular-nums text-brand">
+                {analysis.optimalElo}
+              </p>
+            </div>
+            <div className="bg-bg-elevated px-3 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-dim">
+                {t("mc.eloDelta")}
+              </p>
+              <p className="mt-1 text-[1rem] font-semibold tabular-nums text-positive">
+                +{analysis.eloDelta}
+              </p>
+            </div>
+          </div>
+
+          {/* Recommended swaps */}
+          {analysis.recommendedSwaps.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-dim">
+                {t("mc.recommendedSwaps")}
+              </p>
+              <div className="space-y-2">
+                {analysis.recommendedSwaps.map((s) => (
+                  <div
+                    key={`${s.playerOut}-${s.playerIn}`}
+                    className="flex items-center gap-3 rounded-[10px] border border-border bg-surface px-4 py-3"
+                  >
+                    <div className="flex-1 text-right">
+                      <p className="text-[0.82rem] font-medium text-negative/80 line-through decoration-negative/40">
+                        {s.playerOut}
+                      </p>
+                      <p className="text-[0.66rem] tabular-nums text-dim">
+                        {s.playerOutOvr} OVR
+                      </p>
+                    </div>
+                    <ArrowRight className="size-4 shrink-0 text-brand" />
+                    <div className="flex-1">
+                      <p className="text-[0.82rem] font-semibold text-positive">
+                        {s.playerIn}
+                      </p>
+                      <p className="text-[0.66rem] tabular-nums text-dim">
+                        {s.playerInOvr} OVR
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-positive/10 px-2 py-0.5 text-[0.7rem] font-semibold tabular-nums text-positive">
+                      +{s.eloDelta} Elo
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Optimal XI */}
+          <div className="mt-4">
+            <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-dim">
+              {t("mc.optimalXI")}
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {analysis.optimalXI.map((p) => (
+                <div
+                  key={p.player}
+                  className={cn(
+                    "flex items-center gap-2 rounded-[8px] border px-3 py-2",
+                    p.isNew
+                      ? "border-brand/40 bg-brand-ghost"
+                      : "border-border bg-surface",
+                  )}
+                >
+                  <span className="shrink-0 rounded bg-bg-elevated px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase text-dim">
+                    {p.position.slice(0, 3)}
+                  </span>
+                  <span className="min-w-0 truncate text-[0.78rem] font-medium">
+                    {p.player}
+                  </span>
+                  <span className="ml-auto shrink-0 text-[0.72rem] tabular-nums text-muted">
+                    {p.overall}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Player impact */}
+      <div className="mt-6">
+        <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-dim">
+          {t("mc.playerImpact")}
+        </p>
+        <div className="overflow-hidden rounded-[10px] border border-border">
+          <table className="w-full text-[0.8rem]">
+            <tbody>
+              {analysis.playerImpacts.map((p) => (
+                <tr key={p.cardId} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2">
+                    <span className="font-medium">{p.player}</span>
+                    <span className="ml-1.5 text-[0.66rem] tabular-nums text-dim">{p.overall}</span>
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <span className={cn(
+                      "text-[0.78rem] font-semibold tabular-nums",
+                      p.eloImpact > 0 ? "text-positive" : "text-muted",
+                    )}>
+                      {p.eloImpact > 0 ? "+" : ""}{p.eloImpact}
+                    </span>
+                  </td>
+                  <td className="hidden px-2 py-2 text-right text-[0.72rem] text-dim sm:table-cell">
+                    {p.bestReplacement ? `→ ${p.bestReplacement} (${p.replacementOvr})` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -273,6 +484,16 @@ function ChampionsMC({
       <div className="mt-8">
         <TopChampionsTable champions={result.topChampions} t={t} />
       </div>
+
+      {/* Player performance */}
+      <div className="mt-8">
+        <PlayerPerformanceTable players={result.playerPerformance} t={t} />
+      </div>
+
+      {/* Squad analysis / What-if */}
+      <div className="mt-8">
+        <SquadAnalysisView analysis={result.squadAnalysis} t={t} />
+      </div>
     </div>
   );
 }
@@ -356,6 +577,11 @@ function LeagueMC({
 
         {/* Top champions */}
         <TopChampionsTable champions={result.topChampions} t={t} />
+      </div>
+
+      {/* Player performance */}
+      <div className="mt-8">
+        <PlayerPerformanceTable players={result.playerPerformance} t={t} />
       </div>
 
       {/* Relegation risk */}

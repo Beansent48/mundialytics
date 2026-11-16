@@ -535,17 +535,103 @@ _REACHED = {
 }
 
 
+def _analyze_squad(xi_cards, bench_cards, scale) -> dict:
+    """Player-level Elo impact and optimal XI from the 18-player pool.
+
+    Uses the raw (uncapped) Elo for comparisons so that differences remain
+    visible even when the squad sits at the 2250 cap.
+    """
+    import numpy as np
+
+    def _raw_elo(cards):
+        ovrs = [float(c.overall) for c in cards]
+        return float(scale.intercept + scale.slope_mean * float(np.mean(ovrs)))
+
+    current_elo = _raw_elo(xi_cards)
+    capped_elo = scale.elo_for([c.overall for c in xi_cards])
+    xi_ids = {c.card_id for c in xi_cards}
+    all_cards = list(xi_cards) + list(bench_cards)
+
+    gks = [c for c in all_cards if c.position == "Goalkeeper"]
+    outfield = sorted(
+        [c for c in all_cards if c.position != "Goalkeeper"],
+        key=lambda c: -c.overall,
+    )
+
+    # ── Per-player marginal impact ────────────────────────────────────────
+    impacts = []
+    for i, player in enumerate(xi_cards):
+        remaining = [c for j, c in enumerate(xi_cards) if j != i]
+        best_repl, best_elo = None, -1e9
+        for bp in bench_cards:
+            candidate = remaining + [bp]
+            if sum(1 for c in candidate if c.position == "Goalkeeper") != 1:
+                continue
+            elo = _raw_elo(candidate)
+            if elo > best_elo:
+                best_elo = elo
+                best_repl = bp
+        impacts.append({
+            "player": _display(player.player),
+            "cardId": player.card_id,
+            "overall": int(player.overall),
+            "position": player.position,
+            "eloImpact": round(current_elo - best_elo, 1),
+            "bestReplacement": _display(best_repl.player) if best_repl else None,
+            "replacementOvr": int(best_repl.overall) if best_repl else None,
+        })
+
+    # ── Optimal XI: highest-OVR GK + top 10 outfield ─────────────────────
+    best_gk = max(gks, key=lambda c: c.overall) if gks else None
+    optimal_xi = ([best_gk] + outfield[:10]) if best_gk else outfield[:11]
+    optimal_elo = _raw_elo(optimal_xi)
+    optimal_ids = {c.card_id for c in optimal_xi}
+
+    pos_order = {"Goalkeeper": 0, "Defender": 1, "Midfielder": 2, "Forward": 3}
+
+    # ── Recommended swaps ─────────────────────────────────────────────────
+    players_in = sorted([c for c in optimal_xi if c.card_id not in xi_ids],
+                        key=lambda c: -c.overall)
+    players_out = sorted([c for c in xi_cards if c.card_id not in optimal_ids],
+                         key=lambda c: c.overall)
+    swaps = []
+    for pin, pout in zip(players_in, players_out):
+        swapped = [c for c in xi_cards if c.card_id != pout.card_id] + [pin]
+        swap_elo = _raw_elo(swapped)
+        swaps.append({
+            "playerIn": _display(pin.player), "playerInOvr": int(pin.overall),
+            "playerInPos": pin.position,
+            "playerOut": _display(pout.player), "playerOutOvr": int(pout.overall),
+            "playerOutPos": pout.position,
+            "eloDelta": round(swap_elo - current_elo, 1),
+        })
+
+    return {
+        "currentElo": round(capped_elo, 0),
+        "optimalElo": round(min(optimal_elo, 2250.0), 0),
+        "eloDelta": round(optimal_elo - current_elo, 1),
+        "isOptimal": len(swaps) == 0,
+        "playerImpacts": sorted(impacts, key=lambda x: -x["eloImpact"]),
+        "optimalXI": [
+            {"player": _display(c.player), "overall": int(c.overall),
+             "position": c.position, "isNew": c.card_id not in xi_ids}
+            for c in sorted(optimal_xi, key=lambda c: (pos_order.get(c.position, 9), -c.overall))
+        ],
+        "recommendedSwaps": swaps,
+    }
+
+
 def monte_carlo_champions(
     squad_names: list[str],
     bench_names: list[str] | None = None,
     n: int = 200,
     narrative_seed: int | None = None,
 ) -> dict:
-    """Run the Champions League N times and return aggregate probabilities
-    plus one full narrative run (the one with `narrative_seed`).
+    """Run the Champions League N times and return aggregate probabilities,
+    per-player performance, and squad-composition analysis.
     """
     import numpy as np
-    from collections import Counter
+    from collections import Counter, defaultdict
 
     from mundialytics.statistical_core.squadlab.champions import ChampionsRun
 
@@ -570,6 +656,13 @@ def monte_carlo_champions(
     champion_counts: Counter[str] = Counter()
     narrative_result = None
 
+    player_goals: Counter[str] = Counter()
+    player_assists: Counter[str] = Counter()
+    player_apps: Counter[str] = Counter()
+    player_minutes: defaultdict[str, int] = defaultdict(int)
+    player_rating_sum: defaultdict[str, float] = defaultdict(float)
+    player_rating_apps: Counter[str] = Counter()
+
     for i in range(n):
         seed_i = narrative_seed if i == 0 else random.randrange(2 ** 32)
         rng = np.random.default_rng(int(seed_i))
@@ -586,6 +679,19 @@ def monte_carlo_champions(
             points_total += int(squad_row["pts"].iloc[0])
             goals_for_total += int(squad_row["gf"].iloc[0])
             goals_against_total += int(squad_row["ga"].iloc[0])
+
+        for name, t in (res.squad_totals or {}).items():
+            g = int(t.get("goals", 0))
+            a = int(t.get("assists", 0))
+            ap = int(t.get("apps", 0))
+            player_goals[name] += g
+            player_assists[name] += a
+            player_apps[name] += ap
+            player_minutes[name] += int(t.get("minutes", 0))
+            rs = float(t.get("rating_sum", 0.0))
+            if ap > 0:
+                player_rating_sum[name] += rs
+                player_rating_apps[name] += ap
 
         if i == 0:
             narrative_result = _shape_champions(res, run.replaced, int(narrative_seed))
@@ -608,6 +714,24 @@ def monte_carlo_champions(
 
     top_champions = champion_counts.most_common(10)
 
+    all_players = set(player_goals) | set(player_assists) | set(player_apps)
+    player_perf = []
+    for name in all_players:
+        apps = player_apps[name]
+        ra = player_rating_apps[name]
+        player_perf.append({
+            "player": _display(name),
+            "avgGoals": round(player_goals[name] / n, 2),
+            "avgAssists": round(player_assists[name] / n, 2),
+            "avgApps": round(apps / n, 1),
+            "avgMinutes": round(player_minutes[name] / n, 0),
+            "avgRating": round(player_rating_sum[name] / ra, 2) if ra else None,
+            "totalGoals": player_goals[name],
+        })
+    player_perf.sort(key=lambda p: (-p["avgGoals"], -p["avgAssists"]))
+
+    analysis = _analyze_squad(xi, bench, scale)
+
     return {
         "n": n,
         "squadElo": round(float(squad_elo), 0),
@@ -624,6 +748,8 @@ def monte_carlo_champions(
              "isSquad": team == SQUAD_TEAM_NAME}
             for team, count in top_champions
         ],
+        "playerPerformance": player_perf,
+        "squadAnalysis": analysis,
     }
 
 
@@ -637,7 +763,7 @@ def monte_carlo_league(
 ) -> dict:
     """Run a domestic league N times and return aggregate probabilities."""
     import numpy as np
-    from collections import Counter
+    from collections import Counter, defaultdict
 
     from mundialytics.statistical_core.squadlab.cards import load_cards
     from mundialytics.statistical_core.squadlab.lambda_source import (
@@ -691,6 +817,13 @@ def monte_carlo_league(
     champion_names: Counter[str] = Counter()
     narrative_result = None
 
+    player_goals: Counter[str] = Counter()
+    player_assists: Counter[str] = Counter()
+    player_apps: Counter[str] = Counter()
+    player_minutes: defaultdict[str, int] = defaultdict(int)
+    player_rating_sum: defaultdict[str, float] = defaultdict(float)
+    player_rating_apps: Counter[str] = Counter()
+
     from mundialytics.statistical_core.squadlab.league import LeagueRun
     from mundialytics.statistical_core.schemas import canonical_name
 
@@ -731,6 +864,19 @@ def monte_carlo_league(
         if res.squad_position >= 18:
             relegation_count += 1
 
+        for name, t in (res.squad_totals or {}).items():
+            g = int(t.get("goals", 0))
+            a = int(t.get("assists", 0))
+            ap = int(t.get("apps", 0))
+            player_goals[name] += g
+            player_assists[name] += a
+            player_apps[name] += ap
+            player_minutes[name] += int(t.get("minutes", 0))
+            rs = float(t.get("rating_sum", 0.0))
+            if ap > 0:
+                player_rating_sum[name] += rs
+                player_rating_apps[name] += ap
+
         if i == 0:
             narrative_result = _shape_league(res, int(narrative_seed))
 
@@ -741,6 +887,22 @@ def monte_carlo_league(
         position_dist.append({"position": pos, "count": count, "probability": round(count / n, 4)})
 
     top_champions = champion_names.most_common(10)
+
+    all_players = set(player_goals) | set(player_assists) | set(player_apps)
+    player_perf = []
+    for name in all_players:
+        apps = player_apps[name]
+        ra = player_rating_apps[name]
+        player_perf.append({
+            "player": _display(name),
+            "avgGoals": round(player_goals[name] / n, 2),
+            "avgAssists": round(player_assists[name] / n, 2),
+            "avgApps": round(apps / n, 1),
+            "avgMinutes": round(player_minutes[name] / n, 0),
+            "avgRating": round(player_rating_sum[name] / ra, 2) if ra else None,
+            "totalGoals": player_goals[name],
+        })
+    player_perf.sort(key=lambda p: (-p["avgGoals"], -p["avgAssists"]))
 
     return {
         "mode": "league",
@@ -758,6 +920,7 @@ def monte_carlo_league(
              "isSquad": team == SQUAD_TEAM_NAME or canonical_name(team) == squad_canon}
             for team, count in top_champions
         ],
+        "playerPerformance": player_perf,
     }
 
 

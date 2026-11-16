@@ -591,6 +591,8 @@ export type MonteCarloChampions = {
   averageGoalsFor: number;
   averageGoalsAgainst: number;
   topChampions: TeamProb[];
+  playerPerformance: PlayerPerf[];
+  squadAnalysis: SquadAnalysis;
 };
 
 export type MonteCarloLeague = {
@@ -605,6 +607,54 @@ export type MonteCarloLeague = {
   pTop4: number;
   pRelegation: number;
   topChampions: TeamProb[];
+  playerPerformance: PlayerPerf[];
+};
+
+export type PlayerPerf = {
+  player: string;
+  avgGoals: number;
+  avgAssists: number;
+  avgApps: number;
+  avgMinutes: number;
+  avgRating: number | null;
+  totalGoals: number;
+};
+
+export type PlayerImpact = {
+  player: string;
+  cardId: string;
+  overall: number;
+  position: string;
+  eloImpact: number;
+  bestReplacement: string | null;
+  replacementOvr: number | null;
+};
+
+export type OptimalPlayer = {
+  player: string;
+  overall: number;
+  position: string;
+  isNew: boolean;
+};
+
+export type RecommendedSwap = {
+  playerIn: string;
+  playerInOvr: number;
+  playerInPos: string;
+  playerOut: string;
+  playerOutOvr: number;
+  playerOutPos: string;
+  eloDelta: number;
+};
+
+export type SquadAnalysis = {
+  currentElo: number;
+  optimalElo: number;
+  eloDelta: number;
+  isOptimal: boolean;
+  playerImpacts: PlayerImpact[];
+  optimalXI: OptimalPlayer[];
+  recommendedSwaps: RecommendedSwap[];
 };
 
 export type MonteCarloResult = MonteCarloChampions | MonteCarloLeague;

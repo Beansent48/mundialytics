@@ -624,7 +624,21 @@
       "reachProbability": "P(reach round)",
       "positionDistribution": "Position distribution",
       "topChampions": "Most frequent champions",
-      "relegationRisk": "Relegation risk: {pct}%"
+      "relegationRisk": "Relegation risk: {pct}%",
+      "playerPerformance": "Individual performance",
+      "colPlayer": "Player",
+      "colGoals": "Goals",
+      "colAssists": "Assists",
+      "colApps": "Apps",
+      "colRating": "Rating",
+      "whatIf": "Optimal composition",
+      "alreadyOptimal": "Your XI is already the best possible with this squad",
+      "currentElo": "Current Elo",
+      "optimalElo": "Optimal Elo",
+      "eloDelta": "Gain",
+      "recommendedSwaps": "Recommended swaps",
+      "optimalXI": "Optimal XI",
+      "playerImpact": "Player impact"
     }
   },
   "profile": {
