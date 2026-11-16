@@ -1,43 +1,28 @@
 """SquadLab's live match: ninety-odd minutes played one at a time.
 
-WHAT IT REPLACES. A SquadLab match used to be a Poisson scoreline, decorated
-afterwards: goals at random minutes, no substitutions, penalties with no taker,
-a coin toss for a shoot-out. The team model's expected goals were right; the
-match around them was invented.
+The expected goals (and shots) still come from the team model; this module
+decides how they unfold. Every rule is measured from the big five's ESPN
+commentary (~4,000 matches, scripts/measure_squadlab_match_dynamics.py).
 
-WHAT IT DOES. The expected goals still come from the team model (Elo, and the
-squad's shape — see champions.py); this module only decides how they unfold,
-and every rule it plays by is a number measured on the big five's ESPN
-commentary (scripts/measure_squadlab_match_dynamics.py, ~3,100 matches):
+SHOT-FIRST GENERATION. Each minute draws a Poisson number of shots from the
+side's expected count, spread by the goal clock. Each shot resolves as:
 
-  goal clock       the scoring rate through the match, stoppage time included
-  game state       a side a goal up scores 7% less, a goal down 2% more
-  red cards        a side down a man scores 49% of its rate, the other 148%
-  penalties        ~10% of a side's expected goals arrive as an awarded
-                   penalty, scored 77% of the time — by the designated taker,
-                   at the population rate (taker conversion does not persist
-                   across seasons, r = −0.07)
-  own goals        2.9% of goals, put in mostly by defenders
-  assists          77% of open-play goals carry one
-  bookings         the side's expected yellows spread by the booking clock;
-                   a booked player's second-yellow hazard per minute
-  substitutions    whole real patterns (how many changes, when, whether one was
-                   forced by injury), chosen by the score at the hour
-  who comes off    by position, from 2026/27 starters (forwards 51%, keepers 1%)
+  goal (10%)  → attributed by the player's goal rate
+  saved (23%) → shot on target; may produce a corner (P = 0.26)
+  blocked (29%) → may produce a corner (P = 0.30)
+  missed (38%) → may produce a corner (P = 0.07)
 
-Who gets each event is read off the players' own per-90 rates
-(scripts/build_squadlab_card_rates.py): open-play goals by the goal rate,
-assists by the creation rate, bookings by the booking rate.
+P(goal | shot) is calibrated per side so total goals = lambda by
+construction: a stronger finisher squad converts a higher share.
 
-A substitution changes the side's strength when its manager has a real bench
-(the drafted squad): the change is measured against the TYPICAL starter-bench
-gap of real clubs, because the goal clock was measured on real matches that
-already contain real substitutions. A like-for-like change costs nothing
-extra; bringing on a bronze for an icon does.
+The remaining events are drawn on top of the shot chain:
 
-Expected goals are kept: the state and red-card factors move goals around a
-match, and a normalising constant (fitted once, by simulation) keeps the
-average total on the team model's number.
+  penalties        ~10% of expected goals, scored 77%
+  own goals        2.9% of goals (separate from shots)
+  corners          44% from shot outcomes + 56% base rate from play
+  bookings         yellows by the booking clock; second-yellow hazard
+  red cards        direct and second-yellow, by measured timing
+  substitutions    whole real patterns, chosen by the score at the hour
 """
 from __future__ import annotations
 
@@ -242,6 +227,58 @@ class Dynamics:
     def xg(self) -> dict:
         return self.raw["xg"]
 
+    # ── shot dynamics ──
+    @property
+    def shot_clock(self) -> list[float]:
+        s = self.raw.get("shots")
+        return s["clock_by_5min_bin"] if s else self.clock
+
+    def shot_intensity(self, base: int, add: int) -> float:
+        sc = self.shot_clock
+        if add and base == 45:
+            return sc[8] / (5.0 + self._mean_stoppage(1))
+        if add and base >= 90:
+            return sc[-1] / (1.0 + self._mean_stoppage(2))
+        return sc[(min(base, 90) - 1) // 5]
+
+    @property
+    def shot_outcomes(self) -> dict:
+        s = self.raw.get("shots")
+        if not s:
+            return {"missed": 0.377, "blocked": 0.287, "saved": 0.234, "goal": 0.102}
+        return s["outcomes"]
+
+    @property
+    def mean_shot_weight(self) -> float:
+        sc = self.shot_clock
+        w = 5.0 * sum(sc[:8]) + sc[8] + 5.0 * sum(sc[9:17]) + sc[17]
+        for h, idx in ((1, 8), (2, 17)):
+            mean_st = self._mean_stoppage(h)
+            w += mean_st * sc[idx] / (1.0 + mean_st) if mean_st else 0.0
+        return w
+
+    @property
+    def corner_after_blocked(self) -> float:
+        c = self.raw.get("corners")
+        return float(c["corner_after_blocked"]) if c else 0.296
+
+    @property
+    def corner_after_saved(self) -> float:
+        c = self.raw.get("corners")
+        return float(c["corner_after_saved"]) if c else 0.260
+
+    @property
+    def corner_after_missed(self) -> float:
+        c = self.raw.get("corners")
+        return float(c["corner_after_missed"]) if c else 0.069
+
+    @property
+    def corner_base_per_team(self) -> float:
+        c = self.raw.get("corners")
+        if not c:
+            return 2.7
+        return float(c["per_team_per_match"]) * (1.0 - float(c["from_shots_share"]))
+
     def injury_days(self, rng) -> int:
         """Days out, read off the Kaplan-Meier curve of 2026/27 injuries.
 
@@ -292,6 +329,9 @@ class _Team:
         self.gap = typical_gap
         self.pattern: list = []
         self.pens = 0
+        self.shots = 0
+        self.sot = 0
+        self.corners = 0
 
     # who is on
     def outfield(self) -> list[MatchPlayer]:
@@ -341,8 +381,11 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
     pen_conv = float(dyn.pen["conversion"])
     saved_share = float(dyn.pen["saved_share_of_failures"])
     og_share = dyn.own_goal_share
-    # the side's goal rate splits into open play, penalties and own goals FOR it
     open_share = max(1.0 - og_share - pen_awards_per_goal * pen_conv, 0.5)
+    so = dyn.shot_outcomes
+    ngs = float(so["saved"]) + float(so["blocked"]) + float(so["missed"])
+    p_saved_of_ng = float(so["saved"]) / ngs
+    p_blocked_of_ng = float(so["blocked"]) / ngs
 
     # every side starts from a real substitution pattern of a level game; at
     # the hour a side ahead or behind switches to one from its own bucket
@@ -429,15 +472,6 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
         t.entered[p.key] = ("gone", t.entered.get(p.key))
 
     def score_goal(t: _Team, order: float, label: str) -> None:
-        o = other[t.tag]
-        u = rng.random()
-        if u < og_share / (og_share + open_share) and o.on:
-            who = o.pick(rng, lambda p: dyn.own_goal_weight(p.position))
-            if who is not None:
-                o.lines[who.key].own_goals += 1
-                events.append(MatchEvent(label, order, "own_goal", t.tag, who.name))
-                t.goals += 1
-                return
         scorer = t.pick(rng, lambda p: p.g if p.position != "Goalkeeper" else 0.0)
         if scorer is None:
             return
@@ -488,12 +522,53 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
         for t in (H, A):
             if not t.on:
                 continue
-            r = rate_scale(t) * w
-            n_open = rng.poisson(r * (open_share + og_share))
-            for _ in range(int(n_open)):
-                score_goal(t, order, label)
-            if rng.random() < r * pen_awards_per_goal:
+            o = other[t.tag]
+            # shot-first: draw shots, resolve each; P(goal|shot) is per-side
+            # so total goals from shots = lam * open_share by construction
+            p_goal_this = t.side.lam * open_share / max(t.side.shots_lam, 1.0)
+            p_goal_this = min(p_goal_this, 0.35)
+            shot_rate = t.side.shots_lam * norm / W * w * (
+                dyn.state_factor(gd_of(t)) * dyn.red_factor(t.men, o.men)
+                * t.strength / o.strength)
+            n_shots = int(rng.poisson(shot_rate))
+            for _ in range(n_shots):
+                t.shots += 1
+                u = rng.random()
+                if u < p_goal_this:
+                    t.sot += 1
+                    score_goal(t, order, label)
+                else:
+                    v = rng.random()
+                    if v < p_saved_of_ng:
+                        t.sot += 1
+                        shooter = t.pick(rng, lambda p: p.sh if p.position != "Goalkeeper" else 0.1)
+                        if shooter:
+                            events.append(MatchEvent(label, order, "shot_saved", t.tag, shooter.name))
+                        if rng.random() < dyn.corner_after_saved:
+                            t.corners += 1
+                    elif v < p_saved_of_ng + p_blocked_of_ng:
+                        shooter = t.pick(rng, lambda p: p.sh if p.position != "Goalkeeper" else 0.1)
+                        if shooter:
+                            events.append(MatchEvent(label, order, "shot_blocked", t.tag, shooter.name))
+                        if rng.random() < dyn.corner_after_blocked:
+                            t.corners += 1
+                    else:
+                        if rng.random() < dyn.corner_after_missed:
+                            t.corners += 1
+            # own goals: separate from shots
+            og_rate = rate_scale(t) * w * og_share
+            if rng.poisson(og_rate) > 0:
+                who = o.pick(rng, lambda p: dyn.own_goal_weight(p.position))
+                if who is not None:
+                    o.lines[who.key].own_goals += 1
+                    events.append(MatchEvent(label, order, "own_goal", t.tag, who.name))
+                    t.goals += 1
+            # penalties
+            if rng.random() < rate_scale(t) * w * pen_awards_per_goal:
                 penalty(t, order, label)
+            # base corners (not from shots)
+            base_cr = dyn.corner_base_per_team * norm / W * w
+            t.corners += int(rng.poisson(base_cr))
         # bookings
         for t in (H, A):
             yl = t.side.yellows_lam * (1.0 / 3.0 / 30.0 if et else dyn.yellow_intensity(base, add))
@@ -610,26 +685,25 @@ def _shootout(H: _Team, A: _Team, rng, conv: float, saved_share: float) -> tuple
 
 
 def _stats(H: _Team, A: _Team, dyn: Dynamics, rng) -> dict[str, tuple]:
-    """Shots, shots on target, corners and xG consistent with what happened.
+    """Shots, shots on target, corners and xG counted from actual match events.
 
-    Shots are drawn from the side's expected count but never below what the
-    match needs (every non-own-goal goal was a shot on target, every saved or
-    missed penalty a shot); xG follows our own text-xG fit on goals and shots.
+    Shots and SOT are accumulated during the minute-by-minute simulation; xG
+    follows the text-xG fit applied to those real counts.
     """
     out: dict[str, list] = {"shots": [], "sot": [], "corners": [], "xg": [], "yellows": []}
     x = dyn.xg
     for t in (H, A):
-        goals_shot = sum(l.goals for l in t.lines.values())
         pens = t.pens
-        shots = max(int(rng.poisson(t.side.shots_lam)), goals_shot + max(pens - sum(l.pen_goals for l in t.lines.values()), 0))
-        sot = max(int(rng.binomial(shots, 0.34)), goals_shot)
+        pen_goals = sum(l.pen_goals for l in t.lines.values())
+        np_goals = sum(l.goals for l in t.lines.values()) - pen_goals
+        shots = t.shots + pens
+        sot = t.sot + pen_goals + max(pens - pen_goals, 0)
         sot = min(sot, shots)
-        np_goals = goals_shot - sum(l.pen_goals for l in t.lines.values())
         xg = (x["per_goal"] * np_goals + x["per_other_shot"] * max(shots - np_goals - pens, 0)
               + x["penalty_xg"] * pens + rng.normal(0.0, x["resid_sd"] * 0.5))
         out["shots"].append(shots)
         out["sot"].append(sot)
-        out["corners"].append(int(rng.poisson(t.side.corners_lam)))
+        out["corners"].append(t.corners)
         out["xg"].append(round(max(float(xg), 0.05), 2))
         out["yellows"].append(sum(l.yellows for l in t.lines.values()))
     return {k: tuple(v) for k, v in out.items()}
@@ -667,13 +741,16 @@ def compute_norm(dyn: Dynamics | None = None) -> float:
     def dummy(name):
         return [MatchPlayer(f"{name}{i}", f"{name}{i}", pos) for i, pos in enumerate(shape)]
 
+    shots = (13.0, 11.5)
     tot = 0.0
     global _NORM_OVERRIDE
     _NORM_OVERRIDE = 1.0
     try:
         for _ in range(n):
-            log = play_match(Side("h", dummy("h"), lam=lam[0]), Side("a", dummy("a"), lam=lam[1]),
-                             rng, dyn=dyn)
+            log = play_match(
+                Side("h", dummy("h"), lam=lam[0], shots_lam=shots[0]),
+                Side("a", dummy("a"), lam=lam[1], shots_lam=shots[1]),
+                rng, dyn=dyn)
             tot += log.home_goals + log.away_goals
     finally:
         _NORM_OVERRIDE = None

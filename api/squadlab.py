@@ -1157,11 +1157,12 @@ def _champ_fixture(m) -> dict:
 
 
 # live-engine event kind -> the client's event type (+ a detail it can print)
-_EVENT_TYPE = {
+_EVENT_TYPE: dict[str, tuple[str, str | None] | None] = {
     "goal": ("goal", None), "pen_goal": ("goal", "pen"), "own_goal": ("goal", "og"),
     "pen_saved": ("penMiss", "saved"), "pen_missed": ("penMiss", "missed"),
     "yellow": ("card", None), "second_yellow": ("red", "2y"), "red": ("red", None),
     "sub": ("sub", None), "injury": ("injury", None),
+    "shot_saved": None, "shot_blocked": None,
 }
 
 
@@ -1181,7 +1182,10 @@ def _champ_timeline(m) -> list[dict]:
         return []
     out = []
     for e in log.events:
-        typ, detail = _EVENT_TYPE.get(e.kind, (e.kind, None))
+        entry = _EVENT_TYPE.get(e.kind, (e.kind, None))
+        if entry is None:
+            continue
+        typ, detail = entry
         out.append({
             "type": typ,
             "detail": detail,
