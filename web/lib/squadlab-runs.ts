@@ -37,6 +37,7 @@ export type SavedRun = {
   rerolls: Record<string, number>;
   status: "in_progress" | "finished";
   result: unknown | null;
+  competition?: string | null;
   engineFingerprint: string | null;
   createdAt: string;
   updatedAt: string;

@@ -11,7 +11,7 @@ import {
 } from "react";
 
 import { tierOf } from "@/components/squadlab/player-card";
-import type { SquadPlayer, SquadSeason } from "@/lib/api";
+import type { SquadPlayer } from "@/lib/api";
 import { ordinal } from "@/lib/utils";
 
 const SIZE = 1080;
@@ -80,7 +80,14 @@ export function ShareCard({
   onClose,
 }: {
   squad: SquadPlayer[];
-  season: SquadSeason & { competitionName?: string };
+  season: {
+    teamName: string;
+    champion: string;
+    stage: string;
+    leaguePhaseRank?: number;
+    competitionName?: string;
+    scorers: { player: string; team: string; goals: number; assists: number; isSquad: boolean }[];
+  };
   squadLabel: string;
   onClose: () => void;
 }) {
@@ -111,7 +118,7 @@ export function ShareCard({
     `${squadLabel} · ${competitionName}`,
     t("summaryFinish", {
       stage: season.stage,
-      rank: ordinal(season.leaguePhaseRank, locale),
+      rank: ordinal(season.leaguePhaseRank ?? 0, locale),
     }),
     scorer ? t("summaryScorer", { player: scorer.player, goals: scorer.goals }) : "",
     "mundialytics",
@@ -173,7 +180,7 @@ export function ShareCard({
     ctx.fillStyle = "#99a1b3";
     ctx.fillText(
       t("finishLine", {
-        rank: ordinal(season.leaguePhaseRank, locale),
+        rank: ordinal(season.leaguePhaseRank ?? 0, locale),
         champion: championLabel,
       }),
       SIZE / 2,

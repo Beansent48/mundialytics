@@ -335,8 +335,8 @@ export function detectLeagueAchievements(
   if (allRuns) {
     const leagueComps = new Set<string>();
     for (const r of allRuns) {
-      const res = r.result as any;
-      if (res?.mode === "league" && res?.competition) {
+      const res = r.result as Record<string, unknown> | null;
+      if (res?.mode === "league" && typeof res?.competition === "string") {
         leagueComps.add(res.competition);
       }
     }

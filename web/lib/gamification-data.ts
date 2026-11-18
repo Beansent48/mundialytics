@@ -370,11 +370,11 @@ export async function processFinishedRun(
   const { level: newLevel } = await addXp(userId, totalXp);
 
   // 5. Count newly collected cards (cards with count=1 that were just inserted)
-  const albumCards = await getDb()
+  // Approximate — counts all cards with count=1, not just new ones.
+  await getDb()
     .select({ count: sql<number>`count(*)` })
     .from(userCard)
     .where(and(eq(userCard.userId, userId), eq(userCard.count, 1)));
-  // This is approximate — it counts all cards with count=1, not just new ones
 
   return {
     xpEarned: totalXp,

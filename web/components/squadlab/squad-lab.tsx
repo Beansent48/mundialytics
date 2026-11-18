@@ -318,14 +318,8 @@ export function SquadLab() {
   }, [pool, levelRewards]);
   const gatedMaxRerolls = Math.min(pool?.maxRerolls ?? 3, levelRewards.maxRerolls);
 
-  const slots = useMemo(
-    () => (pool ? buildSlots(pool.slots, pool.benchSlots) : []),
-    [pool],
-  );
-  const taken = useMemo(
-    () => new Set(Object.values(picks).map((p) => p.player)),
-    [picks],
-  );
+  const slots = pool ? buildSlots(pool.slots, pool.benchSlots) : [];
+  const taken = new Set(Object.values(picks).map((p) => p.player));
   const complete = slots.length > 0 && Object.keys(picks).length === slots.length;
 
   const candidates = useCallback(
@@ -486,7 +480,7 @@ export function SquadLab() {
     setPicks(saved.squad);
     setRerolls(saved.rerolls);
     try {
-      setPool(await api.squadPool(saved.mode === "league" ? (saved as any).competition : undefined));
+      setPool(await api.squadPool(saved.mode === "league" ? saved.competition ?? undefined : undefined));
     } catch {
       setPoolError(true);
     }

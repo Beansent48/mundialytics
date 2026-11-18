@@ -190,7 +190,7 @@ export function LeagueSeasonView({
       {done && sharing ? (
         <ShareCard
           squad={squad}
-          season={season as any}
+          season={season}
           squadLabel={squadLabel}
           onClose={() => setSharing(false)}
         />
