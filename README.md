@@ -393,7 +393,7 @@ silently to index 0. Price an international as `"unknown"` and it is scored with
 AFC Asian Cup parameters — λ near 3.0 and the home/away order inverted. Always
 pass the real competition.
 
-Team props are the weakest of the measured rows and the README should say so.
+Team props are the weakest of the measured rows.
 They do beat the league base rate, but by less: log-loss deltas run from −0.056
 on fouls down to −0.003 on corners, and the calibration error, 0.007 to 0.048,
 is several times the player-props level. **Corners specifically are marginal** —
@@ -635,6 +635,7 @@ src/mundialytics/
 ├── evaluation/         RPS, Brier, log loss, walk-forward backtesting
 ├── serving/            logged predictions, provenance, debutant prices,
 │                       track record, scorer race, SquadLab rosters
+├── artifacts/          model bundle serialisation (fit cache for cold start)
 ├── betting/            odds contract, de-vig, value, pick policy (dormant)
 ├── data/               canonical schema, provider adapters, loaders
 ├── data_quality/       team registry, entity guardrails, leakage-safe snapshots
@@ -646,9 +647,9 @@ src/mundialytics/
 api/                    FastAPI service the web app reads from, and its Dockerfile
 web/                    Next.js front end — see web/README.md
 docker/                 Caddyfile (the reverse proxy) and the nightly pg_dump
-scripts/                ~200 CLI entry points — see scripts/README.md
-tests/                  668 tests green on a clean checkout; 127 more
-                        skip unless the local dataset is built
+scripts/                ~280 CLI entry points — see scripts/README.md
+tests/                  754 tests (about 40 skip unless the local dataset
+                        is built)
 docs/                   README figures, one current note, archived history
 ```
 
@@ -658,8 +659,9 @@ Research project, run in **paper mode** — no money has ever been staked on it.
 Everything comes from free public sources: football-data.co.uk (results and
 odds), Understat and StatsBomb Open Data (historical xG and events), ESPN's
 public JSON (current-season fixtures, per-player match stats, and the match
-commentary our own xG is read from), Sofascore (the first weeks of 2026/27's xG,
-until it began refusing requests), ClubElo and FBref.
+commentary our own xG is read from), Transfermarkt (squad market values, read
+weekly), Sofascore (the first weeks of 2026/27's xG, until it began refusing
+requests), ClubElo and FBref.
 
 No source is trusted alone. Every one of them has failed at some point — an API
 returning 502 for days, a season never published, a scraper stalling mid-fetch,
