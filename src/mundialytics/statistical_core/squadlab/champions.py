@@ -403,8 +403,10 @@ class ChampionsMatch:
     shots: tuple[int, int] = (0, 0)
     sot: tuple[int, int] = (0, 0)
     corners: tuple[int, int] = (0, 0)
+    fouls: tuple[int, int] = (0, 0)
     yellows: tuple[int, int] = (0, 0)
     xg: tuple[float, float] = (0.0, 0.0)
+    possession: tuple[float, float] = (50.0, 50.0)
     # the live log of your own matches: every event, minute by minute
     log: object = None
     date: object = None
@@ -555,7 +557,7 @@ class ChampionsRun:
 
         def lam_of(mk, side):
             v = ev.get(mk)
-            return float(v[f"lambda_{side}"]) if v else {"yellows": 2.0, "shots": 12.0, "corners": 5.0}[mk]
+            return float(v[f"lambda_{side}"]) if v else {"yellows": 2.0, "shots": 12.0, "corners": 5.0, "fouls": 11.0}[mk]
 
         slope = self.scale.slope_mean if self.scale is not None else 0.0
         mine = Side(self.squad_name, [from_card(c) for c in xi_cards], [from_card(c) for c in bench_cards],
@@ -569,6 +571,7 @@ class ChampionsRun:
             side.yellows_lam = lam_of("yellows", tag)
             side.shots_lam = lam_of("shots", tag)
             side.corners_lam = lam_of("corners", tag)
+            side.fouls_lam = lam_of("fouls", tag)
 
         log = play_match(H, A, self.rng, dyn=self.dyn, neutral=neutral,
                          extra_time_if_level=decide, shootout_if_level=decide,
@@ -598,6 +601,8 @@ class ChampionsRun:
         m.ratings = log.lines[squad_tag]
         m.shots, m.sot = log.stats["shots"], log.stats["sot"]
         m.corners, m.yellows, m.xg = log.stats["corners"], log.stats["yellows"], log.stats["xg"]
+        m.fouls = log.stats.get("fouls", (0, 0))
+        m.possession = log.stats.get("possession", (50.0, 50.0))
         if log.shootout:
             m.note = "pen."
         elif log.extra_time:

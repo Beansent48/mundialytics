@@ -1200,11 +1200,10 @@ def _champ_timeline(m) -> list[dict]:
     return out
 
 
-# The figures the live match produced, in reading order. No fouls: the
-# European event calibration does not carry them.
 _CHAMP_STAT_KEYS = [
     ("xg", "xg"), ("shots", "shots"), ("sot", "sot"),
-    ("corners", "corners"), ("cards", "yellows"),
+    ("corners", "corners"), ("fouls", "fouls"), ("cards", "yellows"),
+    ("possession", "possession"),
 ]
 
 

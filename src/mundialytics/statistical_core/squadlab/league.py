@@ -265,7 +265,7 @@ class LeagueRun:
             v = ev.get(mk)
             if v:
                 return float(v[0]) if side == "home" else float(v[1])
-            return {"yellow_cards_for": 2.0, "shots_for": 12.0, "corners_for": 5.0}.get(mk, 2.0)
+            return {"yellow_cards_for": 2.0, "shots_for": 12.0, "corners_for": 5.0, "fouls_for": 11.0}.get(mk, 2.0)
 
         mine = Side(
             self.squad_name,
@@ -282,6 +282,7 @@ class LeagueRun:
             side.yellows_lam = lam_of("yellow_cards_for", tag)
             side.shots_lam = lam_of("shots_for", tag)
             side.corners_lam = lam_of("corners_for", tag)
+            side.fouls_lam = lam_of("fouls_for", tag)
 
         log = play_match(
             H, A, self.rng, dyn=self.dyn, neutral=False,
@@ -319,6 +320,8 @@ class LeagueRun:
         m.corners = log.stats["corners"]
         m.yellows = log.stats["yellows"]
         m.xg = log.stats["xg"]
+        m.fouls = log.stats.get("fouls", (0, 0))
+        m.possession = log.stats.get("possession", (50.0, 50.0))
 
         # SquadState: update bans/injuries with league-specific discipline.
         self._after_match_league(log, squad_tag, when)

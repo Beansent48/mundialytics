@@ -4796,7 +4796,7 @@
     "penalty_xg": 0.76,
     "n": 500
   },
-  "norm": 1.01659,
+  "norm": 1.00564,
   "note_fixture": "Trimmed copy of data/processed/squadlab_match_dynamics.json for CI (80 substitution patterns per bucket). Regenerate with scripts/measure_squadlab_match_dynamics.py and trim.",
   "shots": {
     "note": "Measured from 4003 ESPN commentary matches.",

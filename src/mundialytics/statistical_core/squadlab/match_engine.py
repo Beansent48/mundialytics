@@ -20,14 +20,16 @@ The remaining events are drawn on top of the shot chain:
   penalties        ~10% of expected goals, scored 77%
   own goals        2.9% of goals (separate from shots)
   corners          44% from shot outcomes + 56% base rate from play
-  bookings         yellows by the booking clock; second-yellow hazard
+  fouls            Poisson by the foul clock; each foul → P(yellow) = yellows/fouls
   red cards        direct and second-yellow, by measured timing
   substitutions    whole real patterns, chosen by the score at the hour
+  possession       derived from shot/corner/foul balance
 """
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+import functools
 from functools import lru_cache
 from pathlib import Path
 
@@ -65,6 +67,7 @@ class Side:
     yellows_lam: float = 2.0
     shots_lam: float = 12.0
     corners_lam: float = 5.0
+    fouls_lam: float = 11.0
     # Elo per point of the eleven's mean overall (the squad line's slope); 0 means
     # a substitution never changes this side's strength (the rest of the field,
     # whose strength comes from Elo alone)
@@ -202,7 +205,33 @@ class Dynamics:
 
     @property
     def second_yellow_hazard(self) -> float:
-        return float(self.raw["yellows"]["second_yellow_hazard_per_min"])
+        raw = float(self.raw["yellows"]["second_yellow_hazard_per_min"])
+        return raw * self._booking_exposure_ratio
+
+    @functools.cached_property
+    def _booking_exposure_ratio(self) -> float:
+        """Scale the per-min hazard for foul-clock booking timing.
+
+        The measured hazard was calibrated against yellow-clock bookings
+        (back-loaded).  With foul-first bookings (more uniform), players
+        are booked earlier and face more remaining minutes of exposure.
+        The ratio of expected-remaining-minutes corrects for this.
+        """
+        yc = self.raw["yellows"]["by_5min_share"]
+        st2 = self._mean_stoppage(2)
+        match_end = 90.0 + st2
+        exp_yc = sum(
+            self.yellow_intensity(m, 0) * (match_end - m)
+            for m in range(1, 91)
+        )
+        total_fi = exp_fc = 0.0
+        for m in range(1, 91):
+            fi = self.foul_intensity(m, 0)
+            total_fi += fi
+            exp_fc += fi * (match_end - m)
+        if total_fi > 0:
+            exp_fc /= total_fi
+        return exp_yc / max(exp_fc, 0.01)
 
     def direct_red_rate(self, base: int) -> float:
         """Direct reds per minute for one side, following the measured timing."""
@@ -226,6 +255,29 @@ class Dynamics:
     @property
     def xg(self) -> dict:
         return self.raw["xg"]
+
+    # ── foul dynamics ──
+    @property
+    def foul_clock(self) -> list[float]:
+        f = self.raw.get("fouls")
+        return f["clock_by_5min_bin"] if f else self.clock
+
+    def foul_intensity(self, base: int, add: int) -> float:
+        fc = self.foul_clock
+        if add and base == 45:
+            return fc[8] / (5.0 + self._mean_stoppage(1))
+        if add and base >= 90:
+            return fc[-1] / (1.0 + self._mean_stoppage(2))
+        return fc[(min(base, 90) - 1) // 5]
+
+    @property
+    def mean_foul_weight(self) -> float:
+        fc = self.foul_clock
+        w = 5.0 * sum(fc)
+        for h, div, idx in ((1, 5.0, 8), (2, 1.0, 17)):
+            mean_st = self._mean_stoppage(h)
+            w += mean_st * fc[idx] / (div + mean_st) if mean_st else 0.0
+        return w
 
     # ── shot dynamics ──
     @property
@@ -251,10 +303,10 @@ class Dynamics:
     @property
     def mean_shot_weight(self) -> float:
         sc = self.shot_clock
-        w = 5.0 * sum(sc[:8]) + sc[8] + 5.0 * sum(sc[9:17]) + sc[17]
-        for h, idx in ((1, 8), (2, 17)):
+        w = 5.0 * sum(sc)
+        for h, div, idx in ((1, 5.0, 8), (2, 1.0, 17)):
             mean_st = self._mean_stoppage(h)
-            w += mean_st * sc[idx] / (1.0 + mean_st) if mean_st else 0.0
+            w += mean_st * sc[idx] / (div + mean_st) if mean_st else 0.0
         return w
 
     @property
@@ -332,6 +384,7 @@ class _Team:
         self.shots = 0
         self.sot = 0
         self.corners = 0
+        self.fouls = 0
 
     # who is on
     def outfield(self) -> list[MatchPlayer]:
@@ -375,6 +428,8 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
     events: list[MatchEvent] = []
     tl = _timeline(dyn, rng)
     W = dyn.mean_weight
+    SW = dyn.mean_shot_weight
+    FW = dyn.mean_foul_weight
     norm = (_NORM_OVERRIDE if _NORM_OVERRIDE is not None
             else float(dyn.raw.get("norm") or _norm_constant()))
     pen_awards_per_goal = dyn.pen["awarded_per_team_match"] / max(1e-9, _league_goals_per_team(dyn))
@@ -519,6 +574,8 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
             for lab, inj in [e for e in t.pattern if _due(e[0]) == label]:
                 do_sub(t, order, label, bool(inj))
         w = 1.0 if et else dyn.intensity(base, add)
+        sw = SW / 90.0 if et else dyn.shot_intensity(base, add)
+        fw = FW / 90.0 if et else dyn.foul_intensity(base, add)
         for t in (H, A):
             if not t.on:
                 continue
@@ -527,7 +584,7 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
             # so total goals from shots = lam * open_share by construction
             p_goal_this = t.side.lam * open_share / max(t.side.shots_lam, 1.0)
             p_goal_this = min(p_goal_this, 0.35)
-            shot_rate = t.side.shots_lam * norm / W * w * (
+            shot_rate = t.side.shots_lam * norm / SW * sw * (
                 dyn.state_factor(gd_of(t)) * dyn.red_factor(t.men, o.men)
                 * t.strength / o.strength)
             n_shots = int(rng.poisson(shot_rate))
@@ -569,17 +626,21 @@ def play_match(home: Side, away: Side, rng: np.random.Generator, *,
             # base corners (not from shots)
             base_cr = dyn.corner_base_per_team * norm / W * w
             t.corners += int(rng.poisson(base_cr))
-        # bookings
+        # foul-first bookings: fouls are Poisson, each foul may produce a yellow
         for t in (H, A):
-            yl = t.side.yellows_lam * (1.0 / 3.0 / 30.0 if et else dyn.yellow_intensity(base, add))
-            if rng.random() < yl:
-                fresh = [p for p in t.on if p.key not in t.booked]
-                if fresh:
-                    w_ = np.array([max(p.yc, 1e-3) for p in fresh])
-                    p = fresh[int(rng.choice(len(fresh), p=w_ / w_.sum()))]
-                    t.booked.add(p.key)
-                    t.lines[p.key].yellows += 1
-                    events.append(MatchEvent(label, order, "yellow", t.tag, p.name))
+            foul_rate = t.side.fouls_lam / FW * fw
+            n_fouls = int(rng.poisson(foul_rate))
+            t.fouls += n_fouls
+            p_yellow = t.side.yellows_lam / max(t.side.fouls_lam, 1.0)
+            for _ in range(n_fouls):
+                if rng.random() < p_yellow:
+                    fresh = [p for p in t.on if p.key not in t.booked]
+                    if fresh:
+                        w_ = np.array([max(p.yc, 1e-3) for p in fresh])
+                        p = fresh[int(rng.choice(len(fresh), p=w_ / w_.sum()))]
+                        t.booked.add(p.key)
+                        t.lines[p.key].yellows += 1
+                        events.append(MatchEvent(label, order, "yellow", t.tag, p.name))
             for p in [q for q in t.on if q.key in t.booked]:
                 if rng.random() < dyn.second_yellow_hazard:
                     t.lines[p.key].yellows += 1
@@ -685,12 +746,16 @@ def _shootout(H: _Team, A: _Team, rng, conv: float, saved_share: float) -> tuple
 
 
 def _stats(H: _Team, A: _Team, dyn: Dynamics, rng) -> dict[str, tuple]:
-    """Shots, shots on target, corners and xG counted from actual match events.
+    """Shots, shots on target, corners, fouls, possession and xG from the match.
 
-    Shots and SOT are accumulated during the minute-by-minute simulation; xG
-    follows the text-xG fit applied to those real counts.
+    Shots, SOT and fouls are accumulated during the minute-by-minute simulation;
+    xG follows the text-xG fit applied to those real counts; possession is a
+    heuristic derived from the action counts.
     """
-    out: dict[str, list] = {"shots": [], "sot": [], "corners": [], "xg": [], "yellows": []}
+    out: dict[str, list] = {
+        "shots": [], "sot": [], "corners": [], "xg": [],
+        "yellows": [], "fouls": [], "possession": [],
+    }
     x = dyn.xg
     for t in (H, A):
         pens = t.pens
@@ -706,6 +771,16 @@ def _stats(H: _Team, A: _Team, dyn: Dynamics, rng) -> dict[str, tuple]:
         out["corners"].append(t.corners)
         out["xg"].append(round(max(float(xg), 0.05), 2))
         out["yellows"].append(sum(l.yellows for l in t.lines.values()))
+        out["fouls"].append(t.fouls)
+    sh, sa = out["shots"]
+    crh, cra = out["corners"]
+    flh, fla = out["fouls"]
+    poss_h = (0.50
+              + 0.008 * (sh - sa)
+              + 0.008 * (crh - cra)
+              - 0.004 * (flh - fla))
+    poss_h = float(np.clip(poss_h, 0.25, 0.75))
+    out["possession"] = [round(poss_h * 100, 1), round((1.0 - poss_h) * 100, 1)]
     return {k: tuple(v) for k, v in out.items()}
 
 
