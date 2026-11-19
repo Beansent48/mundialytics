@@ -296,6 +296,65 @@ Recorded because negative results are the expensive part of the project:
   table, price a hypothetical squad, quantify the uncertainty in a fixture —
   shipped with a measured statement of how far to trust it.
 
+## SquadLab
+
+A football sandbox built on top of the prediction engine. Open packs, draft a
+squad, pick a formation and play a full Champions League — or simulate any league
+season match by match.
+
+### The match engine
+
+Every match is played **minute by minute**, with rules measured on ~3,100 matches
+of ESPN commentary (`scripts/measure_squadlab_match_dynamics.py`):
+
+- **Shot-first generation.** Each minute draws a Poisson number of shots from the
+  side's expected count, spread by the measured shot clock. Each shot resolves as
+  goal (10%), saved (23%), blocked (29%) or missed (38%); the goal share is
+  calibrated per side so total goals = λ by construction. Saved and blocked shots
+  can produce corners at measured rates.
+- **Foul-first bookings.** Fouls are Poisson events drawn from the foul clock;
+  each foul produces a yellow card with P = yellows / fouls. The timing of
+  yellows matches the observed distribution (heavily back-loaded: 72% of yellows
+  fall in the second half), while second yellows and direct reds follow their own
+  measured hazard rates.
+- **Game state.** A side that is trailing shoots more and concedes less (and vice
+  versa), following the measured intensity curve by goal difference. Down to ten
+  men, a side scores 49% of its rate and concedes 148%.
+- **Derived possession.** A heuristic from the shot, corner and foul balance of
+  each match, so possession is a consequence of play rather than an input.
+- **Penalties** (~10% of expected goals), **own goals** (2.9% of goals),
+  **substitutions** (whole real patterns chosen by score at the hour), and
+  **injuries** calibrated on 2026/27 durations.
+
+The engine's strength-to-lambda calibration is precise on attack (R² = 0.68) and
+modest on defence (R² = 0.35): public stats support a narrower defensive spread,
+so closing that gap needs better data rather than a better fit. Reasoning in
+[`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
+
+### Draft mode
+
+Open tiered packs, draft an eleven from **ACTUAL / PRIME / ICON** player cards,
+pick one of six formations, and play the **real Champions League** with your side
+dropped into the actual bracket. Each slot is dealt by rolling card kind and then
+tier (primes ~10%, icons ~2%, three re-rolls), and the other 35 clubs field their
+real current squads, so the tournament's top scorers are real players rather than
+only your own. Card axes are mapped per position-quantile (attack, defence and
+creation live on different scales).
+
+### League season simulation
+
+Simulate any Big 5 season from the current table: standings, expected points,
+title / top-4 / relegation probabilities, all from 10,000 Monte Carlo runs in
+0.17 seconds. Matches are resolved by the same minute-by-minute engine, with a
+seven-man bench covering bans (UEFA's accumulation rules) and injuries.
+
+### Historical Champions League
+
+The all-time mode rates every side by its real ClubElo at the end of that season.
+The roster catalogue is built from season, career and curated files, with three
+StatsBomb coverage-bias fixes (roster-vs-quality split, axis imputation, curated
+legend XIs for sides like Ajax '95 and Porto '04).
+
 ## Known limitations
 
 - Goals are modelled as **independent** Poisson with the Dixon-Coles correction
@@ -405,7 +464,7 @@ better than the base rate.
 These emit no probabilities of their own, so there is nothing to score the way
 the rows above are scored. They run, and the test suite covers them. Player
 ratings are the one partial exception: they are validated indirectly, through
-the SquadLab calibration reported under In progress.
+the SquadLab calibration reported in its own section.
 
 | Area | What works |
 |---|---|
@@ -425,26 +484,9 @@ open, kept because the benchmark above depends on it.
 
 Listed because half-finished work is normal and hiding it helps nobody.
 
-- **SquadLab** — now a playable draft, not just a simulator. Open tiered packs,
-  draft an eleven from ACTUAL / PRIME / ICON player cards, pick a formation, and
-  play the **real Champions League** with your side dropped into an actual
-  bracket, resolved match by match on the same engine. Each slot is dealt by
-  rolling card kind and then tier (primes ~10%, icons ~2%, three re-rolls), and
-  the other 35 clubs field their real current squads, so the tournament's top
-  scorers are real players rather than only your own. Your matches are played
-  **minute by minute**, by rules measured on ~3,100 matches of ESPN commentary:
-  the goal clock, the game-state and red-card effects (down to ten, a side
-  scores 49% of its rate), real substitution patterns, penalties and their
-  takers, and injuries that last as long as 2026/27's did. A seven-man bench
-  covers bans (UEFA's accumulation rules) and injuries. The all-time Champions
-  League rates every side by its real ClubElo at the end of that season. The
-  card axes are mapped per position-quantile (attack/defence/creation live on
-  different scales), and the squad's rating maps onto team strength through a
-  calibration that is precise on attack (R² = 0.68) and modest on defence
-  (R² = 0.35): the public stats support a narrower defensive spread than an
-  attacking one, so closing that gap needs better data rather than a better fit.
-  Reasoning in
-  [`calibration_constants.py`](src/mundialytics/statistical_core/squadlab/calibration_constants.py).
+- **SquadLab** — described in its own section above. What is still in progress:
+  the defensive calibration gap (R² = 0.35 vs 0.68 on attack), which needs
+  richer data rather than a better fit.
 - **Competition layer** — leagues are done. Other tournament formats, and props
   aggregated over a whole competition, are not.
 - **European fixture coverage** — this season's 108 participants are all
@@ -648,7 +690,7 @@ api/                    FastAPI service the web app reads from, and its Dockerfi
 web/                    Next.js front end — see web/README.md
 docker/                 Caddyfile (the reverse proxy) and the nightly pg_dump
 scripts/                ~280 CLI entry points — see scripts/README.md
-tests/                  754 tests (about 40 skip unless the local dataset
+tests/                  795 tests (about 40 skip unless the local dataset
                         is built)
 docs/                   README figures, one current note, archived history
 ```
