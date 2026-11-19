@@ -51,12 +51,12 @@ SIDE_LINES = {"corners": [3.5, 4.5, 5.5], "yellows": [1.5, 2.5], "shots": [9.5, 
 BOOKING_LINES = [30.5, 40.5, 50.5]
 WINDOWS = (5, 10, 19)
 REF_MARKETS = {"yellows": "ref_yc", "fouls": "ref_foul"}
-NO_PLATT = {"yellows"}          # already calibrated; Platt hurt it
-LEAGUE_DISP = {"fouls", "yellows"}  # per-league NB dispersion (fouls 5/5; yellows 4/5-5/5 on central lines)
+NO_PLATT: set[str] = set()       # yellows was here; now per-league disp makes Platt help 3.5/4.5 (4/5)
+LEAGUE_DISP = {"fouls", "yellows", "corners"}  # per-league NB dispersion (fouls 5/5; yellows 4/5-5/5; corners 7.5/8.5 5/5)
 PLATT_FROM_SEASON = "2016-2017"
 # round-5 upgrades (joint-validated per market, 5/5 folds vs previous config):
 EWM_HL = {"corners": 12}        # corners want LONG memory (12 > 8 > 5 > 3); others 5
-STAKES_MARKETS = {"yellows", "fouls", "sot"}  # walk-forward standings features (sot 4/5-5/5 all lines)
+STAKES_MARKETS = {"yellows", "fouls", "sot", "shots"}  # walk-forward standings features (sot 4/5-5/5; shots 22.5/24.5/26.5 4/5)
 # MLE strengths prior: corners/yellows only — for shots/sot the tiny totals gain
 # (+0.0003) was offset by a side-lines loss (-0.0005); fouls was a wash
 ADM_W = {"corners": 0.3, "yellows": 0.3}
