@@ -155,6 +155,16 @@ try {
 # pushes to a remote unattended. Skipped after exit 1, which rolled the data
 # back and left nothing new to record.
 if ($code -eq 0 -or $code -eq 2) {
+    # Generate the slim JSON the Telegram bot reads (same logic as the GH Actions
+    # workflow step "Generar predictions_latest.json"). Runs inline so a local
+    # update also refreshes the bot data when pushed.
+    try {
+        & $python -I (Join-Path $root 'scripts\generate_bot_json.py')
+        if ($LASTEXITCODE -ne 0) { Write-Warning "bot JSON generation exited $LASTEXITCODE" }
+    } catch {
+        Write-Warning "bot JSON not generated: $($_.Exception.Message)"
+    }
+
     try {
         & $python (Join-Path $root 'scripts\commit_track_record.py')
         if ($LASTEXITCODE -ne 0) { Write-Warning "track record commit exited $LASTEXITCODE" }

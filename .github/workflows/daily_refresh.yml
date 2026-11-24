@@ -130,46 +130,7 @@ jobs:
       # download it on the free plan. This extracts ±3 days into a tiny
       # JSON file the bot reads instead.
       - name: Generar predictions_latest.json
-        run: |
-          python -I -c "
-          import csv, json, pathlib
-          from datetime import date, timedelta
-          log = pathlib.Path('data/processed/logs/predictions_log.csv')
-          if not log.exists():
-              print('no log yet'); raise SystemExit(0)
-          today = date.today()
-          window = {str(today + timedelta(d)) for d in range(-3, 4)}
-          keep = {'fecha','home','away','mercado','linea','prob','seleccion',
-                  'lambda_home','lambda_away','p_home','p_draw','p_away','ambito'}
-          mkts = {'1X2','Goles','corners','yellows'}
-          rows = []
-          with open(log, encoding='utf-8') as f:
-              for r in csv.DictReader(f):
-                  if r.get('fecha') in window and r.get('mercado') in mkts:
-                      rows.append({k: r[k] for k in keep if k in r})
-          # Embed actual results from the foundation
-          results = {}
-          for fn in ['foundation_big5_multi_season.csv', 'foundation_second_divisions.csv']:
-              fp = pathlib.Path('data/processed') / fn
-              if not fp.exists(): continue
-              with open(fp, encoding='utf-8') as f:
-                  for r in csv.DictReader(f):
-                      d = r.get('date','')
-                      if d in window and r.get('home_goals',''):
-                          key = r['home_team'].lower() + '|' + r['away_team'].lower()
-                          results[key] = {
-                              'hg': int(float(r['home_goals'])),
-                              'ag': int(float(r['away_goals'])),
-                              'hc': r.get('home_corners',''),
-                              'ac': r.get('away_corners',''),
-                              'hy': r.get('home_yellow_cards',''),
-                              'ay': r.get('away_yellow_cards',''),
-                          }
-          out = log.parent / 'predictions_latest.json'
-          out.write_text(json.dumps({'predictions': rows, 'results': results},
-                         ensure_ascii=False), encoding='utf-8')
-          print(f'{len(rows)} preds, {len(results)} results -> {out} ({out.stat().st_size} bytes)')
-          "
+        run: python -I scripts/generate_bot_json.py
 
       # ── Commit the track record ───────────────────────────────────────
       # Only the prediction log and drift report — the same two files
