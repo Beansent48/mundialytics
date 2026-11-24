@@ -125,6 +125,33 @@ jobs:
             fi
           }
 
+      # ── Extract a small window for the Telegram bot ──────────────────
+      # The full prediction log is 24 MB+; the Cloudflare Worker can't
+      # download it on the free plan. This extracts ±3 days into a tiny
+      # JSON file the bot reads instead.
+      - name: Generar predictions_latest.json
+        run: |
+          python -I -c "
+          import csv, json, pathlib
+          from datetime import date, timedelta
+          log = pathlib.Path('data/processed/logs/predictions_log.csv')
+          if not log.exists():
+              print('no log yet'); raise SystemExit(0)
+          today = date.today()
+          window = {str(today + timedelta(d)) for d in range(-3, 4)}
+          keep = {'fecha','home','away','mercado','linea','prob','seleccion',
+                  'lambda_home','lambda_away','p_home','p_draw','p_away'}
+          mkts = {'1X2','Goles','corners','yellows'}
+          rows = []
+          with open(log, encoding='utf-8') as f:
+              for r in csv.DictReader(f):
+                  if r.get('fecha') in window and r.get('mercado') in mkts:
+                      rows.append({k: r[k] for k in keep if k in r})
+          out = log.parent / 'predictions_latest.json'
+          out.write_text(json.dumps(rows, ensure_ascii=False), encoding='utf-8')
+          print(f'{len(rows)} rows -> {out} ({out.stat().st_size} bytes)')
+          "
+
       # ── Commit the track record ───────────────────────────────────────
       # Only the prediction log and drift report — the same two files
       # that run_update.ps1 commits locally. Everything else persists in
@@ -135,6 +162,7 @@ jobs:
           git config user.email "mundialytics-bot@users.noreply.github.com"
           for f in \
             data/processed/logs/predictions_log.csv \
+            data/processed/logs/predictions_latest.json \
             data/processed/logs/market_drift_report.json \
             data/processed/logs/morning_pass_log.csv \
             data/processed/logs/lineup_pass_log.csv \
