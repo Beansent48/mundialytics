@@ -265,10 +265,23 @@ def augment_foundation_with_xg() -> None:
     cols = ["date", "home_team_fd", "away_team_fd"] + xg_cols
     # Understat carries the history; Sofascore and ESPN text xG carry the current season
     # (Understat froze 2026-05-24). In that order, so real xG wins any overlap.
-    sources = [pd.read_csv(TEAM_MATCH)[cols]]
-    for extra in (SOFA_TEAM_MATCH, TEXT_TEAM_MATCH):
-        if extra.exists():
-            sources.append(_on_history_level(pd.read_csv(extra), extra)[cols])
+    # All sources are optional: on a fresh GitHub Actions cache none of the xG
+    # files exist yet, and the foundation must still build (without xG columns).
+    sources = []
+    for src in (TEAM_MATCH, SOFA_TEAM_MATCH, TEXT_TEAM_MATCH):
+        if not src.exists():
+            continue
+        df_src = pd.read_csv(src)
+        missing = [c for c in cols if c not in df_src.columns]
+        if missing:
+            continue
+        if src in (SOFA_TEAM_MATCH,):
+            df_src = _on_history_level(df_src, src)
+        sources.append(df_src[cols])
+    if not sources:
+        print("    no xG sources found — foundation built without xG columns", flush=True)
+        atomic_to_csv(found, FOUND)
+        return
     tm = pd.concat(sources, ignore_index=True)
     tm = tm.rename(columns={"home_team_fd": "home_team", "away_team_fd": "away_team"})
     tm["date"] = pd.to_datetime(tm["date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -317,7 +330,8 @@ def main() -> None:
     else:
         print("\n=== 2/8 Understat SKIPPED ===", flush=True)
 
-    run_step("3/8 Understat xG aggregation", [PY, "scripts/build_understat_xg_matches.py"])
+    run_step("3/8 Understat xG aggregation", [PY, "scripts/build_understat_xg_matches.py"],
+             optional=not SHOTS_CSV.exists())
 
     # Live current-season xG from Sofascore (Understat froze 2026-05-24). Optional:
     # a Sofascore outage must not break the daily refresh -- the augment step falls
