@@ -1,0 +1,163 @@
+# Daily pipeline: keeps the data, models and track record fresh without the PC.
+#
+# Runs at 08:00 UTC every day (~10:00 Madrid in winter, ~10:00 CEST in summer).
+# GitHub Actions cron has no timezone support; ±1 h from DST is acceptable —
+# the pipeline only needs to finish before the first kick-off (~18:30 CET).
+#
+# The data tree persists in the Actions cache (rolling key pattern — same as
+# PropsAI). The prediction log and drift report are committed to git so the
+# track record is part of the repo history.
+#
+# Public repo → unlimited free minutes on ubuntu-latest.
+
+name: Mundialytics diario
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 10:00 Madrid (UTC+2 verano, UTC+1 invierno)
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Incluir --full (walk-forward cache, ratings, cartas)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: mundialytics-diario
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          pip install --quiet -r requirements.txt
+          pip install --quiet beautifulsoup4 lxml
+          pip install --quiet -e .
+
+      # ── Persistent data between runs ──────────────────────────────────
+      # The key changes every run so the cache is always overwritten with
+      # the freshest data. restore-keys finds the previous run's cache.
+      # Total size: ~530 MB without Transfermarkt, ~1.4 GB with it —
+      # well within the 10 GB free tier.
+      - name: Restaurar datos
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/football_data
+            data/external/advanced
+            data/external/clubelo
+            data/external/uefa
+            data/external/xg
+            data/processed
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+          # Excludes data/external/transfermarkt (881 MB, optional) and
+          # data/external/wyscout_2017_18 (922 MB, one-time study) to
+          # stay well within the 10 GB free tier.
+
+      # ── Bootstrap: first run only ─────────────────────────────────────
+      # The first run has no cache, so the foundation cannot build without
+      # the historical CSVs (26 seasons × 5 leagues). This step downloads
+      # them from football-data.co.uk (~40 MB). Subsequent runs skip it
+      # because the cache provides the data.
+      #
+      # The Understat xG history (~223 MB) cannot be re-downloaded (the
+      # site has been dead since 2026-05). On the first run the foundation
+      # builds WITHOUT xG and the models work with slightly less signal.
+      # To seed the full xG history, trigger one workflow_dispatch AFTER
+      # running: scripts/seed_actions_cache.py (see docs/VPS_DEPLOYMENT_RUNBOOK.md)
+      - name: Bootstrap historical data (first run only)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          echo "No cache found — downloading 26 seasons of historical data..."
+          python scripts/download_football_data_stats.py \
+            --mode csv \
+            --leagues E0 SP1 I1 D1 F1 \
+            --seasons \
+              0001 0102 0203 0304 0405 0506 0607 0708 0809 0910 \
+              1011 1112 1213 1314 1415 1516 1617 1718 1819 1920 \
+              2021 2122 2223 2324 2425 2526
+
+      # ── Decide --full (Mondays or manual) ─────────────────────────────
+      - name: Decidir si --full
+        id: mode
+        run: |
+          if [ "${{ github.event.inputs.full }}" = "true" ] || [ "$(date +%u)" = "1" ]; then
+            echo "args=--full" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── The pipeline ──────────────────────────────────────────────────
+      # update_season.py handles its own error tolerance: optional steps
+      # (Understat dead, Sofascore 403, FBref timeout) fail without
+      # breaking the run. Exit 0 = all good, 2 = finished but a required
+      # step failed (still worth committing what we got).
+      - name: Ejecutar update_season.py
+        run: |
+          python scripts/update_season.py ${{ steps.mode.outputs.args }} || {
+            code=$?
+            if [ "$code" -eq 2 ]; then
+              echo "::warning::update_season finished with required-step failures (exit 2)"
+            else
+              exit $code
+            fi
+          }
+
+      # ── Commit the track record ───────────────────────────────────────
+      # Only the prediction log and drift report — the same two files
+      # that run_update.ps1 commits locally. Everything else persists in
+      # the Actions cache and does NOT go to git.
+      - name: Publicar track record
+        run: |
+          git config user.name  "mundialytics-bot"
+          git config user.email "mundialytics-bot@users.noreply.github.com"
+          git add data/processed/logs/predictions_log.csv || true
+          git add data/processed/logs/market_drift_report.json || true
+          git add data/processed/logs/morning_pass_log.csv || true
+          git add data/processed/logs/lineup_pass_log.csv || true
+          git add data/processed/logs/lineup_pass_players_log.csv || true
+          git add data/processed/logs/lineup_pass_team_log.csv || true
+          if git diff --cached --quiet; then
+            echo "sin cambios que publicar"
+            exit 0
+          fi
+          git diff --cached --name-status
+          git commit -q -m "Track record: $(date -u +%Y-%m-%d)"
+          git pull --rebase --quiet origin ${{ github.ref_name }}
+          git push --quiet
+          echo "publicado"
+
+      # ── Summary ───────────────────────────────────────────────────────
+      - name: Resumen
+        if: always()
+        run: |
+          if [ -f data/processed/logs/last_steps.json ]; then
+            python -c "
+          import json, pathlib
+          s = json.loads(pathlib.Path('data/processed/logs/last_steps.json').read_text())
+          print(f\"Exit code: {s['exit_code']}\")
+          if s.get('failed'):
+              print(f\"Failed (required): {', '.join(s['failed'])}\")
+          if s.get('failed_optional'):
+              print(f\"Failed (optional): {', '.join(s['failed_optional'])}\")
+          for step in s.get('steps', []):
+              tag = 'OK' if step['ok'] else ('SKIP' if step.get('optional') else 'FAIL')
+              print(f\"  [{tag:4s}] {step['step']:50s} {step['seconds']:6.0f}s\")
+          "
+          fi
