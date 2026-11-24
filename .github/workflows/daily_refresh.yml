@@ -71,16 +71,9 @@ jobs:
           # stay well within the 10 GB free tier.
 
       # ── Bootstrap: first run only ─────────────────────────────────────
-      # The first run has no cache, so the foundation cannot build without
-      # the historical CSVs (26 seasons × 5 leagues). This step downloads
-      # them from football-data.co.uk (~40 MB). Subsequent runs skip it
-      # because the cache provides the data.
-      #
-      # The Understat xG history (~223 MB) cannot be re-downloaded (the
-      # site has been dead since 2026-05). On the first run the foundation
-      # builds WITHOUT xG and the models work with slightly less signal.
-      # To seed the full xG history, trigger one workflow_dispatch AFTER
-      # running: scripts/seed_actions_cache.py (see docs/VPS_DEPLOYMENT_RUNBOOK.md)
+      # The first run has no cache. Download historical CSVs from
+      # football-data.co.uk and seed data (ClubElo + Understat) from the
+      # GitHub release. Subsequent runs skip this because the cache has it.
       - name: Bootstrap historical data (first run only)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
@@ -92,6 +85,18 @@ jobs:
               0001 0102 0203 0304 0405 0506 0607 0708 0809 0910 \
               1011 1112 1213 1314 1415 1516 1617 1718 1819 1920 \
               2021 2122 2223 2324 2425 2526
+
+      - name: Seed irrecoverable data (ClubElo + Understat)
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Downloading seed data from release seed-data-v1..."
+          gh release download seed-data-v1 --pattern '*.tar.gz' --dir /tmp/seed
+          tar -xzf /tmp/seed/clubelo_seed.tar.gz -C data/external
+          tar -xzf /tmp/seed/understat_seed.tar.gz -C data/external/advanced
+          echo "ClubElo: $(ls data/external/clubelo/teams/ | wc -l) teams"
+          echo "Understat: $(wc -l < data/external/advanced/understat/understat_shots.csv) shots"
 
       # ── Decide --full (Mondays or manual) ─────────────────────────────
       - name: Decidir si --full
