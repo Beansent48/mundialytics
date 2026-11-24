@@ -55,7 +55,7 @@ NO_PLATT: set[str] = set()       # yellows was here; now per-league disp makes P
 LEAGUE_DISP = {"fouls", "yellows", "corners"}  # per-league NB dispersion (fouls 5/5; yellows 4/5-5/5; corners 7.5/8.5 5/5)
 PLATT_FROM_SEASON = "2016-2017"
 # round-5 upgrades (joint-validated per market, 5/5 folds vs previous config):
-EWM_HL = {"corners": 12}        # corners want LONG memory (12 > 8 > 5 > 3); others 5
+EWM_HL = {"corners": 20}        # corners want LONG memory (20 > 15 > 12 > 8 > 5); others 5
 STAKES_MARKETS = {"yellows", "fouls", "sot", "shots"}  # walk-forward standings features (sot 4/5-5/5; shots 22.5/24.5/26.5 4/5)
 # MLE strengths prior: corners/yellows only — for shots/sot the tiny totals gain
 # (+0.0003) was offset by a side-lines loss (-0.0005); fouls was a wash
@@ -86,6 +86,9 @@ RES_K = {"yellows": 120}
 REF_DEV_MARKETS = {"yellows", "fouls"}
 REF_DEV_SHRINK = 20.0
 REF_DEV_SKIP = {"Premier League"}
+# cross-event: use predicted source-market lambda as extra feature for target
+# (fouls↔yellows r=0.40, 5/5 all lines, −0.00015..−0.00022)
+CROSS_FEAT: dict[str, str] = {"yellows": "fouls"}
 
 
 def _ref_key(name) -> str:
@@ -300,6 +303,7 @@ class TeamPropsModel:
     _res_ratio: dict = field(default_factory=dict, init=False, repr=False)
     _ref_dev: dict = field(default_factory=dict, init=False, repr=False)
     _stakes_markets: set = field(default_factory=set, init=False, repr=False)
+    _cross_fitted: set = field(default_factory=set, init=False, repr=False)
 
     @staticmethod
     def _add_positions(full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -447,6 +451,48 @@ class TeamPropsModel:
                     # ref models are EPL-trained: only ever applied to EPL fixtures
                     self._epl_teams |= set(epl["home_team"].astype(str).str.lower())
                     self._epl_teams |= set(epl["away_team"].astype(str).str.lower())
+        # cross-event: retrain target markets with source-market prediction as feature
+        for target, source in CROSS_FEAT.items():
+            if target not in self._models or source not in self._models:
+                continue
+            hc_t, ac_t, _ = MARKETS[target]
+            hc_s, ac_s, _ = MARKETS[source]
+            mt = df.dropna(subset=[hc_t, ac_t, hc_s, ac_s, "home_goals", "away_goals", "date"]).copy()
+            for c in [hc_t, ac_t, hc_s, ac_s, "home_goals", "away_goals"]:
+                mt[c] = pd.to_numeric(mt[c], errors="coerce")
+            mt = mt.dropna(subset=[hc_t, ac_t, hc_s, ac_s, "home_goals", "away_goals"])
+            if len(mt) < 3000:
+                continue
+            if target in STAKES_MARKETS and "pos_home" not in mt.columns:
+                mt, _ = self._add_positions(mt)
+            extra_t = {}
+            if target in LEVEL_K and "competition" in mt.columns:
+                lvl, _ = _league_levels(mt, hc_t, ac_t, LEVEL_K[target])
+                mt["lg_lvl"] = mt["match_id"].map(lvl)
+                extra_t = {"lg_lvl": "lg_lvl"}
+            if target in REF_DEV_MARKETS and "referee" in mt.columns and mt["referee"].notna().any():
+                rd, _ = _referee_deviation(mt, hc_t, ac_t)
+                mt["ref_dev"] = mt["match_id"].map(rd).fillna(0.0)
+                extra_t = {**extra_t, "ref_dev": "ref_dev"}
+            lr_t = self._long_rows(mt, hc_t, ac_t, extra=extra_t,
+                                   hl=EWM_HL.get(target, 5))
+            # build source long rows on the same match set for aligned predictions
+            lr_s = self._long_rows(mt, hc_s, ac_s, hl=EWM_HL.get(source, 5))
+            feats_s = self._feature_names(source)
+            valid_s = lr_s.dropna(subset=feats_s)
+            valid_s = valid_s.copy()
+            valid_s["cross_pred"] = np.clip(
+                self._models[source].predict(valid_s[feats_s]), 0.1, 25)
+            lr_t = lr_t.merge(valid_s[["match_id", "is_home", "cross_pred"]],
+                              on=["match_id", "is_home"], how="left")
+            feats_t = self._feature_names(target) + ["cross_pred"]
+            tr_t = lr_t.dropna(subset=feats_t + ["ev_for"])
+            if len(tr_t) < 2000:
+                continue
+            self._models[target] = PoissonRegressor(alpha=0.1, max_iter=1000).fit(
+                tr_t[feats_t], tr_t["ev_for"].clip(lower=0))
+            self._cross_fitted.add(target)
+            self._team_feats[target] = self._latest_team_state(lr_t, hl=EWM_HL.get(target, 5))
         return self
 
     def _current_season_ratio(self, market: str, m: pd.DataFrame, lr: pd.DataFrame,
@@ -620,6 +666,8 @@ class TeamPropsModel:
             base += ["lg_lvl"]
         if market in REF_DEV_MARKETS and getattr(self, "_ref_dev", {}).get(market):
             base += ["ref_dev"]
+        if market in CROSS_FEAT and market in getattr(self, "_cross_fitted", set()):
+            base += ["cross_pred"]
         return base
 
     @staticmethod
@@ -671,6 +719,11 @@ class TeamPropsModel:
             row = row + [lv.get(comp, float(np.mean(list(lv.values()))))]
         if market in REF_DEV_MARKETS and getattr(self, "_ref_dev", {}).get(market):
             row = row + [ref_dev if ref_dev is not None else 0.0]
+        if market in CROSS_FEAT and market in getattr(self, "_cross_fitted", set()):
+            source = CROSS_FEAT[market]
+            cp = self._side_lambda(source, team, opp, is_home,
+                                   lam_t=lam_t, lam_o=lam_o)
+            row = row + [cp if cp is not None else 5.0]
         cols = self._feature_names(market)
         model = self._models[market]
         if ref_rate is not None and market in self._models_ref:
