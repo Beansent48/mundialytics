@@ -34,8 +34,8 @@ class DynamicLineConfig:
     demo_odds_policy: str = "label_only"  # label_only | allow_value
 
 
-GOAL_TOTAL_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]
-TEAM_GOAL_LINES = [0.5, 1.5, 2.5]
+GOAL_TOTAL_LINES = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]
+TEAM_GOAL_LINES = [0.5, 1.5, 2.5, 3.5]
 TEAM_LINES = {
     "shots": [6.5, 8.5, 10.5, 12.5, 14.5],
     "shots_on_target": [1.5, 2.5, 3.5, 4.5],

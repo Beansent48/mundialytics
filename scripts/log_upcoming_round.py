@@ -37,6 +37,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from mundialytics.statistical_core.prediction_engine import (  # noqa: E402
     DEPLOYED_CLUB_ENGINE_KWARGS, PredictionEngine)
+from mundialytics.statistical_core.dynamic_lines import GOAL_TOTAL_LINES, TEAM_GOAL_LINES  # noqa: E402
+from mundialytics.statistical_core.distributions import (  # noqa: E402
+    probability_for_count_line, scoreline_distribution)
+
 from mundialytics.props.half_time import HalfTimeModel  # noqa: E402
 from mundialytics.utils import atomic_to_csv  # noqa: E402
 from mundialytics.ratings.elo import EloConfig, EloRater  # noqa: E402
@@ -373,12 +377,17 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
             pick = max(trio, key=trio.get)
             rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
                          "prob": round(trio[pick], 4), "seleccion": pick})
-            # scoreline_distribution exposes no p_over_25 attribute; ask its own
-            # total-goals helper rather than inventing a number
-            p_o25 = float(dist.total_goals_probability(2.5, "over"))
-            rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": 2.5,
-                         "prob": round(p_o25, 4),
-                         "seleccion": "OVER" if p_o25 >= 0.5 else "UNDER"})
+            for gl in GOAL_TOTAL_LINES:
+                pr = float(dist.total_goals_probability(gl, "over"))
+                rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": gl,
+                             "prob": round(pr, 4),
+                             "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+            for team_lam, amb in [(lam_h, "Local"), (lam_a, "Visitante")]:
+                for gl in TEAM_GOAL_LINES:
+                    pr = float(probability_for_count_line(team_lam, gl, "over"))
+                    rows.append({**base, "mercado": "Goles", "ambito": amb, "linea": gl,
+                                 "prob": round(pr, 4),
+                                 "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
             paths = htm.predict_ht_ft(lam_h, lam_a)
             bestp = max(paths, key=paths.get)
             rows.append({**base, "mercado": "ht_ft", "ambito": "Total", "linea": "",
@@ -572,9 +581,19 @@ def _log(args) -> None:
         pick = max(trio, key=trio.get)
         rows.append({**base, "mercado": "1X2", "ambito": "Total", "linea": "",
                      "prob": round(trio[pick], 4), "seleccion": pick})
-        rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": 2.5,
-                     "prob": round(p.p_over_25, 4),
-                     "seleccion": "OVER" if p.p_over_25 >= 0.5 else "UNDER"})
+        dist = scoreline_distribution(p.lambda_home, p.lambda_away, max_goals=10,
+                                      normalize=True)
+        for gl in GOAL_TOTAL_LINES:
+            pr = float(dist.total_goals_probability(gl, "over"))
+            rows.append({**base, "mercado": "Goles", "ambito": "Total", "linea": gl,
+                         "prob": round(pr, 4),
+                         "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
+        for team_lam, amb in [(p.lambda_home, "Local"), (p.lambda_away, "Visitante")]:
+            for gl in TEAM_GOAL_LINES:
+                pr = float(probability_for_count_line(team_lam, gl, "over"))
+                rows.append({**base, "mercado": "Goles", "ambito": amb, "linea": gl,
+                             "prob": round(pr, 4),
+                             "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
 
         # Half-time markets, derived from the same lambdas (see props/half_time.py).
         ht = htm.predict_half_time(p.lambda_home, p.lambda_away)
