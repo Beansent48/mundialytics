@@ -93,6 +93,7 @@ jobs:
         run: |
           echo "Downloading seed data from release seed-data-v1..."
           gh release download seed-data-v1 --pattern '*.tar.gz' --dir /tmp/seed
+          mkdir -p data/external data/external/advanced
           tar -xzf /tmp/seed/clubelo_seed.tar.gz -C data/external
           tar -xzf /tmp/seed/understat_seed.tar.gz -C data/external/advanced
           echo "ClubElo: $(ls data/external/clubelo/teams/ | wc -l) teams"
