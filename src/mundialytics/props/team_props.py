@@ -55,7 +55,7 @@ NO_PLATT: set[str] = set()       # yellows was here; now per-league disp makes P
 LEAGUE_DISP = {"fouls", "yellows", "corners"}  # per-league NB dispersion (fouls 5/5; yellows 4/5-5/5; corners 7.5/8.5 5/5)
 PLATT_FROM_SEASON = "2016-2017"
 # round-5 upgrades (joint-validated per market, 5/5 folds vs previous config):
-EWM_HL = {"corners": 20}        # corners want LONG memory (20 > 15 > 12 > 8 > 5); others 5
+EWM_HL = {"corners": 20, "yellows": 12, "fouls": 8, "sot": 12}  # tuned per market (monotonic search)
 STAKES_MARKETS = {"yellows", "fouls", "sot", "shots"}  # walk-forward standings features (sot 4/5-5/5; shots 22.5/24.5/26.5 4/5)
 # MLE strengths prior: corners/yellows only — for shots/sot the tiny totals gain
 # (+0.0003) was offset by a side-lines loss (-0.0005); fouls was a wash
