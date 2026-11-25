@@ -92,6 +92,11 @@ CROSS_FEAT: dict[str, str] = {"yellows": "fouls"}
 # xG rolling features (team xG-for + opponent xG-for rollings): captures shot
 # quality / attacking threat, different from event count. corners 4/5 folds.
 XG_MARKETS = {"corners"}
+# heteroscedastic NB dispersion: disp = f(|delta|) (Yip et al. 2021 — goal
+# supremacy affects VARIANCE, not mean; close matches = lower variance).
+# fouls 5/5 folds, −0.003..−0.006 per fold. Bins: close/medium/far.
+HETERO_DISP = {"fouls"}
+HETERO_BINS = (0.3, 0.8)
 
 
 def _ref_key(name) -> str:
@@ -308,6 +313,7 @@ class TeamPropsModel:
     _stakes_markets: set = field(default_factory=set, init=False, repr=False)
     _cross_fitted: set = field(default_factory=set, init=False, repr=False)
     _has_xg: bool = field(default=False, init=False, repr=False)
+    _disp_hetero: dict = field(default_factory=dict, init=False, repr=False)
 
     @staticmethod
     def _add_positions(full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -425,6 +431,8 @@ class TeamPropsModel:
                 self._adm[market] = adm.fit(adm_tr)
             tt = (m[hc] + m[ac]).astype(float)
             self._disp[market] = float(np.clip(tt.var() / max(tt.mean(), 1e-9), 0.8, 3.0))
+            if market in HETERO_DISP:
+                self._fit_hetero_disp(market, m, lr, hc, ac)
             sv = lr["ev_for"].dropna().astype(float)
             self._disp_side[market] = float(np.clip(sv.var() / max(sv.mean(), 1e-9), 0.9, 3.0))
             if "competition" in m.columns:
@@ -555,6 +563,27 @@ class TeamPropsModel:
 
     def is_epl_fixture(self, home_team: str, away_team: str) -> bool:
         return home_team.lower() in self._epl_teams and away_team.lower() in self._epl_teams
+
+    def _fit_hetero_disp(self, market: str, m: pd.DataFrame,
+                         lr: pd.DataFrame, hc: str, ac: str) -> None:
+        """NB dispersion per |delta| bin (close/medium/far)."""
+        match_delta = lr.dropna(subset=["abs_delta"]).groupby("match_id")["abs_delta"].first()
+        mi = m.set_index("match_id")
+        common = match_delta.index.intersection(mi.index)
+        tot = (mi.loc[common, hc] + mi.loc[common, ac]).astype(float)
+        ad = match_delta.loc[common]
+        labels = ["close", "medium", "far"]
+        bins = pd.cut(ad, [-0.01, HETERO_BINS[0], HETERO_BINS[1], 999], labels=labels)
+        fallback = self._disp[market]
+        result = {}
+        for label in labels:
+            mask = bins == label
+            if mask.sum() < 200:
+                result[label] = fallback
+            else:
+                vals = tot[mask]
+                result[label] = float(np.clip(vals.var() / max(vals.mean(), 1e-9), 0.9, 3.0))
+        self._disp_hetero[market] = result
 
     def _fit_platt(self, market: str, m: pd.DataFrame, lr: pd.DataFrame,
                    feats: list[str], hc: str, ac: str, lines: list[float]) -> None:
@@ -818,6 +847,21 @@ class TeamPropsModel:
             if market in self._disp_lg:   # per-league dispersion (fouls, validated 5/5)
                 comp = self._team_comp.get(home_team.lower())
                 disp = self._disp_lg[market].get(comp, disp)
+            if market in getattr(self, "_disp_hetero", {}):
+                mf_ = self._team_feats.get(market, {})
+                st_h = mf_.get(home_team) or mf_.get(home_team.lower())
+                st_a = mf_.get(away_team) or mf_.get(away_team.lower())
+                if st_h and st_a:
+                    d_h = ((st_h["gf_ewm"] + st_a["ga_ewm"]) / 2
+                           - (st_a["gf_ewm"] + st_h["ga_ewm"]) / 2)
+                    ad_ = abs(d_h)
+                    hd = self._disp_hetero[market]
+                    if ad_ < HETERO_BINS[0]:
+                        disp = hd["close"]
+                    elif ad_ < HETERO_BINS[1]:
+                        disp = hd["medium"]
+                    else:
+                        disp = hd["far"]
             lines = MARKETS[market][2]
             over = {ln: self._apply_platt(market, ln, float(_prob_over(lh + la, ln, disp)))
                     for ln in lines}
