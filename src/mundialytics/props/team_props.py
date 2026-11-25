@@ -89,6 +89,9 @@ REF_DEV_SKIP = {"Premier League"}
 # cross-event: use predicted source-market lambda as extra feature for target
 # (fouls↔yellows r=0.40, 5/5 all lines, −0.00015..−0.00022)
 CROSS_FEAT: dict[str, str] = {"yellows": "fouls"}
+# xG rolling features (team xG-for + opponent xG-for rollings): captures shot
+# quality / attacking threat, different from event count. corners 4/5 folds.
+XG_MARKETS = {"corners"}
 
 
 def _ref_key(name) -> str:
@@ -304,6 +307,7 @@ class TeamPropsModel:
     _ref_dev: dict = field(default_factory=dict, init=False, repr=False)
     _stakes_markets: set = field(default_factory=set, init=False, repr=False)
     _cross_fitted: set = field(default_factory=set, init=False, repr=False)
+    _has_xg: bool = field(default=False, init=False, repr=False)
 
     @staticmethod
     def _add_positions(full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -359,6 +363,13 @@ class TeamPropsModel:
             df["la"] = np.nan
         # delta_lam features only when lambda coverage is real (else goals-delta recipe)
         self._use_lam = bool(df["lh"].notna().mean() > 0.3)
+        # xG rolling features for XG_MARKETS when coverage is sufficient
+        for xc in ["home_xg", "away_xg"]:
+            if xc not in df.columns:
+                df[xc] = np.nan
+            else:
+                df[xc] = pd.to_numeric(df[xc], errors="coerce")
+        self._has_xg = bool(df["home_xg"].notna().mean() > 0.3)
         # walk-forward standings (stakes features for cards/fouls) + predict-time state
         df = df.dropna(subset=["home_goals", "away_goals"])
         df, self._team_pos = self._add_positions(df)
@@ -398,7 +409,8 @@ class TeamPropsModel:
                 rd, self._ref_dev[market] = _referee_deviation(m, hc, ac)
                 m["ref_dev"] = m["match_id"].map(rd).fillna(0.0)
                 extra = {**extra, "ref_dev": "ref_dev"}
-            lr = self._long_rows(m, hc, ac, extra=extra, hl=EWM_HL.get(market, 5))
+            lr = self._long_rows(m, hc, ac, extra=extra, hl=EWM_HL.get(market, 5),
+                                include_xg=(market in XG_MARKETS))
             feats = self._feature_names(market)
             tr = lr.dropna(subset=feats + ["ev_for"])
             reg = PoissonRegressor(alpha=0.1, max_iter=1000).fit(tr[feats], tr["ev_for"].clip(lower=0))
@@ -606,7 +618,8 @@ class TeamPropsModel:
 
     @staticmethod
     def _long_rows(m: pd.DataFrame, hc: str, ac: str,
-                   extra: dict[str, str] | None = None, hl: int = 5) -> pd.DataFrame:
+                   extra: dict[str, str] | None = None, hl: int = 5,
+                   include_xg: bool = False) -> pd.DataFrame:
         has_lam = "lh" in m.columns
         has_pos = "pos_home" in m.columns
         # vectorized two-sided view (home perspective + away perspective)
@@ -621,6 +634,9 @@ class TeamPropsModel:
         if has_pos:
             h_map.update({"pos_home": "pos_t", "pos_away": "pos_o", "played_home": "played"})
             a_map.update({"pos_away": "pos_t", "pos_home": "pos_o", "played_home": "played"})
+        if include_xg and "home_xg" in m.columns:
+            h_map.update({"home_xg": "xg_for", "away_xg": "xg_against"})
+            a_map.update({"away_xg": "xg_for", "home_xg": "xg_against"})
         for k, col in (extra or {}).items():
             h_map[col] = k
             a_map[col] = k
@@ -630,7 +646,10 @@ class TeamPropsModel:
         # cython grouped rolling/ewm on the shifted series (same semantics as the
         # old per-group apply, ~4x faster)
         tkey = lr["team"]
-        for col in ["ev_for", "ev_against", "gf", "ga"]:
+        roll_cols = ["ev_for", "ev_against", "gf", "ga"]
+        if include_xg and "xg_for" in lr.columns:
+            roll_cols += ["xg_for"]
+        for col in roll_cols:
             shifted = lr.groupby("team", sort=False)[col].shift(1)
             g = shifted.groupby(tkey, sort=False)
             for w in WINDOWS:
@@ -638,6 +657,8 @@ class TeamPropsModel:
             use_hl = hl if col in ("ev_for", "ev_against") else 5  # goals delta stays hl5
             lr[f"{col}_ewm"] = g.ewm(halflife=use_hl, min_periods=3).mean().reset_index(level=0, drop=True)
         opp_src = [f"ev_against_r{w}" for w in WINDOWS] + ["ev_against_ewm", "gf_ewm", "ga_ewm"]
+        if include_xg and "xg_for" in lr.columns:
+            opp_src += [f"xg_for_r{w}" for w in WINDOWS] + ["xg_for_ewm"]
         opp = lr[["match_id", "team"] + opp_src].rename(
             columns={"team": "opp", **{c: f"opp_{c}" for c in opp_src}})
         lr = lr.merge(opp, on=["match_id", "opp"], how="left")
@@ -668,11 +689,15 @@ class TeamPropsModel:
             base += ["ref_dev"]
         if market in CROSS_FEAT and market in getattr(self, "_cross_fitted", set()):
             base += ["cross_pred"]
+        if market in XG_MARKETS and getattr(self, "_has_xg", False):
+            base += ([f"xg_for_r{w}" for w in WINDOWS] + ["xg_for_ewm"]
+                     + [f"opp_xg_for_r{w}" for w in WINDOWS] + ["opp_xg_for_ewm"])
         return base
 
     @staticmethod
     def _latest_team_state(lr: pd.DataFrame, hl: int = 5) -> dict:
         """Per team: rolling stats INCLUDING its last played game (for the next fixture)."""
+        has_xg = "xg_for" in lr.columns
         out: dict = {}
         for team, g in lr.groupby("team"):
             if len(g) < 3:
@@ -685,6 +710,12 @@ class TeamPropsModel:
             st["against_ewm"] = float(g["ev_against"].ewm(halflife=hl).mean().iloc[-1])
             st["gf_ewm"] = float(g["gf"].ewm(halflife=5).mean().iloc[-1])   # goals delta stays hl5
             st["ga_ewm"] = float(g["ga"].ewm(halflife=5).mean().iloc[-1])
+            if has_xg:
+                xg = g["xg_for"].dropna()
+                if len(xg) >= 3:
+                    for w in WINDOWS:
+                        st[f"xg_for_r{w}"] = float(xg.tail(w).mean())
+                    st["xg_for_ewm"] = float(xg.ewm(halflife=5).mean().iloc[-1])
             out[team] = st
         return out
 
@@ -724,6 +755,12 @@ class TeamPropsModel:
             cp = self._side_lambda(source, team, opp, is_home,
                                    lam_t=lam_t, lam_o=lam_o)
             row = row + [cp if cp is not None else 5.0]
+        if market in XG_MARKETS and getattr(self, "_has_xg", False):
+            xg_t = [st_t.get(f"xg_for_r{w}") for w in WINDOWS] + [st_t.get("xg_for_ewm")]
+            xg_o = [st_o.get(f"xg_for_r{w}") for w in WINDOWS] + [st_o.get("xg_for_ewm")]
+            if any(v is None for v in xg_t + xg_o):
+                return None
+            row = row + xg_t + xg_o
         cols = self._feature_names(market)
         model = self._models[market]
         if ref_rate is not None and market in self._models_ref:
