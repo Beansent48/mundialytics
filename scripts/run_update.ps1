@@ -165,6 +165,16 @@ if ($code -eq 0 -or $code -eq 2) {
         Write-Warning "bot JSON not generated: $($_.Exception.Message)"
     }
 
+    $botJson = Join-Path $root 'data\processed\logs\predictions_latest.json'
+    if (Test-Path $botJson) {
+        try {
+            npx wrangler kv key put --namespace-id "0d2f340d508e4a88a78bbf72231f8aba" "predictions_raw" --path $botJson --remote 2>&1 | Out-Null
+            Write-Host "bot JSON uploaded to KV"
+        } catch {
+            Write-Warning "KV upload failed: $($_.Exception.Message)"
+        }
+    }
+
     try {
         & $python (Join-Path $root 'scripts\commit_track_record.py')
         if ($LASTEXITCODE -ne 0) { Write-Warning "track record commit exited $LASTEXITCODE" }

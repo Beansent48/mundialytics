@@ -55,11 +55,130 @@ def load_event_calibration(root: str | Path) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
+@dataclass
+class EuroEventContext:
+    """Pre-computed European context for enriching markets where Elo has no
+    predictive power (yellows, fouls: b=0).  Built once per logging run from
+    espn_uefa_history.csv; passed into predict_euro_events.
+
+    comp_means: {market: {"home": float, "away": float}} per competition
+    fouls_slope: OLS slope of total_fouls -> total_yellows in prior UEFA data
+    fouls_mean: mean total fouls in prior UEFA data (the intercept reference)
+    """
+    tp: object                              # fitted TeamPropsModel (or None)
+    comp_means: dict[str, dict]             # {market: {"home": h, "away": a}}
+    fouls_slope: float = 0.0
+    fouls_mean: float = 23.0
+    blend_w: float = 0.5
+    fouls_alpha: float = 0.7
+
+    def _dom_rate(self, team: str, market: str = "yellows") -> float | None:
+        if self.tp is None:
+            return None
+        mf = getattr(self.tp, "_team_feats", {}).get(market, {})
+        st = mf.get(team) or mf.get(team.lower())
+        return float(st["for_ewm"]) if st else None
+
+    def enrich_side(self, home: str, away: str, market: str) -> tuple[float, float] | None:
+        """Return (lam_h, lam_a) for a market with b=0, or None to fall back."""
+        cm = self.comp_means.get(market)
+        if cm is None:
+            return None
+        mean_h, mean_a = cm["home"], cm["away"]
+
+        if self.tp is not None:
+            res = self.tp.predict_fixture(home, away)
+            mk_res = res.get(market)
+            if mk_res and mk_res.get("lambda_home") is not None:
+                lh = self.blend_w * mk_res["lambda_home"] + (1 - self.blend_w) * mean_h
+                la = self.blend_w * mk_res["lambda_away"] + (1 - self.blend_w) * mean_a
+                return self._fouls_adjust(home, away, lh, la, market)
+
+        rh = self._dom_rate(home, market)
+        ra = self._dom_rate(away, market)
+        lh = self.blend_w * rh + (1 - self.blend_w) * mean_h if rh is not None else mean_h
+        la = self.blend_w * ra + (1 - self.blend_w) * mean_a if ra is not None else mean_a
+        return self._fouls_adjust(home, away, lh, la, market)
+
+    def _fouls_adjust(self, home: str, away: str,
+                      lh: float, la: float, market: str) -> tuple[float, float]:
+        if market != "yellows" or abs(self.fouls_slope) < 1e-6:
+            return (lh, la)
+        cm_f = self.comp_means.get("fouls")
+        if cm_f is None:
+            return (lh, la)
+        rh_f = self._dom_rate(home, "fouls")
+        ra_f = self._dom_rate(away, "fouls")
+        mean_hf, mean_af = cm_f["home"], cm_f["away"]
+        pred_hf = self.blend_w * rh_f + (1 - self.blend_w) * mean_hf if rh_f is not None else mean_hf
+        pred_af = self.blend_w * ra_f + (1 - self.blend_w) * mean_af if ra_f is not None else mean_af
+        fouls_dev = (pred_hf + pred_af) - self.fouls_mean
+        adj = self.fouls_alpha * self.fouls_slope * fouls_dev / 2
+        return (max(0.3, lh + adj), max(0.3, la + adj))
+
+
+def build_euro_event_context(root: str | Path, tp=None,
+                             competition: str | None = None) -> EuroEventContext | None:
+    """Build the European event context from historical UEFA data on disk."""
+    hist_path = Path(root) / "data/external/advanced/espn/espn_uefa_history.csv"
+    if not hist_path.exists():
+        return None
+
+    hist = pd.read_csv(hist_path)
+    hist["date"] = pd.to_datetime(hist["date"], errors="coerce")
+
+    comp_label = {"champions": "Champions League", "europa": "Europa League",
+                  "conference": "Conference League"}.get(competition, competition)
+
+    comp_means: dict[str, dict] = {}
+    for market, col in [("yellows", "yellows"), ("fouls", "fouls")]:
+        if col not in hist.columns:
+            continue
+        sub = hist if comp_label is None else hist[hist.competition == comp_label]
+        if len(sub) < 20:
+            sub = hist
+        home = sub[sub.team.str.lower() == sub.home_team.str.lower()]
+        away = sub[sub.team.str.lower() == sub.away_team.str.lower()]
+        mh = home[col].dropna().mean()
+        ma = away[col].dropna().mean()
+        if pd.notna(mh) and pd.notna(ma):
+            comp_means[market] = {"home": float(mh), "away": float(ma)}
+
+    fouls_slope, fouls_mean = 0.0, 23.0
+    if "fouls" in hist.columns and "yellows" in hist.columns:
+        home_f = hist[hist.team.str.lower() == hist.home_team.str.lower()][["event_id", "fouls", "yellows"]]
+        away_f = hist[hist.team.str.lower() == hist.away_team.str.lower()][["event_id", "fouls", "yellows"]]
+        home_f = home_f.rename(columns={"fouls": "hf", "yellows": "hy"})
+        away_f = away_f.rename(columns={"fouls": "af", "yellows": "ay"})
+        both = home_f.merge(away_f, on="event_id")
+        both["tf"] = both.hf + both.af
+        both["ty"] = both.hy + both.ay
+        both = both.dropna(subset=["tf", "ty"])
+        if len(both) > 50:
+            from numpy.polynomial.polynomial import polyfit
+            coefs = polyfit(both.tf.to_numpy(), both.ty.to_numpy(), 1)
+            fouls_slope = float(coefs[1])
+            fouls_mean = float(both.tf.mean())
+
+    return EuroEventContext(
+        tp=tp, comp_means=comp_means,
+        fouls_slope=fouls_slope, fouls_mean=fouls_mean)
+
+
 def predict_euro_events(elo_h: float, elo_a: float, events_calib: dict,
-                        side_lines: dict[str, list[float]] | None = None) -> dict:
+                        side_lines: dict[str, list[float]] | None = None,
+                        home: str = "", away: str = "",
+                        euro_ctx: EuroEventContext | None = None) -> dict:
     """Team-event markets for ANY European pair from the Elo->events mapping
     (calibrated walk-forward on the big-5 foundation). Same output shape as
-    TeamPropsModel.predict_fixture (lambda_home/away/total + over ladders)."""
+    TeamPropsModel.predict_fixture (lambda_home/away/total + over ladders).
+
+    When *euro_ctx* is passed, markets with b=0 (yellows, fouls) are enriched
+    with domestic team profiles blended with per-competition European means and
+    a fouls cross-signal. Markets where Elo IS predictive (corners, shots, sot)
+    keep their Elo-based lambdas.  Validated walk-forward 3/3 folds, -0.0069
+    pooled BLL vs flat baseline (scripts/experiment_euro_yellows_wf.py).
+    """
     from scipy.stats import nbinom, poisson
 
     def p_over(lam, line, disp):
@@ -73,8 +192,16 @@ def predict_euro_events(elo_h: float, elo_a: float, events_calib: dict,
     d400 = (elo_h - elo_a) / 400.0
     out: dict = {}
     for mk, v in events_calib["markets"].items():
-        lh = float(np.exp(v["c"] + v["hfa"] + v["b"] * d400))
-        la = float(np.exp(v["c"] - v["b"] * d400))
+        enriched = None
+        if euro_ctx is not None and home and away and abs(v["b"]) < 1e-6:
+            enriched = euro_ctx.enrich_side(home, away, mk)
+
+        if enriched is not None:
+            lh, la = enriched
+        else:
+            lh = float(np.exp(v["c"] + v["hfa"] + v["b"] * d400))
+            la = float(np.exp(v["c"] - v["b"] * d400))
+
         entry = {
             "lambda_home": round(lh, 2), "lambda_away": round(la, 2),
             "lambda_total": round(lh + la, 2), "dispersion": round(v["disp_total"], 2),

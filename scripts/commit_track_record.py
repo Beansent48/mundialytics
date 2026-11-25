@@ -38,6 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LOG = "data/processed/logs/predictions_log.csv"
 DRIFT = "data/processed/logs/market_drift.json"
+BOT_JSON = "data/processed/logs/predictions_latest.json"
 
 # A Big Five round lands over a weekend and the next one is a week away, so
 # five days is "a round has happened" while still collapsing Saturday and
@@ -112,13 +113,17 @@ def main() -> int:
         print(f"track record: skipped, a {busy} is in progress")
         return 0
 
-    pending = changed([DRIFT, LOG])
+    pending = changed([DRIFT, LOG, BOT_JSON])
     staging: list[str] = []
     parts: list[str] = []
 
     if DRIFT in pending:
         staging.append(DRIFT)
         parts.append(f"drift report {drift_as_of()}".strip())
+
+    if BOT_JSON in pending:
+        staging.append(BOT_JSON)
+        parts.append("bot JSON")
 
     if LOG in pending:
         age = days_since_last_commit(LOG)

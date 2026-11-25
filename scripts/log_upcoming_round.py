@@ -295,7 +295,7 @@ def player_rows(pp, base: dict, team: str, lam: float, ref_dev: float | None = N
 
 
 def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
-                  stamp: str, season: str) -> list[dict]:
+                  stamp: str, season: str, tp=None) -> list[dict]:
     """Pre-kickoff predictions for upcoming UCL/UEL/UECL ties.
 
     The European layer prices off ClubElo rather than the domestic engine — it
@@ -307,7 +307,8 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
     Clubs the rating table cannot cover are skipped, never guessed.
     """
     from mundialytics.statistical_core.competition.european import (
-        FD_SLUG, fetch_current_elo, fetch_season_fixtures, load_calibration,
+        FD_SLUG, build_euro_event_context, fetch_current_elo,
+        fetch_season_fixtures, load_calibration,
         load_event_calibration, make_resolver, predict_euro_events)
     from mundialytics.statistical_core.distributions import scoreline_distribution
 
@@ -331,6 +332,15 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
                 if local.exists() else "")
     htm = HalfTimeModel()
     c, hfa, b = calib["c"], calib["hfa"], calib["b"]
+
+    euro_ctxs: dict[str, object] = {}
+    if tp is not None:
+        for comp_key in FD_SLUG:
+            ctx = build_euro_event_context(ROOT, tp=tp, competition=comp_key)
+            if ctx is not None:
+                euro_ctxs[comp_key] = ctx
+        if euro_ctxs:
+            print(f"  contexto europeo enriquecido para {list(euro_ctxs)}")
 
     rows: list[dict] = []
     for comp, slug in FD_SLUG.items():
@@ -402,7 +412,10 @@ def european_rows(year: int, horizon: pd.Timestamp, now: pd.Timestamp,
                              "prob": round(float(pr), 4),
                              "seleccion": "OVER" if pr >= 0.5 else "UNDER"})
             if ev_calib:
-                for mk, dd in predict_euro_events(elo[h], elo[a], ev_calib).items():
+                e_ctx = euro_ctxs.get(comp)
+                for mk, dd in predict_euro_events(
+                        elo[h], elo[a], ev_calib,
+                        home=h, away=a, euro_ctx=e_ctx).items():
                     for ln, pr in dd.get("over", {}).items():
                         rows.append({**base, "mercado": mk, "ambito": "Total", "linea": ln,
                                      "prob": round(float(pr), 4),
@@ -512,7 +525,13 @@ def _log(args) -> None:
     tp = None
     try:
         from mundialytics.props import TeamPropsModel
-        tp = TeamPropsModel().fit(df, root=ROOT)
+        from mundialytics.props import team_props as _tp_mod
+        _saved_xf = _tp_mod.CROSS_FEAT.copy()
+        _tp_mod.CROSS_FEAT = {}
+        try:
+            tp = TeamPropsModel().fit(df, root=ROOT)
+        finally:
+            _tp_mod.CROSS_FEAT = _saved_xf
         print("  team props: OK")
     except Exception as exc:
         print(f"  team props no disponibles ({str(exc)[:60]}) — solo 1X2/Goles")
@@ -636,7 +655,7 @@ def _log(args) -> None:
 
     if not args.skip_europe:
         print("\ncompeticiones europeas:")
-        rows += european_rows(year, horizon, now, stamp, season)
+        rows += european_rows(year, horizon, now, stamp, season, tp=tp)
     _write(rows, skipped, args)
 
 
