@@ -368,10 +368,10 @@
      "kind": "calibration",
      "market": "Goles 2.5",
      "scope": "Total",
-     "n": 663,
-     "expected": 0.547,
-     "actual": 0.581,
-     "z": 1.76,
+     "n": 672,
+     "expected": 0.548,
+     "actual": 0.577,
+     "z": 1.55,
      "alert": false
     },
     {
@@ -558,30 +558,30 @@
      "kind": "calibration",
      "market": "ht_goles 0.5",
      "scope": "Total",
-     "n": 658,
+     "n": 666,
      "expected": 0.718,
-     "actual": 0.708,
-     "z": -0.56,
+     "actual": 0.707,
+     "z": -0.65,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 1.5",
      "scope": "Total",
-     "n": 658,
+     "n": 666,
      "expected": 0.366,
-     "actual": 0.4,
-     "z": 1.82,
+     "actual": 0.396,
+     "z": 1.63,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 2.5",
      "scope": "Total",
-     "n": 658,
+     "n": 666,
      "expected": 0.142,
-     "actual": 0.15,
-     "z": 0.65,
+     "actual": 0.149,
+     "z": 0.5,
      "alert": false
     },
     {
@@ -1324,10 +1324,10 @@
      "kind": "calibration",
      "market": "Goles 2.5",
      "scope": "Total",
-     "n": 202,
-     "expected": 0.56,
-     "actual": 0.515,
-     "z": -1.32,
+     "n": 211,
+     "expected": 0.562,
+     "actual": 0.507,
+     "z": -1.65,
      "alert": false
     },
     {
@@ -1514,30 +1514,30 @@
      "kind": "calibration",
      "market": "ht_goles 0.5",
      "scope": "Total",
-     "n": 201,
-     "expected": 0.726,
-     "actual": 0.721,
-     "z": -0.15,
+     "n": 209,
+     "expected": 0.727,
+     "actual": 0.718,
+     "z": -0.3,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 1.5",
      "scope": "Total",
-     "n": 201,
-     "expected": 0.375,
-     "actual": 0.378,
-     "z": 0.09,
+     "n": 209,
+     "expected": 0.376,
+     "actual": 0.368,
+     "z": -0.24,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 2.5",
      "scope": "Total",
-     "n": 201,
-     "expected": 0.147,
-     "actual": 0.129,
-     "z": -0.71,
+     "n": 209,
+     "expected": 0.148,
+     "actual": 0.124,
+     "z": -0.95,
      "alert": false
     },
     {
@@ -2005,6 +2005,12 @@
    "n": 746,
    "partidos": 108,
    "logged_last": "2026-09-25T11:06:38"
+  },
+  {
+   "era": "euro-fcd85a01",
+   "n": 58,
+   "partidos": 9,
+   "logged_last": "2026-11-17T10:51:44"
   },
   {
    "era": "pre-huella",
