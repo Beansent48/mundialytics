@@ -12,6 +12,7 @@ import csv
 import json
 import pathlib
 import re
+import unicodedata
 from datetime import date, timedelta
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -25,6 +26,19 @@ KEEP = {
 MKTS = {"1X2", "Goles", "corners", "yellows"}
 
 _SCORE_RE = re.compile(r"(\d+)\s*-\s*(\d+)")
+
+_TRANSLIT = {"æ": "ae", "ø": "oe", "å": "aa", "ß": "ss", "ð": "d", "þ": "th",
+             "ł": "l", "đ": "d", "ı": "i", "œ": "oe",
+             "Æ": "ae", "Ø": "oe", "Å": "aa", "Ð": "d", "Þ": "th",
+             "Ł": "l", "Đ": "d", "Œ": "oe"}
+
+
+def _norm(name: str) -> str:
+    """Normalize a team name for matching: transliterate, strip accents, lowercase."""
+    for k, v in _TRANSLIT.items():
+        name = name.replace(k, v)
+    name = "".join(ch for ch in unicodedata.normalize("NFKD", name) if not unicodedata.combining(ch))
+    return name.lower().strip()
 
 
 def main():
@@ -79,17 +93,23 @@ def main():
                 espn_by_score[(r["date"], r["home_goals"], r["away_goals"],
                                r["home_team"].lower(), r["away_team"].lower())] = eid
 
+    def _name_overlap(a: str, b: str) -> bool:
+        na, nb = _norm(a), _norm(b)
+        if na == nb:
+            return True
+        wa = set(na.replace("/", " ").split())
+        wb = set(nb.replace("/", " ").split())
+        if wa & wb:
+            return True
+        return na in nb or nb in na
+
     def _espn_enrich(date_iso: str, hg: int, ag: int,
                      home_uefa: str, away_uefa: str) -> tuple:
         """Find ESPN event matching a UEFA result and return (hc, ac, hy, ay)."""
-        hu, au = home_uefa.lower(), away_uefa.lower()
         for (d, ehg, eag, eh, ea), eid in espn_by_score.items():
             if d != date_iso or int(ehg) != hg or int(eag) != ag:
                 continue
-            # score + date match; check if team names overlap (fuzzy)
-            hw = set(hu.replace("/", " ").split())
-            ew = set(eh.replace("/", " ").split())
-            if hw & ew or hu in eh or eh in hu:
+            if _name_overlap(home_uefa, eh):
                 sh = espn_uefa_stats.get((eid, eh), {})
                 sa = espn_uefa_stats.get((eid, ea), {})
                 return (sh.get("corners", ""), sa.get("corners", ""),
@@ -121,6 +141,37 @@ def main():
                             "hg": hg, "ag": ag,
                             "hc": hc, "ac": ac, "hy": hy, "ay": ay,
                         }
+
+    # ESPN UEFA matches as a direct result source (UEFA CSVs often lack the
+    # Result field for recent matchdays while ESPN already has scores + stats).
+    # Match ESPN names to prediction-log names by date + word overlap.
+    pred_teams_by_date: dict[str, list[tuple[str, str]]] = {}
+    for r in rows:
+        d = r.get("fecha", "")
+        h, a = r.get("home", ""), r.get("away", "")
+        if d and h and a:
+            pred_teams_by_date.setdefault(d, [])
+            if (h, a) not in pred_teams_by_date[d]:
+                pred_teams_by_date[d].append((h, a))
+
+    for (d, ehg, eag, eh, ea), eid in espn_by_score.items():
+        if d not in window or not ehg or not eag:
+            continue
+        matched_key = None
+        for ph, pa in pred_teams_by_date.get(d, []):
+            if _name_overlap(eh, ph) and _name_overlap(ea, pa):
+                matched_key = ph.lower() + "|" + pa.lower()
+                break
+        if not matched_key:
+            matched_key = eh + "|" + ea
+        if matched_key not in results:
+            sh = espn_uefa_stats.get((eid, eh), {})
+            sa = espn_uefa_stats.get((eid, ea), {})
+            results[matched_key] = {
+                "hg": int(ehg), "ag": int(eag),
+                "hc": sh.get("corners", ""), "ac": sa.get("corners", ""),
+                "hy": sh.get("yellows", ""), "ay": sa.get("yellows", ""),
+            }
 
     OUT.write_text(
         json.dumps({"predictions": rows, "results": results}, ensure_ascii=False),
