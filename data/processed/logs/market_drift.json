@@ -368,10 +368,10 @@
      "kind": "calibration",
      "market": "Goles 2.5",
      "scope": "Total",
-     "n": 672,
-     "expected": 0.548,
+     "n": 681,
+     "expected": 0.549,
      "actual": 0.577,
-     "z": 1.55,
+     "z": 1.51,
      "alert": false
     },
     {
@@ -558,30 +558,30 @@
      "kind": "calibration",
      "market": "ht_goles 0.5",
      "scope": "Total",
-     "n": 666,
-     "expected": 0.718,
+     "n": 675,
+     "expected": 0.719,
      "actual": 0.707,
-     "z": -0.65,
+     "z": -0.7,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 1.5",
      "scope": "Total",
-     "n": 666,
-     "expected": 0.366,
-     "actual": 0.396,
-     "z": 1.63,
+     "n": 675,
+     "expected": 0.367,
+     "actual": 0.394,
+     "z": 1.48,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 2.5",
      "scope": "Total",
-     "n": 666,
+     "n": 675,
      "expected": 0.142,
-     "actual": 0.149,
-     "z": 0.5,
+     "actual": 0.147,
+     "z": 0.33,
      "alert": false
     },
     {
@@ -1324,10 +1324,10 @@
      "kind": "calibration",
      "market": "Goles 2.5",
      "scope": "Total",
-     "n": 211,
-     "expected": 0.562,
-     "actual": 0.507,
-     "z": -1.65,
+     "n": 220,
+     "expected": 0.564,
+     "actual": 0.509,
+     "z": -1.67,
      "alert": false
     },
     {
@@ -1514,30 +1514,30 @@
      "kind": "calibration",
      "market": "ht_goles 0.5",
      "scope": "Total",
-     "n": 209,
-     "expected": 0.727,
-     "actual": 0.718,
-     "z": -0.3,
+     "n": 218,
+     "expected": 0.728,
+     "actual": 0.716,
+     "z": -0.41,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 1.5",
      "scope": "Total",
-     "n": 209,
-     "expected": 0.376,
-     "actual": 0.368,
-     "z": -0.24,
+     "n": 218,
+     "expected": 0.377,
+     "actual": 0.362,
+     "z": -0.46,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 2.5",
      "scope": "Total",
-     "n": 209,
-     "expected": 0.148,
-     "actual": 0.124,
-     "z": -0.95,
+     "n": 218,
+     "expected": 0.149,
+     "actual": 0.119,
+     "z": -1.22,
      "alert": false
     },
     {
@@ -2008,9 +2008,9 @@
   },
   {
    "era": "euro-fcd85a01",
-   "n": 58,
-   "partidos": 9,
-   "logged_last": "2026-11-17T10:51:44"
+   "n": 121,
+   "partidos": 18,
+   "logged_last": "2026-11-18T13:58:30"
   },
   {
    "era": "pre-huella",
