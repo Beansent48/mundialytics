@@ -155,6 +155,20 @@ try {
 # pushes to a remote unattended. Skipped after exit 1, which rolled the data
 # back and left nothing new to record.
 if ($code -eq 0 -or $code -eq 2) {
+    # Fetch real betting odds from The Odds API (free tier) before building the
+    # bot JSON.  Best-effort: if the key is not set or the API is down, the bot
+    # falls back to its approximate odds table.
+    if ($env:THE_ODDS_API_KEY) {
+        try {
+            & $python (Join-Path $root 'scripts\fetch_theoddsapi_odds.py') --corners-cards --days 2
+            if ($LASTEXITCODE -ne 0) { Write-Warning "odds fetch exited $LASTEXITCODE" }
+        } catch {
+            Write-Warning "odds fetch failed: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Host "THE_ODDS_API_KEY not set - skipping real odds fetch"
+    }
+
     # Generate the slim JSON the Telegram bot reads (same logic as the GH Actions
     # workflow step "Generar predictions_latest.json"). Runs inline so a local
     # update also refreshes the bot data when pushed.

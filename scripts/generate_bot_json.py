@@ -173,11 +173,62 @@ def main():
                 "hy": sh.get("yellows", ""), "ay": sa.get("yellows", ""),
             }
 
+    # ── Real odds from The Odds API log ──
+    odds: dict[str, dict] = {}
+    odds_csv = ROOT / "data" / "external" / "odds_api" / "odds_log.csv"
+    if odds_csv.exists():
+        mkt_map = {
+            "totals": "Goles",
+            "alternate_totals_corners": "corners",
+            "alternate_totals_cards": "yellows",
+        }
+        with open(odds_csv, encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                ct = r.get("commence_time", "")
+                if not ct:
+                    continue
+                match_date = ct[:10]
+                if match_date not in window:
+                    continue
+                mkt = mkt_map.get(r.get("market", ""))
+                if not mkt:
+                    continue
+                h = _norm(r.get("home_team", ""))
+                a = _norm(r.get("away_team", ""))
+                line = r.get("line", "")
+                over_p = r.get("over_price", "")
+                under_p = r.get("under_price", "")
+                if not (h and a and line and over_p and under_p):
+                    continue
+                # Match API names to prediction-log names
+                matched_key = None
+                for ph, pa in pred_teams_by_date.get(match_date, []):
+                    if _name_overlap(r["home_team"], ph) and _name_overlap(r["away_team"], pa):
+                        matched_key = ph.lower() + "|" + pa.lower()
+                        break
+                if not matched_key:
+                    matched_key = r["home_team"].lower() + "|" + r["away_team"].lower()
+                entry = odds.setdefault(matched_key, {})
+                mkt_entry = entry.setdefault(mkt, {})
+                line_entry = mkt_entry.setdefault(line, [0.0, 0.0])
+                o, u = float(over_p), float(under_p)
+                # Keep the best (highest) odds per line across bookmakers
+                if o > line_entry[0]:
+                    line_entry[0] = round(o, 3)
+                if u > line_entry[1]:
+                    line_entry[1] = round(u, 3)
+        odds_matches = sum(1 for v in odds.values() if v)
+        odds_lines = sum(sum(len(m) for m in v.values()) for v in odds.values())
+        print(f"{odds_matches} matches with real odds, {odds_lines} lines")
+    else:
+        print("no odds_log.csv — skipping real odds")
+
     OUT.write_text(
-        json.dumps({"predictions": rows, "results": results}, ensure_ascii=False),
+        json.dumps({"predictions": rows, "results": results, "odds": odds},
+                   ensure_ascii=False),
         encoding="utf-8",
     )
-    print(f"{len(rows)} preds, {len(results)} results -> {OUT} ({OUT.stat().st_size} bytes)")
+    print(f"{len(rows)} preds, {len(results)} results, {len(odds)} odds -> {OUT} ({OUT.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":
