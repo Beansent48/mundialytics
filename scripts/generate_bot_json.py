@@ -190,15 +190,10 @@ def main():
                 match_date = ct[:10]
                 if match_date not in window:
                     continue
-                mkt = mkt_map.get(r.get("market", ""))
-                if not mkt:
-                    continue
+                raw_mkt = r.get("market", "")
                 h = _norm(r.get("home_team", ""))
                 a = _norm(r.get("away_team", ""))
-                line = r.get("line", "")
-                over_p = r.get("over_price", "")
-                under_p = r.get("under_price", "")
-                if not (h and a and line and over_p and under_p):
+                if not (h and a):
                     continue
                 # Match API names to prediction-log names
                 matched_key = None
@@ -209,10 +204,32 @@ def main():
                 if not matched_key:
                     matched_key = r["home_team"].lower() + "|" + r["away_team"].lower()
                 entry = odds.setdefault(matched_key, {})
+
+                # h2h: best odds per outcome (home/away/draw)
+                if raw_mkt == "h2h":
+                    over_p = r.get("over_price", "")
+                    under_p = r.get("under_price", "")
+                    draw_p = r.get("draw_price", "")
+                    if not (over_p and under_p and draw_p):
+                        continue
+                    h2h = entry.setdefault("h2h", [0.0, 0.0, 0.0])
+                    ho, ao, do_ = float(over_p), float(under_p), float(draw_p)
+                    if ho > h2h[0]: h2h[0] = round(ho, 3)
+                    if do_ > h2h[1]: h2h[1] = round(do_, 3)
+                    if ao > h2h[2]: h2h[2] = round(ao, 3)
+                    continue
+
+                mkt = mkt_map.get(raw_mkt)
+                if not mkt:
+                    continue
+                line = r.get("line", "")
+                over_p = r.get("over_price", "")
+                under_p = r.get("under_price", "")
+                if not (line and over_p and under_p):
+                    continue
                 mkt_entry = entry.setdefault(mkt, {})
                 line_entry = mkt_entry.setdefault(line, [0.0, 0.0])
                 o, u = float(over_p), float(under_p)
-                # Keep the best (highest) odds per line across bookmakers
                 if o > line_entry[0]:
                     line_entry[0] = round(o, 3)
                 if u > line_entry[1]:

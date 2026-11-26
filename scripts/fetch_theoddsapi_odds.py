@@ -60,13 +60,13 @@ CORNERS_CARDS_SPORTS = {
     "soccer_uefa_europa_league",
 }
 
-BULK_MARKETS = "totals"
+BULK_MARKETS = "h2h,totals"
 EVENT_MARKETS = "alternate_totals_corners,alternate_totals_cards"
 
 CSV_COLS = [
     "fetch_ts", "sport", "event_id", "commence_time",
     "home_team", "away_team",
-    "market", "bookmaker", "line", "over_price", "under_price",
+    "market", "bookmaker", "line", "over_price", "under_price", "draw_price",
 ]
 
 
@@ -160,6 +160,21 @@ def parse_odds_rows(events: list[dict], market_filter: str | None = None,
                 if market_filter and mkt_key != market_filter:
                     continue
                 outcomes = mkt.get("outcomes", [])
+                if mkt_key == "h2h":
+                    home = next((o for o in outcomes if o.get("name") == ev.get("home_team")), None)
+                    draw = next((o for o in outcomes if o.get("name") == "Draw"), None)
+                    away = next((o for o in outcomes if o.get("name") == ev.get("away_team")), None)
+                    if home and draw and away:
+                        rows.append({
+                            **base,
+                            "market": "h2h",
+                            "bookmaker": bk.get("key", ""),
+                            "line": "1x2",
+                            "over_price": home.get("price", ""),
+                            "under_price": away.get("price", ""),
+                            "draw_price": draw.get("price", ""),
+                        })
+                    continue
                 over = next((o for o in outcomes if o.get("name") == "Over"), None)
                 under = next((o for o in outcomes if o.get("name") == "Under"), None)
                 if over and under:
