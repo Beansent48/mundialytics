@@ -219,6 +219,18 @@ def main():
                     if ao > h2h[2]: h2h[2] = round(ao, 3)
                     continue
 
+                # btts: best odds for Yes/No
+                if raw_mkt == "btts":
+                    over_p = r.get("over_price", "")
+                    under_p = r.get("under_price", "")
+                    if not (over_p and under_p):
+                        continue
+                    btts = entry.setdefault("btts", [0.0, 0.0])
+                    y, n = float(over_p), float(under_p)
+                    if y > btts[0]: btts[0] = round(y, 3)
+                    if n > btts[1]: btts[1] = round(n, 3)
+                    continue
+
                 mkt = mkt_map.get(raw_mkt)
                 if not mkt:
                     continue

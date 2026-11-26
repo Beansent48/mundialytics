@@ -61,7 +61,8 @@ CORNERS_CARDS_SPORTS = {
 }
 
 BULK_MARKETS = "h2h,totals"
-EVENT_MARKETS = "alternate_totals_corners,alternate_totals_cards"
+EVENT_MARKETS_FULL = "btts,alternate_totals_corners,alternate_totals_cards"
+EVENT_MARKETS_BTTS = "btts"
 
 CSV_COLS = [
     "fetch_ts", "sport", "event_id", "commence_time",
@@ -175,6 +176,19 @@ def parse_odds_rows(events: list[dict], market_filter: str | None = None,
                             "draw_price": draw.get("price", ""),
                         })
                     continue
+                if mkt_key == "btts":
+                    yes = next((o for o in outcomes if o.get("name") == "Yes"), None)
+                    no = next((o for o in outcomes if o.get("name") == "No"), None)
+                    if yes and no:
+                        rows.append({
+                            **base,
+                            "market": "btts",
+                            "bookmaker": bk.get("key", ""),
+                            "line": "btts",
+                            "over_price": yes.get("price", ""),
+                            "under_price": no.get("price", ""),
+                        })
+                    continue
                 over = next((o for o in outcomes if o.get("name") == "Over"), None)
                 under = next((o for o in outcomes if o.get("name") == "Under"), None)
                 if over and under:
@@ -231,16 +245,19 @@ def main():
             event_count += len(events)
             print(f"    {sport}: {len(events)} events, {len(rows)} odds rows")
 
-        if args.corners_cards and events and sport in CORNERS_CARDS_SPORTS:
+        if args.corners_cards and events:
+            # For CORNERS_CARDS_SPORTS: btts + corners + cards (no extra quota)
+            # For other sports: btts only (1 quota per event)
+            evt_mkts = EVENT_MARKETS_FULL if sport in CORNERS_CARDS_SPORTS else EVENT_MARKETS_BTTS
             for ev in events:
                 eid = ev.get("id", "")
                 if not eid:
                     continue
-                ev_data = fetch_event_odds(api_key, sport, eid, EVENT_MARKETS)
+                ev_data = fetch_event_odds(api_key, sport, eid, evt_mkts)
                 if ev_data:
                     rows = parse_odds_rows([ev_data], fetch_ts=fetch_ts)
                     all_rows.extend(rows)
-                    print(f"      +{len(rows)} corners/cards rows")
+                    print(f"      +{len(rows)} event rows")
 
     print(f"\nTotal: {event_count} events, {len(all_rows)} odds rows")
 
