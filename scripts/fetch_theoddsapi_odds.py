@@ -46,7 +46,20 @@ SPORT_KEYS = [
     "soccer_uefa_europa_conference_league",
 ]
 
-# Markets fetched per event (corners/cards need the event endpoint)
+# Leagues where corners/cards odds actually exist on The Odds API.
+# Segunda, Serie B, Ligue 2 and Conference return 0 rows — skip them.
+CORNERS_CARDS_SPORTS = {
+    "soccer_epl",
+    "soccer_spain_la_liga",
+    "soccer_italy_serie_a",
+    "soccer_germany_bundesliga",
+    "soccer_france_ligue_one",
+    "soccer_uefa_champs_league",
+    "soccer_efl_champ",
+    "soccer_germany_bundesliga2",
+    "soccer_uefa_europa_league",
+}
+
 BULK_MARKETS = "totals"
 EVENT_MARKETS = "alternate_totals_corners,alternate_totals_cards"
 
@@ -113,11 +126,14 @@ def fetch_bulk_odds(api_key: str, sport: str,
 
 def fetch_event_odds(api_key: str, sport: str, event_id: str,
                      markets: str) -> dict | None:
-    """Fetch corners/cards odds for a single event."""
+    """Fetch corners/cards odds for a single event.
+
+    Uses eu region only (Pinnacle is there) to halve quota cost.
+    """
     url = f"{BASE}/sports/{sport}/events/{event_id}/odds"
     params = {
         "apiKey": api_key,
-        "regions": "eu,uk",
+        "regions": "eu",
         "markets": markets,
         "oddsFormat": "decimal",
     }
@@ -200,7 +216,7 @@ def main():
             event_count += len(events)
             print(f"    {sport}: {len(events)} events, {len(rows)} odds rows")
 
-        if args.corners_cards and events:
+        if args.corners_cards and events and sport in CORNERS_CARDS_SPORTS:
             for ev in events:
                 eid = ev.get("id", "")
                 if not eid:
