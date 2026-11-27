@@ -173,8 +173,75 @@ def main():
                 "hy": sh.get("yellows", ""), "ay": sa.get("yellows", ""),
             }
 
-    # ── Real odds from The Odds API log ──
+    # ── Closing odds from football-data.co.uk (free, all Big 5 + seconds) ──
+    # These are Bet365 closing odds — available for every played match, no API.
+    # Wider window (-7 to +4): the CSVs lag a day or two behind the foundation,
+    # so ±3 would miss the most recent matchday's closing odds.
+    fd_window = {str(today + timedelta(d)) for d in range(-7, 5)}
+    fd_dir = ROOT / "data" / "raw" / "football_data"
+    fd_codes = ["E0", "SP1", "I1", "D1", "F1", "E1", "SP2", "I2", "D2", "F2"]
+    fd_odds_count = 0
+    fd_odds: dict[str, dict] = {}
+    for code in fd_codes:
+        fp = fd_dir / f"2627_{code}.csv"
+        if not fp.exists():
+            continue
+        with open(fp, encoding="utf-8-sig") as f:
+            for r in csv.DictReader(f):
+                raw_date = r.get("Date", "")
+                if not raw_date:
+                    continue
+                parts = raw_date.split("/")
+                if len(parts) == 3:
+                    yr = parts[2] if len(parts[2]) == 4 else f"20{parts[2]}"
+                    date_iso = f"{yr}-{parts[1]}-{parts[0]}"
+                else:
+                    continue
+                if date_iso not in fd_window:
+                    continue
+                ht = r.get("HomeTeam", "").strip()
+                at = r.get("AwayTeam", "").strip()
+                if not (ht and at):
+                    continue
+                # Match to prediction-log names
+                matched_key = None
+                for ph, pa in pred_teams_by_date.get(date_iso, []):
+                    if _name_overlap(ht, ph) and _name_overlap(at, pa):
+                        matched_key = ph.lower() + "|" + pa.lower()
+                        break
+                if not matched_key:
+                    matched_key = ht.lower() + "|" + at.lower()
+                entry = fd_odds.setdefault(matched_key, {})
+                # 1X2 closing odds (B365C = closing, B365 = opening; prefer closing)
+                b365h = r.get("B365CH") or r.get("B365H", "")
+                b365d = r.get("B365CD") or r.get("B365D", "")
+                b365a = r.get("B365CA") or r.get("B365A", "")
+                if b365h and b365d and b365a:
+                    try:
+                        entry["h2h"] = [round(float(b365h), 3),
+                                        round(float(b365d), 3),
+                                        round(float(b365a), 3)]
+                    except ValueError:
+                        pass
+                # O/U 2.5 closing
+                ou_o = r.get("B365C>2.5") or r.get("B365>2.5", "")
+                ou_u = r.get("B365C<2.5") or r.get("B365<2.5", "")
+                if ou_o and ou_u:
+                    try:
+                        goles = entry.setdefault("Goles", {})
+                        goles["2.5"] = [round(float(ou_o), 3), round(float(ou_u), 3)]
+                    except ValueError:
+                        pass
+                fd_odds_count += 1
+    if fd_odds_count:
+        print(f"{fd_odds_count} football-data rows with closing odds ({len(fd_odds)} matches)")
+
+    # ── Real odds from The Odds API log (supplements football-data) ──
     odds: dict[str, dict] = {}
+    # Start with football-data closing odds as baseline
+    for k, v in fd_odds.items():
+        odds[k] = dict(v)
+
     odds_csv = ROOT / "data" / "external" / "odds_api" / "odds_log.csv"
     if odds_csv.exists():
         mkt_map = {
@@ -251,6 +318,31 @@ def main():
         print(f"{odds_matches} matches with real odds, {odds_lines} lines")
     else:
         print("no odds_log.csv — skipping real odds")
+
+    # Remap odds keys to results keys when names differ (e.g. football-data
+    # "man city" vs foundation "manchester city").  The worker joins by key.
+    remapped = 0
+    result_keys = set(results.keys())
+    for ok in list(odds.keys()):
+        if ok in result_keys:
+            continue
+        oh, oa = ok.split("|", 1) if "|" in ok else ("", "")
+        if not oh:
+            continue
+        for rk in result_keys:
+            rh, ra = rk.split("|", 1) if "|" in rk else ("", "")
+            if not rh:
+                continue
+            if _name_overlap(oh, rh) and _name_overlap(oa, ra):
+                if rk not in odds:
+                    odds[rk] = odds.pop(ok)
+                else:
+                    for mk, mv in odds.pop(ok).items():
+                        odds[rk].setdefault(mk, mv)
+                remapped += 1
+                break
+    if remapped:
+        print(f"  {remapped} odds entries remapped to result keys")
 
     OUT.write_text(
         json.dumps({"predictions": rows, "results": results, "odds": odds},
