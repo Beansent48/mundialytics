@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Fetch real betting odds from The Odds API (free tier, 500 req/day).
+"""Fetch real betting odds from The Odds API (free tier, 500 req/MONTH).
 
-Logs O/U goals, corners and yellows odds per match into a CSV that the bot
-pipeline and the backtest can consume.  Run daily before the bot JSON step.
+Quota budget (500/month ≈ 16/day):
+  - Bulk odds (h2h + totals): 1 req per sport WITH matches (eu region only).
+    Typical day: 5-8 sports have matches → 5-8 req.
+  - Event-level (btts + corners/cards): 1 req per event, Big 5 + CL only.
+    Typical day: 5-15 events → 5-15 req. Skipped when budget is tight.
+  - Events endpoint: FREE (no quota cost), used to skip empty sports.
+
+Logs odds per match into a CSV for the bot pipeline and backtesting.
 
 Usage:
     python scripts/fetch_theoddsapi_odds.py              # today + tomorrow
@@ -64,6 +70,20 @@ BULK_MARKETS = "h2h,totals"
 EVENT_MARKETS_FULL = "btts,alternate_totals_corners,alternate_totals_cards"
 EVENT_MARKETS_BTTS = "btts"
 
+# Sports worth spending event-level quota on (btts + corners/cards).
+# Second divisions and Conference rarely have these markets anyway.
+EVENT_LEVEL_SPORTS = {
+    "soccer_epl",
+    "soccer_spain_la_liga",
+    "soccer_italy_serie_a",
+    "soccer_germany_bundesliga",
+    "soccer_france_ligue_one",
+    "soccer_uefa_champs_league",
+}
+
+MONTHLY_QUOTA = 500
+QUOTA_RESERVE = 30  # keep some buffer for manual/debug calls
+
 CSV_COLS = [
     "fetch_ts", "sport", "event_id", "commence_time",
     "home_team", "away_team",
@@ -78,6 +98,10 @@ def _api_key() -> str:
     return key
 
 
+class QuotaExhausted(Exception):
+    pass
+
+
 def _get(url: str, params: dict, label: str = "") -> tuple[dict | list | None, dict]:
     """GET with quota tracking. Returns (json_body, headers)."""
     resp = requests.get(url, params=params, timeout=30)
@@ -87,41 +111,49 @@ def _get(url: str, params: dict, label: str = "") -> tuple[dict | list | None, d
     if resp.status_code == 401:
         sys.exit("Invalid API key")
     if resp.status_code == 429:
-        print("  RATE LIMITED — stopping")
-        return None, {}
+        print("  QUOTA EXHAUSTED — stopping all fetches")
+        raise QuotaExhausted()
     if resp.status_code == 422:
         print(f"  Unprocessable (market not available?): {resp.text[:200]}")
         return None, {}
     resp.raise_for_status()
+    rem = int(remaining) if remaining != "?" else 999
+    if rem <= QUOTA_RESERVE:
+        print(f"  WARNING: only {rem} requests left this month, stopping")
+        raise QuotaExhausted()
     return resp.json(), dict(resp.headers)
 
 
 def fetch_sport_events(api_key: str, sport: str,
                        from_dt: str, to_dt: str) -> list[dict]:
-    """List upcoming events for a sport (free, no quota cost)."""
+    """List upcoming events for a sport (FREE, no quota cost)."""
     url = f"{BASE}/sports/{sport}/events"
     params = {
         "apiKey": api_key,
         "commenceTimeFrom": from_dt,
         "commenceTimeTo": to_dt,
     }
-    data, _ = _get(url, params, f"events {sport}")
-    return data or []
+    resp = requests.get(url, params=params, timeout=30)
+    if resp.status_code == 401:
+        sys.exit("Invalid API key")
+    if resp.status_code != 200:
+        return []
+    return resp.json() or []
 
 
 def fetch_bulk_odds(api_key: str, sport: str,
                     from_dt: str, to_dt: str) -> list[dict]:
-    """Fetch totals odds for all events in a sport (1 quota unit per region)."""
+    """Fetch h2h+totals odds for all events in a sport (1 quota unit, eu only)."""
     url = f"{BASE}/sports/{sport}/odds"
     params = {
         "apiKey": api_key,
-        "regions": "eu,uk",
+        "regions": "eu",
         "markets": BULK_MARKETS,
         "oddsFormat": "decimal",
         "commenceTimeFrom": from_dt,
         "commenceTimeTo": to_dt,
     }
-    data, _ = _get(url, params, f"totals {sport}")
+    data, _ = _get(url, params, f"bulk {sport}")
     return data or []
 
 
@@ -220,7 +252,7 @@ def main():
     parser.add_argument("--days", type=int, default=2)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--corners-cards", action="store_true",
-                        help="Also fetch corners/cards per event (costly)")
+                        help="Also fetch btts/corners/cards per event (top leagues only)")
     args = parser.parse_args()
 
     api_key = _api_key()
@@ -233,31 +265,65 @@ def main():
     print(f"Sports: {len(SPORT_KEYS)}")
     print()
 
+    # Phase 1: check which sports have upcoming matches (FREE, no quota)
+    sports_with_events: dict[str, list[dict]] = {}
+    for sport in SPORT_KEYS:
+        try:
+            evts = fetch_sport_events(api_key, sport, from_dt, to_dt)
+        except QuotaExhausted:
+            break
+        if evts:
+            sports_with_events[sport] = evts
+            print(f"    {sport}: {len(evts)} upcoming events")
+        else:
+            print(f"    {sport}: no events, skipping")
+
+    active = len(sports_with_events)
+    print(f"\n{active} sports with matches → {active} bulk requests")
+
     all_rows: list[dict] = []
     event_count = 0
+    quota_stopped = False
 
-    for sport in SPORT_KEYS:
-        # Totals (O/U goals) — bulk, cheap
-        events = fetch_bulk_odds(api_key, sport, from_dt, to_dt)
+    # Phase 2: fetch bulk odds only for sports with matches (1 req each)
+    for sport in sports_with_events:
+        try:
+            events = fetch_bulk_odds(api_key, sport, from_dt, to_dt)
+        except QuotaExhausted:
+            quota_stopped = True
+            break
         if events:
             rows = parse_odds_rows(events, fetch_ts=fetch_ts)
             all_rows.extend(rows)
             event_count += len(events)
             print(f"    {sport}: {len(events)} events, {len(rows)} odds rows")
 
-        if args.corners_cards and events:
-            # For CORNERS_CARDS_SPORTS: btts + corners + cards (no extra quota)
-            # For other sports: btts only (1 quota per event)
-            evt_mkts = EVENT_MARKETS_FULL if sport in CORNERS_CARDS_SPORTS else EVENT_MARKETS_BTTS
-            for ev in events:
+    # Phase 3: event-level (btts + corners/cards) for top leagues only
+    if args.corners_cards and not quota_stopped:
+        for sport, evts in sports_with_events.items():
+            if sport not in EVENT_LEVEL_SPORTS:
+                continue
+            evt_mkts = (EVENT_MARKETS_FULL
+                        if sport in CORNERS_CARDS_SPORTS
+                        else EVENT_MARKETS_BTTS)
+            for ev in evts:
                 eid = ev.get("id", "")
                 if not eid:
                     continue
-                ev_data = fetch_event_odds(api_key, sport, eid, evt_mkts)
+                try:
+                    ev_data = fetch_event_odds(api_key, sport, eid, evt_mkts)
+                except QuotaExhausted:
+                    quota_stopped = True
+                    break
                 if ev_data:
                     rows = parse_odds_rows([ev_data], fetch_ts=fetch_ts)
                     all_rows.extend(rows)
                     print(f"      +{len(rows)} event rows")
+            if quota_stopped:
+                break
+
+    if quota_stopped:
+        print("\n⚠️  Stopped early — monthly quota nearly exhausted")
 
     print(f"\nTotal: {event_count} events, {len(all_rows)} odds rows")
 
