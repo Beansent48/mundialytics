@@ -187,6 +187,17 @@ if ($code -eq 0 -or $code -eq 2) {
         } catch {
             Write-Warning "KV upload failed: $($_.Exception.Message)"
         }
+
+        # Trigger the Telegram bot to send/refresh today's message.
+        # The worker reads the fresh KV, builds pages, and sends or edits
+        # the daily message. Best-effort: a missed trigger just means the
+        # 08:45 cron message stays until the user taps refresh.
+        try {
+            Invoke-RestMethod -Uri "https://mundialytics-bot.vvazquezg04.workers.dev/send?key=$($env:MUNDIALYTICS_CHAT_ID)" -Method Get -TimeoutSec 15 | Out-Null
+            Write-Host "Telegram bot triggered"
+        } catch {
+            Write-Warning "Telegram trigger failed: $($_.Exception.Message)"
+        }
     }
 
     try {
