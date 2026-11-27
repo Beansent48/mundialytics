@@ -366,12 +366,142 @@
     },
     {
      "kind": "calibration",
+     "market": "Goles 0.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.772,
+     "actual": 0.944,
+     "z": 2.61,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 1.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.481,
+     "actual": 0.861,
+     "z": 5.04,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.259,
+     "actual": 0.611,
+     "z": 5.35,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 3.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.126,
+     "actual": 0.417,
+     "z": 5.73,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 0.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.954,
+     "actual": 0.944,
+     "z": -0.29,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 1.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.816,
+     "actual": 0.861,
+     "z": 0.71,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
      "market": "Goles 2.5",
      "scope": "Total",
-     "n": 681,
-     "expected": 0.549,
-     "actual": 0.577,
-     "z": 1.51,
+     "n": 717,
+     "expected": 0.552,
+     "actual": 0.579,
+     "z": 1.49,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 3.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.385,
+     "actual": 0.417,
+     "z": 0.39,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 4.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.214,
+     "actual": 0.194,
+     "z": -0.29,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 5.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.105,
+     "actual": 0.056,
+     "z": -0.98,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 0.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.71,
+     "actual": 0.944,
+     "z": 3.29,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 1.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.392,
+     "actual": 0.861,
+     "z": 6.3,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.186,
+     "actual": 0.611,
+     "z": 7.2,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 3.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.081,
+     "actual": 0.417,
+     "z": 8.04,
      "alert": false
     },
     {
@@ -558,30 +688,30 @@
      "kind": "calibration",
      "market": "ht_goles 0.5",
      "scope": "Total",
-     "n": 675,
-     "expected": 0.719,
-     "actual": 0.707,
-     "z": -0.7,
+     "n": 711,
+     "expected": 0.72,
+     "actual": 0.709,
+     "z": -0.68,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 1.5",
      "scope": "Total",
-     "n": 675,
-     "expected": 0.367,
+     "n": 711,
+     "expected": 0.369,
      "actual": 0.394,
-     "z": 1.48,
+     "z": 1.4,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 2.5",
      "scope": "Total",
-     "n": 675,
-     "expected": 0.142,
-     "actual": 0.147,
-     "z": 0.33,
+     "n": 711,
+     "expected": 0.143,
+     "actual": 0.143,
+     "z": -0.0,
      "alert": false
     },
     {
@@ -1322,12 +1452,142 @@
     },
     {
      "kind": "calibration",
+     "market": "Goles 0.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.772,
+     "actual": 0.944,
+     "z": 2.61,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 1.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.481,
+     "actual": 0.861,
+     "z": 5.04,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.259,
+     "actual": 0.611,
+     "z": 5.35,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 3.5",
+     "scope": "Local",
+     "n": 36,
+     "expected": 0.126,
+     "actual": 0.417,
+     "z": 5.73,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 0.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.954,
+     "actual": 0.944,
+     "z": -0.29,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 1.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.816,
+     "actual": 0.861,
+     "z": 0.71,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
      "market": "Goles 2.5",
      "scope": "Total",
-     "n": 220,
-     "expected": 0.564,
-     "actual": 0.509,
-     "z": -1.67,
+     "n": 256,
+     "expected": 0.57,
+     "actual": 0.523,
+     "z": -1.52,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 3.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.385,
+     "actual": 0.417,
+     "z": 0.39,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 4.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.214,
+     "actual": 0.194,
+     "z": -0.29,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 5.5",
+     "scope": "Total",
+     "n": 36,
+     "expected": 0.105,
+     "actual": 0.056,
+     "z": -0.98,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 0.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.71,
+     "actual": 0.944,
+     "z": 3.29,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 1.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.392,
+     "actual": 0.861,
+     "z": 6.3,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 2.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.186,
+     "actual": 0.611,
+     "z": 7.2,
+     "alert": false
+    },
+    {
+     "kind": "calibration",
+     "market": "Goles 3.5",
+     "scope": "Visitante",
+     "n": 36,
+     "expected": 0.081,
+     "actual": 0.417,
+     "z": 8.04,
      "alert": false
     },
     {
@@ -1514,30 +1774,30 @@
      "kind": "calibration",
      "market": "ht_goles 0.5",
      "scope": "Total",
-     "n": 218,
-     "expected": 0.728,
-     "actual": 0.716,
-     "z": -0.41,
+     "n": 254,
+     "expected": 0.731,
+     "actual": 0.72,
+     "z": -0.36,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 1.5",
      "scope": "Total",
-     "n": 218,
-     "expected": 0.377,
-     "actual": 0.362,
-     "z": -0.46,
+     "n": 254,
+     "expected": 0.381,
+     "actual": 0.366,
+     "z": -0.5,
      "alert": false
     },
     {
      "kind": "calibration",
      "market": "ht_goles 2.5",
      "scope": "Total",
-     "n": 218,
-     "expected": 0.149,
-     "actual": 0.119,
-     "z": -1.22,
+     "n": 254,
+     "expected": 0.151,
+     "actual": 0.114,
+     "z": -1.65,
      "alert": false
     },
     {
@@ -1995,6 +2255,12 @@
    "logged_last": "2026-10-26T10:45:54"
   },
   {
+   "era": "euro-2669cf80",
+   "n": 468,
+   "partidos": 36,
+   "logged_last": "2026-11-26T14:01:21"
+  },
+  {
    "era": "euro-74867bbf",
    "n": 373,
    "partidos": 54,
@@ -2008,9 +2274,9 @@
   },
   {
    "era": "euro-fcd85a01",
-   "n": 121,
-   "partidos": 18,
-   "logged_last": "2026-11-18T13:58:30"
+   "n": 373,
+   "partidos": 54,
+   "logged_last": "2026-11-19T14:49:41"
   },
   {
    "era": "pre-huella",
