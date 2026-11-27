@@ -1,0 +1,6 @@
+logged_at_utc,event_id,kickoff_utc,competition,home,away,absent_home,absent_away,missing_home,missing_away,lambda_home,lambda_away,p_home,p_draw,p_away,p_over_25,model_source,train_cutoff,model_fp
+2026-11-27T18:06:16,401879225,2026-11-27T20:00:00,Premier League,nott m forest,chelsea,0.0,0.09090909090909091,,Maxence Lacroix,1.4149,1.5032,0.3411,0.2654,0.3934,0.5481,xgrate60%_ad40%_ls0.898_mkt1.062_am,2026-11-23,5d5b74d61f07
+2026-11-27T18:06:16,401882791,2026-11-27T20:00:00,LaLiga,levante,santander,0.0,0.09090909090909091,,Alvaro Mantilla,1.662,1.1377,0.527,0.2542,0.2188,0.5231,xgrate60%_ad40%_ls0.898_mkt1.100_am,2026-11-23,5d5b74d61f07
+2026-11-27T18:06:16,401884720,2026-11-27T19:30:00,Bundesliga,werder bremen,m gladbach,0.09090909090909091,0.18181818181818182,Marco Grüll,Lukas Ullrich; Hugo Bolin,1.5818,1.2802,0.4579,0.263,0.2791,0.5358,xgrate60%_ad40%_ls0.898_mkt1.050_am,2026-11-23,5d5b74d61f07
+2026-11-27T18:06:16,401875004,2026-11-27T19:45:00,Serie A,venezia,bologna,0.0,0.09090909090909091,,Juan Miranda,1.1598,1.2087,0.334,0.3003,0.3657,0.4081,xgrate60%_ad40%_ls0.898_mkt1.092_am,2026-11-23,5d5b74d61f07
+2026-11-27T18:06:16,401876392,2026-11-27T19:45:00,Ligue 1,brest,paris fc,0.09090909090909091,0.0,Kamory Doumbia,,1.3931,1.5625,0.3192,0.2621,0.4187,0.5572,xgrate60%_ad40%_ls0.898_mkt1.082_am,2026-11-23,5d5b74d61f07
